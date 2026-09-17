@@ -1,0 +1,22 @@
+{
+  "name": "@cafe/mcp-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cafe/db": "workspace:*",
+    "@cafe/protocol": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ulid": "^3.0.2",
+    "zod": "^4.6.5"
+  }
+}

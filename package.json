@@ -1,0 +1,33 @@
+{
+  "name": "ai-eval-cafe",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Stardust Cafe: a model-agnostic multi-agent eval harness visualized as a Stardew-style cafe",
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "pnpm -r typecheck",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @cafe/db generate",
+    "db:migrate": "pnpm --filter @cafe/db migrate",
+    "db:seed": "pnpm --filter @cafe/db seed",
+    "db:reset": "pnpm --filter @cafe/db reset",
+    "eval": "pnpm --filter @cafe/server cli --"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^24",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

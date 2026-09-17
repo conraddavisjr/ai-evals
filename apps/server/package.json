@@ -1,0 +1,30 @@
+{
+  "name": "@cafe/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cli": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@cafe/agents": "workspace:*",
+    "@cafe/db": "workspace:*",
+    "@cafe/evals": "workspace:*",
+    "@cafe/mcp-gateway": "workspace:*",
+    "@cafe/models": "workspace:*",
+    "@cafe/protocol": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ai": "^7.0.105",
+    "hono": "^4.13.8",
+    "ulid": "^3.0.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13"
+  }
+}
