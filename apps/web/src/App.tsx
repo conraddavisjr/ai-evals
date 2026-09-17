@@ -1,5 +1,4 @@
 import type { RunConfigInput, Scenario } from '@cafe/protocol'
-import type Phaser from 'phaser'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type ModelsInfo, openStream, type RunRow } from './api.js'
 import { AgentInspector } from './components/AgentInspector.js'
@@ -12,16 +11,19 @@ import { TransactionList } from './components/TransactionList.js'
 import { fmtUsd } from './format.js'
 import { TimelinePlayer } from './playback/TimelinePlayer.js'
 import { usePlayer } from './playback/usePlayer.js'
-import { createGame } from './scene/game.js'
+import { createGame, type Game } from './scene3d/game.js'
 
 type Tab = 'run' | 'inspector' | 'queue' | 'visits' | 'metrics' | 'log'
 
-const player = new TimelinePlayer()
+// One player per page, surviving Vite HMR so a live stream is never orphaned mid-run.
+const hotData = import.meta.hot?.data as { player?: TimelinePlayer } | undefined
+const player: TimelinePlayer = hotData?.player ?? new TimelinePlayer()
+if (hotData) hotData.player = player
 
 export function App() {
   usePlayer(player)
   const mountRef = useRef<HTMLDivElement>(null)
-  const gameRef = useRef<Phaser.Game | null>(null)
+  const gameRef = useRef<Game | null>(null)
   const [models, setModels] = useState<ModelsInfo | null>(null)
   const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [bootError, setBootError] = useState<string | null>(null)
@@ -56,7 +58,7 @@ export function App() {
     if (import.meta.env.DEV)
       (window as unknown as { __cafe: unknown }).__cafe = { player, game: gameRef.current }
     return () => {
-      gameRef.current?.destroy(true)
+      gameRef.current?.destroy()
       gameRef.current = null
     }
   }, [onSelect])
@@ -162,8 +164,11 @@ export function App() {
     <div className="app">
       <header>
         <div className="brand">
-          <span className="logo">☕</span> Stardust Cafe{' '}
-          <span className="muted">agentic eval harness</span>
+          <LanternMark />
+          <div className="brand-text">
+            <span className="title">Stardust Cafe</span>
+            <span className="subtitle">agentic eval harness</span>
+          </div>
         </div>
         <div className="status">
           {runId ? (
@@ -238,5 +243,44 @@ export function App() {
         </aside>
       </main>
     </div>
+  )
+}
+
+/** Lantern-and-cup mark: warm glow against the dusk palette. */
+function LanternMark() {
+  return (
+    <svg className="mark" viewBox="0 0 48 48" width="40" height="40" aria-hidden="true">
+      <defs>
+        <radialGradient id="mk-glow" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stopColor="#ffd27a" stopOpacity="0.95" />
+          <stop offset="60%" stopColor="#ff9d3d" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#ff9d3d" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="24" cy="22" r="22" fill="url(#mk-glow)" />
+      <path
+        d="M14 18h20v13a10 10 0 0 1-20 0z"
+        fill="#f6efdd"
+        stroke="#23485a"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M34 21h4a4 4 0 0 1 0 8h-4"
+        fill="none"
+        stroke="#23485a"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <path d="M16 40h16" stroke="#23485a" strokeWidth="2.5" strokeLinecap="round" />
+      <path
+        d="M20 14c0-3 3-3 3-6M27 14c0-3 3-3 3-6"
+        fill="none"
+        stroke="#ffd27a"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <ellipse cx="24" cy="18" rx="10" ry="2.5" fill="#d28a5a" />
+    </svg>
   )
 }
