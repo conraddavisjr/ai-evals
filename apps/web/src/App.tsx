@@ -9,6 +9,7 @@ import { QueuePanel } from './components/QueuePanel.js'
 import { RunConfigPanel } from './components/RunConfigPanel.js'
 import { initialDraft, type RunDraft, toRunConfig } from './components/run-draft.js'
 import { TransactionList } from './components/TransactionList.js'
+import { usePanelWidth } from './components/usePanelWidth.js'
 import { fmtUsd } from './format.js'
 import { type ModelsInfo, type RunRow, useHarness } from './harness/index.js'
 import { TimelinePlayer } from './playback/TimelinePlayer.js'
@@ -53,6 +54,9 @@ export function App() {
     setSelectedId(id)
     if (id) setTab('inspector')
   }, [])
+  /** Select without leaving the current tab (the Log's nested pane). */
+  const onPeek = useCallback((id: string | null) => setSelectedId(id), [])
+  const panel = usePanelWidth()
 
   useEffect(() => {
     Promise.all([api.models(), api.scenarios()])
@@ -326,7 +330,7 @@ export function App() {
         </div>
       </header>
 
-      <main>
+      <main style={{ '--panel-width': `${panel.width}px` } as React.CSSProperties}>
         {page === 'architecture' && <ArchitectureView />}
         <section className="stage">
           <div className="canvas-wrap">
@@ -356,6 +360,18 @@ export function App() {
         </section>
 
         <aside className="panel">
+          <button
+            type="button"
+            className="panel-resizer"
+            aria-label="Resize panel"
+            title="Drag to resize · double-click to reset · arrow keys nudge"
+            onPointerDown={panel.startDrag}
+            onDoubleClick={panel.reset}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowLeft') panel.nudge(20)
+              else if (e.key === 'ArrowRight') panel.nudge(-20)
+            }}
+          />
           <nav className="tabs">
             {(
               [
@@ -396,7 +412,7 @@ export function App() {
             {tab === 'queue' && <QueuePanel player={player} />}
             {tab === 'inspector' && <AgentInspector player={player} selectedId={selectedId} />}
             {tab === 'metrics' && <MetricsDashboard runId={runId} status={runStatus} />}
-            {tab === 'log' && <EventLog player={player} onSelect={onSelect} />}
+            {tab === 'log' && <EventLog player={player} onPeek={onPeek} />}
           </div>
         </aside>
       </main>
