@@ -16,7 +16,7 @@ The harness records ground-truth correctness, tool-use correctness, blinded LLM-
 | `packages/agents` | `runAgent()`: persona + sliced tools + the AI SDK tool loop + budget guard + crash injection. Emits `agent.*` and `model.usage` events. |
 | `packages/evals` | Scenarios, deterministic ground truth, the blinded judge (`experimental_evaluate`, same questions for Jev or any LLM), door triage questions, metrics roll-up. |
 | `apps/server` | Hono API: run manager, the shift orchestrator (cashiers, FIFO ticket rail, barista workers, judge), SSE event stream, replay, MCP endpoints, and the headless eval CLI. |
-| `apps/web` | Vite + React + Phaser 3. The cafe scene consumes events through a `TimelinePlayer` with four playback modes, plus panels for run config, visits with waterfalls, queue, inspector, metrics, and the event log. |
+| `apps/web` | Vite + React + Three.js. A stylized top-down 3D village square (chunky beveled geometry, toon shading, warm lanterns against a dusk-teal palette) consumes events through a `TimelinePlayer` with four playback modes, plus panels for run config, visits with waterfalls, queue, inspector, metrics, and the event log. The pixel-art Phaser version lives on `main`; this look is the `style/painterly-topdown` branch. |
 
 ## Quick start
 
@@ -78,6 +78,21 @@ pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe
 
 `runs/frontier-vs-jev.example.json` is the Claude vs GPT vs Gemini staff comparison with Jev as judge, plus a same-family judge as a control.
 Every CLI run is persisted and appears under **Recent shifts** in the UI for replay.
+
+Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`.
+
+## The 3D scene
+
+`apps/web/src/scene3d/` builds the square procedurally: `builders.ts` makes every prop from rounded boxes, cylinders and spheres (no external assets), `materials.ts` gives them a four-band toon gradient, `CafeWorld.ts` places them on the same 20 x 13 tile grid the layout has always used, and `mergeStatic()` bakes the static props into one mesh per material so a frame is a couple of dozen draw calls.
+Characters are chunky low-poly figures whose limbs swing while they walk; names, bubbles, progress rings and the red `!` are HTML projected over the canvas (`Overlay.ts`), so they share the app's typography.
+Lighting is a cool hemisphere plus a soft shadow-casting key light, warm point lights on the lamps, brazier and pastry case with per-lamp flicker, ACES tone mapping and a bloom pass that only catches emissives.
+
+The scene starts at a shallower 40-degree viewing angle.
+Drag to orbit, scroll or pinch to zoom, and right-drag or Shift-drag to pan.
+On a Mac trackpad, secondary-click with two fingers and drag to pan.
+On a touch screen, drag with one finger to orbit, or use two fingers to pinch and pan.
+Click or tap a character to inspect it, and use **Reset view** in the scene to return to the default framing.
+Camera gestures do not change the playback clock, and resizing preserves a view you have adjusted.
 
 ## Time and playback
 

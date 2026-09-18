@@ -2,13 +2,13 @@ import type { Beat, TransactionTimeline } from '@cafe/protocol'
 import { fmtMs } from '../format.js'
 
 export const BEAT_COLORS: Record<Beat, string> = {
-  arrive: '#8a94a6',
-  order_taken: '#3d7a5a',
-  queued: '#e6a23c',
-  making: '#8a4b3a',
-  called_out: '#4d7fc4',
-  left: '#8a94a6',
-  judged: '#8b6fd1',
+  arrive: '#5f7a8a',
+  order_taken: '#7fb069',
+  queued: '#ffd27a',
+  making: '#d28a5a',
+  called_out: '#37a3c9',
+  left: '#5f7a8a',
+  judged: '#b79bea',
 }
 export const BEAT_LABELS: Record<Beat, string> = {
   arrive: 'arrive',
