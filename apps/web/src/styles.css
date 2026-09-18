@@ -973,3 +973,237 @@ table.grid tr.current td {
     min-height: 360px;
   }
 }
+
+/* Cut stone frames, enamel controls and a pale ledger inside the dusk shell. */
+header {
+  min-height: 74px;
+  padding: 12px 24px;
+  background: linear-gradient(110deg, #24464c, #152e3b 48%, #10242f);
+  border-bottom: 3px solid #426369;
+  box-shadow:
+    inset 0 1px #648085,
+    0 5px 0 #081922;
+}
+.brand .title {
+  font-size: 29px;
+  text-shadow: 0 2px 0 #13292e;
+}
+.brand .subtitle {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  margin-top: 5px;
+}
+.canvas-wrap {
+  margin: 16px;
+  border: 4px solid #3b5e65;
+  border-radius: 20px 12px 22px 12px;
+  box-shadow:
+    0 0 0 1px #71908d,
+    0 0 0 6px #112832,
+    0 18px 38px #06151c99;
+}
+.panel {
+  border-left: 3px solid #38545e;
+  background: linear-gradient(125deg, #1b3541, #10252f 55%);
+}
+.tabs {
+  padding: 8px 7px 0;
+  gap: 2px;
+  background: #102630;
+}
+.tabs button {
+  border-radius: 8px 8px 0 0;
+  font-size: 12px;
+}
+.tabs button.on {
+  background: linear-gradient(#375b63, #24434e);
+  border-bottom-color: #c6ae75;
+  color: #f0dfb6;
+  text-shadow: none;
+  box-shadow: inset 0 1px #739190;
+}
+.panel-body {
+  padding: 18px 16px 28px;
+  scrollbar-color: #456974 #112832;
+  scrollbar-width: thin;
+}
+.run-config section {
+  background: linear-gradient(135deg, #24434b80, #122b3690);
+  border-color: #3b5862;
+  box-shadow:
+    inset 0 1px #78908b22,
+    0 3px 0 #091c2666;
+  margin-bottom: 16px;
+}
+.panel h3 {
+  color: #d2ded3;
+  text-shadow: none;
+  font-size: 20px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #5a75735c;
+}
+.panel h4 {
+  color: #cfbc96;
+}
+.inspector blockquote {
+  color: #304b50;
+  background: linear-gradient(120deg, #e0dfc9, #c4d0bb);
+  border: 1px solid #99b1a3;
+  border-left: 4px solid #a58d60;
+  border-radius: 3px 10px 8px 3px;
+  box-shadow:
+    inset 0 1px #fff9,
+    0 4px 10px #08182055;
+  padding: 14px;
+}
+.playback {
+  margin: 0 16px 14px;
+  border: 1px solid #46656d;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #24424d, #142c38);
+  padding: 12px 14px;
+  box-shadow:
+    inset 0 1px #718a8c44,
+    0 4px 0 #081923;
+}
+.segmented button.on {
+  background: linear-gradient(#ced7b9, #9eaf96);
+  color: #203b40;
+  box-shadow:
+    0 2px 0 #627b72,
+    inset 0 1px #e7ebd6;
+}
+.ov-tag.staff {
+  display: block;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #102b39c9;
+  color: #e0e8d5;
+}
+.ov-tag.staff.selected {
+  outline: 1px solid var(--gold);
+  color: var(--gold);
+}
+.ov-ticket {
+  padding: 2px 4px;
+  background: #f3e9cf;
+  border-radius: 2px;
+  box-shadow: 0 2px 2px #102b3980;
+  font-size: 10px;
+}
+.ov-ticket[data-age="warm"] {
+  background: #ffdda0;
+}
+.ov-ticket[data-age="hot"] {
+  background: #ffafa1;
+  box-shadow:
+    0 0 12px #ff6b5e,
+    0 0 0 1px #ffe0ce;
+}
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.scene-camera-controls {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  pointer-events: none;
+}
+.scene-camera-controls button {
+  pointer-events: auto;
+  background: #183541ed;
+  border-color: #597b80;
+  font-size: 12px;
+}
+.camera-hint {
+  color: #c5d9d7;
+  background: #0d2632d9;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.camera-hint.touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .camera-hint.desktop {
+    display: none;
+  }
+  .camera-hint.touch {
+    display: inline;
+  }
+}
+@media (max-width: 600px) {
+  .scene-camera-controls {
+    left: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+  .camera-hint {
+    font-size: 9px;
+  }
+}
+
+/* Stack the scene and a scrollable panel on phones without overlapping grid rows. */
+@media (max-width: 900px) {
+  .app {
+    height: auto;
+    min-height: 100%;
+  }
+  header {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+  .status {
+    flex-wrap: wrap;
+    max-width: 100%;
+    gap: 8px;
+  }
+  main {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    min-width: 0;
+  }
+  .stage {
+    flex: none;
+  }
+  .canvas-wrap {
+    flex: none;
+    height: clamp(320px, 60svh, 560px);
+    min-height: 320px;
+  }
+  .panel {
+    flex: none;
+    height: min(75svh, 720px);
+    min-height: 360px;
+    border-left: none;
+  }
+  .playback-row {
+    gap: 8px;
+  }
+  .segmented {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .scrubber-row {
+    flex-wrap: wrap;
+  }
+  .scrubber {
+    min-width: 100px;
+  }
+  .readout {
+    flex-wrap: wrap;
+    white-space: normal;
+    font-size: 11px;
+    gap: 6px;
+  }
+}

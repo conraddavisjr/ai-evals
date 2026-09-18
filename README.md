@@ -87,6 +87,13 @@ Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Side-by-side of 
 Characters are chunky low-poly figures whose limbs swing while they walk; names, bubbles, progress rings and the red `!` are HTML projected over the canvas (`Overlay.ts`), so they share the app's typography.
 Lighting is a cool hemisphere plus a soft shadow-casting key light, warm point lights on the lamps, brazier and pastry case with per-lamp flicker, ACES tone mapping and a bloom pass that only catches emissives.
 
+The scene starts at a shallower 40-degree viewing angle.
+Drag to orbit, scroll or pinch to zoom, and right-drag or Shift-drag to pan.
+On a Mac trackpad, secondary-click with two fingers and drag to pan.
+On a touch screen, drag with one finger to orbit, or use two fingers to pinch and pan.
+Click or tap a character to inspect it, and use **Reset view** in the scene to return to the default framing.
+Camera gestures do not change the playback clock, and resizing preserves a view you have adjusted.
+
 ## Time and playback
 
 Real timing is bimodal: model steps take seconds, tool calls take milliseconds.
