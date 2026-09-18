@@ -1,0 +1,130 @@
+/* Traditional: engineering diagram on paper; a considered dark variant. */
+:root {
+  --font-display: "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --display-weight: 600;
+  --bg: #f4f6f8;
+  --canvas: #f4f6f8;
+  --bar: #ffffff;
+  --btn: #ffffff;
+  --ink: #1d2833;
+  --ink-2: #44515e;
+  --muted: #6b7885;
+  --title: #1d2833;
+  --line: #d5dce3;
+  --accent: #2f6fdb;
+  --accent-ink: #1f56b3;
+  --accent-soft: #9dbcf0;
+  --card: #ffffff;
+  --card-line: #cfd7df;
+  --card-radius: 10px;
+  --card-shadow: 0 1px 2px rgba(29, 40, 51, 0.08);
+  --card-shadow-hover: 0 4px 12px rgba(29, 40, 51, 0.14);
+  --card-shadow-open: 0 12px 32px rgba(29, 40, 51, 0.22);
+  --code-bg: #eef2f6;
+  --code-ink: #2b3a49;
+  --seg-fill: rgba(255, 255, 255, 0.55);
+  --edge: #8b98a6;
+  --edge-label: #5b6875;
+  --t-sky: #4a86c8;
+  --t-sky-ink: #1f56b3;
+  --t-slate: #7a8896;
+  --t-slate-ink: #4a5866;
+  --t-teal: #2d9aa8;
+  --t-teal-ink: #1a6e79;
+  --t-moss: #5e9a4e;
+  --t-moss-ink: #3c6f2f;
+  --t-gold: #c9962a;
+  --t-gold-ink: #8a6210;
+  --t-copper: #c46a3b;
+  --t-copper-ink: #8f4620;
+  --t-lavender: #8b6fd1;
+  --t-lavender-ink: #5d47a0;
+  --t-rose: #c65a7c;
+  --t-rose-ink: #8f3a56;
+  --t-stone: #8d8579;
+  --t-stone-ink: #5f5850;
+  --t-ink: #3b4652;
+  --t-ink-ink: #2a3441;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131a21;
+    --canvas: #131a21;
+    --bar: #1a222b;
+    --btn: #1f2934;
+    --ink: #e6ecf2;
+    --ink-2: #c3ccd6;
+    --muted: #8d9aa8;
+    --title: #eef3f8;
+    --line: #2e3a47;
+    --accent: #6fa3f0;
+    --accent-ink: #9cc2f7;
+    --accent-soft: #3d5f92;
+    --card: #1c2632;
+    --card-line: #33404e;
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.5);
+    --card-shadow-open: 0 14px 36px rgba(0, 0, 0, 0.6);
+    --code-bg: #141c25;
+    --code-ink: #c9d4df;
+    --seg-fill: rgba(255, 255, 255, 0.025);
+    --edge: #6f7f90;
+    --edge-label: #a2afbd;
+    --t-sky-ink: #8fb6f2;
+    --t-slate-ink: #a9b6c3;
+    --t-teal-ink: #7fd0da;
+    --t-moss-ink: #9fd18d;
+    --t-gold-ink: #ecc266;
+    --t-copper-ink: #eea070;
+    --t-lavender-ink: #c3adf3;
+    --t-rose-ink: #f09ab6;
+    --t-stone-ink: #c9c0b2;
+    --t-ink-ink: #cbd5df;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131a21;
+  --canvas: #131a21;
+  --bar: #1a222b;
+  --btn: #1f2934;
+  --ink: #e6ecf2;
+  --ink-2: #c3ccd6;
+  --muted: #8d9aa8;
+  --title: #eef3f8;
+  --line: #2e3a47;
+  --accent: #6fa3f0;
+  --accent-ink: #9cc2f7;
+  --accent-soft: #3d5f92;
+  --card: #1c2632;
+  --card-line: #33404e;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.5);
+  --card-shadow-open: 0 14px 36px rgba(0, 0, 0, 0.6);
+  --code-bg: #141c25;
+  --code-ink: #c9d4df;
+  --seg-fill: rgba(255, 255, 255, 0.025);
+  --edge: #6f7f90;
+  --edge-label: #a2afbd;
+  --t-sky-ink: #8fb6f2;
+  --t-slate-ink: #a9b6c3;
+  --t-teal-ink: #7fd0da;
+  --t-moss-ink: #9fd18d;
+  --t-gold-ink: #ecc266;
+  --t-copper-ink: #eea070;
+  --t-lavender-ink: #c3adf3;
+  --t-rose-ink: #f09ab6;
+  --t-stone-ink: #c9c0b2;
+  --t-ink-ink: #cbd5df;
+  color-scheme: dark;
+}
+.archv .archv-canvas {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center;
+}
