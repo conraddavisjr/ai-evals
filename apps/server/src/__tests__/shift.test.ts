@@ -272,3 +272,24 @@ describe('HTTP API', () => {
     expect(body).not.toMatch(/payments\.charge/)
   })
 })
+
+describe('orphaned runs', () => {
+  it('are marked failed at boot, while runs the manager still owns are left alone', async () => {
+    const config = RunConfig.parse({ scenarioIds: ['latte-simple'], roles: MOCK_ROLES })
+    const orphan = await store.runs.create(config)
+    createdRuns.push(orphan.id)
+    await store.runs.setStatus(orphan.id, 'running', { startedAt: Date.now() })
+    const finished = await store.runs.create(config)
+    createdRuns.push(finished.id)
+    await store.runs.setStatus(finished.id, 'finished', { finishedAt: Date.now() })
+
+    const runs = new RunManager(store, false)
+    const reaped = await runs.reapOrphans()
+    expect(reaped).toContain(orphan.id)
+    expect(reaped).not.toContain(finished.id)
+    const row = await store.runs.get(orphan.id)
+    expect(row?.status).toBe('failed')
+    expect(row?.error).toMatch(/interrupted/)
+    expect((await store.runs.get(finished.id))?.status).toBe('finished')
+  })
+})

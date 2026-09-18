@@ -1,30 +1,10 @@
 import { allTimelines } from '@cafe/protocol'
+import { useState } from 'react'
 import { fmtDelta, fmtMs } from '../format.js'
+import { MODE_DOCS, modeDoc } from '../playback/mode-docs.js'
 import type { PlaybackMode, TimelinePlayer } from '../playback/TimelinePlayer.js'
 
-const MODES: Array<{ id: PlaybackMode; label: string; hint: string; liveOnly?: boolean }> = [
-  {
-    id: 'live-buffered',
-    label: 'Live',
-    hint: 'A few seconds behind real time so every beat can be animated properly',
-  },
-  { id: 'live-raw', label: 'Raw', hint: 'Wall clock, no buffer. Honest but you will miss detail' },
-  { id: 'replay', label: 'Replay', hint: 'Real timing at a chosen speed' },
-  { id: 'step', label: 'Step', hint: 'Pause on every beat; arrows to move' },
-  {
-    id: 'directors-cut',
-    label: "Director's cut",
-    hint: 'Tiny steps stretched, hangs compressed, order preserved',
-  },
-]
-
-export function PlaybackControls({
-  player,
-  isLiveRun,
-}: {
-  player: TimelinePlayer
-  isLiveRun: boolean
-}) {
+export function PlaybackControls({ player }: { player: TimelinePlayer }) {
   const pos = player.position
   const timelines = allTimelines(player.events)
   const markers: Array<{ v: number; name: string; outcome: string | null }> = []
@@ -36,18 +16,19 @@ export function PlaybackControls({
   const timed = player.mode === 'replay' || player.mode === 'directors-cut'
   const end = Math.max(1, pos.visualEnd)
   const frac = Math.min(1, pos.visualNow / end)
+  // Nothing loaded: the transport would toggle an icon and change nothing, so keep it off.
+  const idle = pos.total === 0
 
   return (
     <div className="playback">
       <div className="playback-row">
         <div className="segmented" role="tablist" aria-label="Playback mode">
-          {MODES.map((m) => (
+          {MODE_DOCS.map((m) => (
             <button
               key={m.id}
               type="button"
               className={player.mode === m.id ? 'on' : ''}
-              title={m.hint}
-              disabled={m.liveOnly && !isLiveRun}
+              title={`${m.label} (${m.key})`}
               onClick={() => player.setMode(m.id)}
             >
               {m.label}
@@ -59,7 +40,7 @@ export function PlaybackControls({
             type="button"
             onClick={() => player.stepBack()}
             title="Previous beat (←)"
-            disabled={pos.cursor === 0}
+            disabled={idle || pos.cursor === 0}
           >
             ◀
           </button>
@@ -69,7 +50,7 @@ export function PlaybackControls({
               className="primary"
               onClick={() => player.stepForward()}
               title="Next beat (→ or space)"
-              disabled={pos.atEnd}
+              disabled={idle || pos.atEnd}
             >
               Next ▶
             </button>
@@ -78,8 +59,14 @@ export function PlaybackControls({
               type="button"
               className="primary"
               onClick={() => (player.playing ? player.pause() : player.play())}
-              title="Play / pause (space)"
-              disabled={player.mode === 'live-raw'}
+              title={
+                idle
+                  ? 'Open the cafe or load a recent shift first'
+                  : player.mode === 'live-raw'
+                    ? 'Raw applies events as they arrive; nothing to pause'
+                    : 'Play / pause (space)'
+              }
+              disabled={idle || player.mode === 'live-raw'}
             >
               {player.playing ? '❚❚' : '▶'}
             </button>
@@ -88,7 +75,7 @@ export function PlaybackControls({
             type="button"
             onClick={() => player.stepForward()}
             title="Next beat (→)"
-            disabled={pos.atEnd}
+            disabled={idle || pos.atEnd}
           >
             ▶
           </button>
@@ -138,6 +125,8 @@ export function PlaybackControls({
           </label>
         )}
       </div>
+
+      <ModeHelp mode={player.mode} />
 
       {player.mode === 'directors-cut' && (
         <div className="playback-row cut">
@@ -228,6 +217,48 @@ export function PlaybackControls({
           <span className="muted">{fmtMs(pos.realElapsedMs)} elapsed</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * What the current mode does and how to drive it: two sentences, expandable to the
+ * long form. Collapses again whenever the mode changes.
+ */
+function ModeHelp({ mode }: { mode: PlaybackMode }) {
+  // Remember which mode was expanded, so switching modes collapses the help again.
+  const [openFor, setOpenFor] = useState<PlaybackMode | null>(null)
+  const open = openFor === mode
+  const setOpen = (v: boolean) => setOpenFor(v ? mode : null)
+  const doc = modeDoc(mode)
+  const id = `mode-help-${mode}`
+  return (
+    <div className={`mode-help ${open ? 'open' : ''}`}>
+      {open ? (
+        <div id={id}>
+          {doc.details.map((p) => (
+            <p key={p.slice(0, 24)}>{p}</p>
+          ))}
+          <button type="button" className="link" onClick={() => setOpen(false)}>
+            See less
+          </button>
+        </div>
+      ) : (
+        <p>
+          <button
+            type="button"
+            className="mode-help-summary"
+            aria-expanded={false}
+            aria-controls={id}
+            onClick={() => setOpen(true)}
+          >
+            {doc.summary.replace(/\.$/, '')}…
+          </button>{' '}
+          <button type="button" className="link" onClick={() => setOpen(true)}>
+            See more
+          </button>
+        </p>
+      )}
     </div>
   )
 }

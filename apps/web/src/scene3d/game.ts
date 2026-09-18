@@ -5,16 +5,14 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
-import { CafeScene3D, type SceneCallbacks } from './CafeScene3D.js'
+import type { SceneCallbacks, SceneHandle } from '../views/types.js'
+import { CafeScene3D } from './CafeScene3D.js'
 import { COLS, ROWS } from './layout.js'
 
-export interface Game {
+export interface Game extends SceneHandle {
   scene: CafeScene3D
   renderer: THREE.WebGLRenderer
   camera: THREE.PerspectiveCamera
-  /** Advance one frame manually (used when the tab is hidden and rAF is paused). */
-  step(now: number): void
-  destroy(): void
   /** Last frame's CPU time in ms. */
   frameMs: number
 }

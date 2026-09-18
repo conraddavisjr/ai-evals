@@ -1,10 +1,8 @@
-import type { RunConfigInput, Scenario } from '@cafe/protocol'
+import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, type ModelsInfo, type RunRow } from '../api.js'
 import { fmtMs, fmtUsd, shortModel } from '../format.js'
-
-const ROLES = ['cashier', 'barista', 'manager', 'judge'] as const
-type RoleKey = (typeof ROLES)[number]
+import { type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
+import { ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
 
 /** Rough per-visit token profile for the pre-run estimate. */
 const TOKENS_PER_VISIT: Record<RoleKey, { steps: number; inPerStep: number; outPerStep: number }> =
@@ -34,37 +32,29 @@ const priceOf = (spec: string): [number, number] =>
 export interface RunConfigPanelProps {
   models: ModelsInfo
   scenarios: Scenario[]
-  onStart: (config: RunConfigInput) => Promise<void>
+  draft: RunDraft
+  onDraftChange: (next: RunDraft) => void
+  /** Start the draft. Resolves when the run has been accepted; rejects with the reason otherwise. */
+  onStart: () => Promise<void>
   onLoadRun: (run: RunRow) => void
   currentRunId: string | null
   busy: boolean
+  /** The last failure to start a shift, wherever it was attempted from. */
+  startError: string | null
 }
-
-type Draft = RunConfigInput & { roles: Record<RoleKey, string> }
 
 export function RunConfigPanel({
   models,
   scenarios,
+  draft,
+  onDraftChange,
   onStart,
   onLoadRun,
   currentRunId,
   busy,
+  startError,
 }: RunConfigPanelProps) {
-  const d = models.defaults
-  const [draft, setDraft] = useState<Draft>({
-    name: 'shift',
-    scenarioIds: scenarios.map((s) => s.id),
-    roles: { ...d.roles },
-    staffing: { ...d.staffing },
-    chaos: { ...d.chaos },
-    budget: { ...d.budget },
-    arrivalGapMs: d.arrivalGapMs,
-    judgeEnabled: true,
-    triageEnabled: true,
-    mockPacing: { ...d.mockPacing },
-  })
-  const [pacingPreset, setPacingPreset] = useState<'realistic' | 'instant' | 'hang'>('realistic')
-  const [error, setError] = useState<string | null>(null)
+  const api = useHarness()
   const [runs, setRuns] = useState<RunRow[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -74,7 +64,7 @@ export function RunConfigPanel({
         .runs()
         .then(setRuns)
         .catch(() => {}),
-    [],
+    [api],
   )
   useEffect(() => {
     void refreshRuns()
@@ -82,9 +72,9 @@ export function RunConfigPanel({
     return () => clearInterval(id)
   }, [refreshRuns])
 
-  const patch = (p: Partial<Draft>) => setDraft((x) => ({ ...x, ...p }))
+  const patch = (p: Partial<RunDraft>) => onDraftChange({ ...draft, ...p })
   const setRole = (role: RoleKey, spec: string) =>
-    setDraft((x) => ({ ...x, roles: { ...x.roles, [role]: spec } }))
+    onDraftChange({ ...draft, roles: { ...draft.roles, [role]: spec } })
 
   const n = draft.scenarioIds.length
   const estimate = useMemo(() => {
@@ -115,38 +105,41 @@ export function RunConfigPanel({
   }, [scenarios])
 
   const submit = async () => {
-    setError(null)
-    const pacing =
-      pacingPreset === 'instant'
-        ? {
-            llmStepMs: [0, 0] as [number, number],
-            toolMs: [0, 0] as [number, number],
-            hangOrders: [],
-            hangMs: 0,
-          }
-        : pacingPreset === 'hang'
-          ? {
-              llmStepMs: [800, 2500] as [number, number],
-              toolMs: [3, 20] as [number, number],
-              hangOrders: [1],
-              hangMs: 25_000,
-            }
-          : {
-              llmStepMs: [800, 2500] as [number, number],
-              toolMs: [3, 20] as [number, number],
-              hangOrders: [],
-              hangMs: 0,
-            }
     try {
-      await onStart({ ...draft, mockPacing: pacing })
+      await onStart()
       void refreshRuns()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+    } catch {
+      // surfaced through startError
     }
   }
 
+  const startRow = (
+    <div className="start-row">
+      <div>
+        <div className="estimate">
+          est. {fmtUsd(estimate)} {anyLive ? '' : '(all mock)'}
+        </div>
+        <div className="muted small">
+          {n} customer{n === 1 ? '' : 's'} · {draft.staffing?.cashiers ?? 2} cashiers ·{' '}
+          {draft.staffing?.baristas ?? 1} barista{(draft.staffing?.baristas ?? 1) === 1 ? '' : 's'}
+        </div>
+        {anyLive && !models.allowLive && (
+          <div className="bad small">
+            Live specs selected but live models are disabled on the server.
+          </div>
+        )}
+      </div>
+      <button type="button" className="primary big" disabled={busy || n === 0} onClick={submit}>
+        {busy ? 'Running…' : 'Open the cafe'}
+      </button>
+    </div>
+  )
+
   return (
     <div className="run-config">
+      {startRow}
+      {startError && <div className="error-box">{startError}</div>}
+
       <section>
         <h3>Staff models</h3>
         {ROLES.map((role) => (
@@ -192,27 +185,52 @@ export function RunConfigPanel({
             none
           </button>
         </h3>
-        {Object.entries(grouped).map(([tag, list]) => (
-          <div key={tag} className="scenario-group">
-            <div className={`tag ${tag}`}>{tag}</div>
-            {list.map((s) => (
-              <label key={s.id} className="check">
-                <input
-                  type="checkbox"
-                  checked={draft.scenarioIds.includes(s.id)}
-                  onChange={(e) =>
-                    patch({
-                      scenarioIds: e.target.checked
-                        ? [...draft.scenarioIds, s.id]
-                        : draft.scenarioIds.filter((x) => x !== s.id),
-                    })
-                  }
-                />
-                <span title={s.customer.utterances[0]}>{s.title}</span>
-              </label>
-            ))}
-          </div>
-        ))}
+        {Object.entries(grouped).map(([tag, list]) => {
+          const picked = list.filter((s) => draft.scenarioIds.includes(s.id)).length
+          return (
+            <div key={tag} className="scenario-group">
+              <button
+                type="button"
+                className={`tag ${tag} ${picked === 0 ? 'off' : ''}`}
+                title={
+                  picked === list.length
+                    ? `Deselect all ${tag} customers`
+                    : `Select all ${tag} customers`
+                }
+                aria-pressed={picked === list.length}
+                onClick={() =>
+                  patch({
+                    scenarioIds: toggleGroup(
+                      draft.scenarioIds,
+                      list.map((s) => s.id),
+                    ),
+                  })
+                }
+              >
+                {tag}{' '}
+                <span className="count">
+                  {picked}/{list.length}
+                </span>
+              </button>
+              {list.map((s) => (
+                <label key={s.id} className="check">
+                  <input
+                    type="checkbox"
+                    checked={draft.scenarioIds.includes(s.id)}
+                    onChange={(e) =>
+                      patch({
+                        scenarioIds: e.target.checked
+                          ? [...draft.scenarioIds, s.id]
+                          : draft.scenarioIds.filter((x) => x !== s.id),
+                      })
+                    }
+                  />
+                  <span title={s.customer.utterances[0]}>{s.title}</span>
+                </label>
+              ))}
+            </div>
+          )
+        })}
       </section>
 
       <section>
@@ -254,8 +272,8 @@ export function RunConfigPanel({
         <label className="row">
           <span>mock pacing</span>
           <select
-            value={pacingPreset}
-            onChange={(e) => setPacingPreset(e.target.value as typeof pacingPreset)}
+            value={draft.pacing}
+            onChange={(e) => patch({ pacing: e.target.value as RunDraft['pacing'] })}
           >
             <option value="realistic">realistic (0.8–2.5s per model step)</option>
             <option value="hang">realistic + barista hangs on order #2</option>
@@ -386,43 +404,41 @@ export function RunConfigPanel({
         )}
       </section>
 
-      <div className="start-row">
-        <div>
-          <div className="estimate">
-            est. {fmtUsd(estimate)} {anyLive ? '' : '(all mock)'}
-          </div>
-          {anyLive && !models.allowLive && (
-            <div className="bad small">
-              Live specs selected but live models are disabled on the server.
-            </div>
-          )}
-        </div>
-        <button type="button" className="primary big" disabled={busy || n === 0} onClick={submit}>
-          {busy ? 'Running…' : 'Open the cafe'}
-        </button>
-      </div>
-      {error && <div className="error-box">{error}</div>}
-
       <section>
         <h3>Recent shifts</h3>
+        <p className="muted small">
+          Every shift is persisted. Click one to load it: a finished shift replays from the start, a
+          shift that is still running attaches live. Shifts the server lost track of (a restart
+          mid-run) are shown as interrupted.
+        </p>
         {runs.length === 0 ? (
           <p className="muted">None yet.</p>
         ) : (
           <ul className="runs">
-            {runs.slice(0, 15).map((r) => (
-              <li key={r.id} className={r.id === currentRunId ? 'current' : ''}>
-                <button type="button" className="link" onClick={() => onLoadRun(r)}>
-                  {new Date(r.createdAt).toLocaleTimeString()} · {r.config.name} ·{' '}
-                  {r.config.scenarioIds.length} customers
-                </button>
-                <span className={`pill ${r.status}`}>{r.status}</span>
-                <span className="muted small">
-                  {ROLES.map((role) => shortModel(r.config.roles[role]).replace(/^mock:/, '')).join(
-                    ' / ',
-                  )}
-                </span>
-              </li>
-            ))}
+            {runs.slice(0, 15).map((r) => {
+              // A run the server lost (restart mid-shift) is reaped as failed with an
+              // "interrupted" error at boot; a running row nobody owns is the same thing.
+              const interrupted =
+                ((r.status === 'running' || r.status === 'pending') && !r.active) ||
+                (r.status === 'failed' && (r.error?.startsWith('interrupted') ?? false))
+              const status = interrupted ? 'interrupted' : r.status
+              return (
+                <li key={r.id} className={r.id === currentRunId ? 'current' : ''}>
+                  <button type="button" className="link" onClick={() => onLoadRun(r)}>
+                    {new Date(r.createdAt).toLocaleTimeString()} · {r.config.name} ·{' '}
+                    {r.config.scenarioIds.length} customers
+                  </button>
+                  <span className={`pill ${status}`} title={r.error ?? undefined}>
+                    {status}
+                  </span>
+                  <span className="muted small">
+                    {ROLES.map((role) =>
+                      shortModel(r.config.roles[role]).replace(/^mock:/, ''),
+                    ).join(' / ')}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>

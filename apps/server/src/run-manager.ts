@@ -24,6 +24,25 @@ export class RunManager {
     private readonly allowLive: boolean,
   ) {}
 
+  /**
+   * Runs that were pending or running when the previous server process died can never
+   * finish: nothing owns them any more. Mark them failed at boot so the UI does not keep
+   * listing them as running. Returns the ids that were reaped.
+   */
+  async reapOrphans(): Promise<string[]> {
+    const rows = await this.store.runs.list(500)
+    const orphans = rows.filter(
+      (r) => (r.status === 'running' || r.status === 'pending') && !this.active.has(r.id),
+    )
+    for (const r of orphans) {
+      await this.store.runs.setStatus(r.id, 'failed', {
+        finishedAt: Date.now(),
+        error: 'interrupted: the server restarted while this shift was running',
+      })
+    }
+    return orphans.map((r) => r.id)
+  }
+
   validateConfig(input: RunConfigInput): RunConfig {
     const config = RunConfigSchema.parse(input)
     const live = Object.entries(config.roles).filter(([, spec]) => !isMockSpec(spec))
