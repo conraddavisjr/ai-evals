@@ -79,7 +79,7 @@ pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe
 `runs/frontier-vs-jev.example.json` is the Claude vs GPT vs Gemini staff comparison with Jev as judge, plus a same-family judge as a control.
 Every CLI run is persisted and appears under **Recent shifts** in the UI for replay.
 
-Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`.
+Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
 
 ## The 3D scene
 

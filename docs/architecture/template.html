@@ -1,0 +1,32 @@
+<title>__TITLE__</title>
+<meta name="description" content="__DESC__" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="__FONTS__" rel="stylesheet" />
+<style>
+__BASE_CSS__
+__THEME_CSS__
+</style>
+<div class="app">
+  <header class="bar">
+    <h1 class="title">__TITLE__</h1>
+    <span class="sub">__SUB__</span>
+    <span class="spacer"></span>
+    <input id="search" list="search-list" placeholder="__SEARCH__" aria-label="Jump to a component" />
+    <datalist id="search-list"></datalist>
+    <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+    <span class="zoom" id="zoom">100%</span>
+    <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+    <button id="zoom-fit" type="button">Fit</button>
+    <span class="status" id="status">__HINT__</span>
+  </header>
+  <div class="legend">__LEGEND__</div>
+  <div id="canvas"></div>
+</div>
+<script>
+__DATA_JS__
+</script>
+<script>
+window.ARCH_THEME = __THEME_JS__;
+__ENGINE_JS__
+</script>

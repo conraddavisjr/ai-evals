@@ -1,0 +1,65 @@
+/* Shared structure for both treatments. Colors and type come from the theme file. */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.4; overflow: hidden; }
+.app { height: 100%; display: flex; flex-direction: column; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); border-bottom: 1px solid var(--line); background: var(--bar); flex-wrap: wrap; }
+.bar .title { font-family: var(--font-display); font-size: 20px; font-weight: var(--display-weight); letter-spacing: 0.01em; color: var(--title); margin: 0; }
+.bar .sub { color: var(--muted); font-size: 12.5px; }
+.bar .spacer { flex: 1; }
+.bar button { font: inherit; font-weight: 600; color: var(--ink); background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.bar button:hover { border-color: var(--accent); }
+.bar button:focus-visible, .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar input { font: inherit; color: var(--ink); background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; min-width: 180px; }
+.bar .zoom { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 44px; text-align: center; }
+.bar .status { color: var(--muted); font-size: 12.5px; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend { display: flex; gap: 10px 14px; flex-wrap: wrap; padding: 6px 16px; border-bottom: 1px solid var(--line); background: var(--bar); font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; border: 1px dashed var(--seg-line); }
+#canvas { flex: 1; min-height: 0; position: relative; background: var(--canvas); }
+svg.arch { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+svg.arch.grabbing { cursor: grabbing; }
+.seg-box { fill: var(--seg-fill); stroke: var(--seg-line); stroke-width: 2; stroke-dasharray: 10 8; }
+.seg-title { display: flex; align-items: baseline; gap: 10px; font-family: var(--font-display); pointer-events: none; }
+.seg-name { font-size: 22px; font-weight: var(--display-weight); color: var(--seg-title); background: var(--canvas); padding: 0 8px; border-radius: 6px; }
+.seg-sub { font-family: var(--font-body); font-size: 12px; color: var(--muted); background: var(--canvas); padding: 0 6px; border-radius: 6px; }
+.edge-hit { fill: none; stroke: transparent; stroke-width: 14; }
+.edge-line { fill: none; stroke: var(--edge); stroke-width: 2; opacity: 0.8; transition: opacity 0.2s, stroke 0.2s; }
+.edge-label { font-family: var(--font-body); font-size: 11px; fill: var(--edge-label); paint-order: stroke; stroke: var(--canvas); stroke-width: 4px; stroke-linejoin: round; opacity: 0; transition: opacity 0.2s; }
+.zoomed-in .edge-label { opacity: 0.9; }
+.arrow { fill: var(--edge); }
+.arrow.hi { fill: var(--accent); }
+.has-open .edge:not(.hi) .edge-line { opacity: 0.12; }
+.has-open .edge:not(.hi) .edge-label { opacity: 0; }
+.edge.hi .edge-line { stroke: var(--accent); stroke-width: 3; opacity: 1; }
+.edge.hi .edge-line { marker-end: url(#arrow-hi); }
+.edge.hi .edge-label { opacity: 1; fill: var(--accent-ink); font-weight: 700; }
+.node { transition: opacity 0.2s; }
+.node.dim { opacity: 0.35; }
+.card { background: var(--card); color: var(--ink); border: 1.5px solid var(--card-line); border-radius: var(--card-radius); padding: 10px 12px 8px; box-shadow: var(--card-shadow); cursor: pointer; font-family: var(--font-body); transition: box-shadow 0.15s, transform 0.15s; display: flex; flex-direction: column; gap: 6px; }
+.card:hover { box-shadow: var(--card-shadow-hover); transform: translateY(-1px); }
+.node.open .card { border-color: var(--accent); box-shadow: var(--card-shadow-open); }
+.node.linked .card { border-color: var(--accent-soft); }
+.card-head { display: flex; flex-direction: column; gap: 1px; }
+.card-title { font-family: var(--font-display); font-weight: var(--display-weight); font-size: 16px; line-height: 1.15; color: var(--card-title); text-wrap: balance; }
+.card-nick { font-size: 11.5px; color: var(--accent-ink); font-style: italic; }
+.card-summary { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.card-more { display: none; flex-direction: column; gap: 8px; border-top: 1px dashed var(--card-line); padding-top: 8px; }
+.node.open .card-more { display: flex; }
+.card-details { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--ink); display: flex; flex-direction: column; gap: 4px; }
+.card-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.card-files code { font-family: var(--font-mono); font-size: 11px; background: var(--code-bg); color: var(--code-ink); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+.card-hint { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.node.open .card-hint { display: none; }
+.tone-sky { --seg-line: var(--t-sky); --seg-title: var(--t-sky-ink); --card-title: var(--t-sky-ink); }
+.tone-slate { --seg-line: var(--t-slate); --seg-title: var(--t-slate-ink); --card-title: var(--t-slate-ink); }
+.tone-teal { --seg-line: var(--t-teal); --seg-title: var(--t-teal-ink); --card-title: var(--t-teal-ink); }
+.tone-moss { --seg-line: var(--t-moss); --seg-title: var(--t-moss-ink); --card-title: var(--t-moss-ink); }
+.tone-gold { --seg-line: var(--t-gold); --seg-title: var(--t-gold-ink); --card-title: var(--t-gold-ink); }
+.tone-copper { --seg-line: var(--t-copper); --seg-title: var(--t-copper-ink); --card-title: var(--t-copper-ink); }
+.tone-lavender { --seg-line: var(--t-lavender); --seg-title: var(--t-lavender-ink); --card-title: var(--t-lavender-ink); }
+.tone-rose { --seg-line: var(--t-rose); --seg-title: var(--t-rose-ink); --card-title: var(--t-rose-ink); }
+.tone-stone { --seg-line: var(--t-stone); --seg-title: var(--t-stone-ink); --card-title: var(--t-stone-ink); }
+.tone-ink { --seg-line: var(--t-ink); --seg-title: var(--t-ink-ink); --card-title: var(--t-ink-ink); }
+@media (prefers-reduced-motion: reduce) { .card, .node, .edge-line { transition: none; } }
+@media (max-width: 600px) { .bar .status, .legend { display: none; } .bar input { min-width: 120px; } }
