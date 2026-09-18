@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
@@ -18,7 +19,7 @@ export interface Game {
   frameMs: number
 }
 
-const CAMERA_PITCH = THREE.MathUtils.degToRad(55)
+const CAMERA_PITCH = THREE.MathUtils.degToRad(40)
 const CAMERA_YAW = THREE.MathUtils.degToRad(9)
 
 /**
@@ -71,7 +72,27 @@ export function createGame(
   scene.scene.add(fill)
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 120)
-  const target = new THREE.Vector3(COLS / 2, 0.4, ROWS / 2)
+  const controls = new OrbitControls(camera, renderer.domElement)
+  const target = controls.target
+  controls.enableDamping = true
+  controls.dampingFactor = 0.12
+  controls.rotateSpeed = 0.65
+  controls.zoomSpeed = 0.8
+  controls.minDistance = 7
+  controls.maxDistance = 90
+  controls.minPolarAngle = THREE.MathUtils.degToRad(12)
+  controls.maxPolarAngle = THREE.MathUtils.degToRad(75)
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.PAN,
+  }
+  controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
+  let cameraTouched = false
+  const onCameraStart = () => {
+    cameraTouched = true
+  }
+  controls.addEventListener('start', onCameraStart)
 
   const composer = new EffectComposer(renderer)
   composer.addPass(new RenderPass(scene.scene, camera))
@@ -79,7 +100,7 @@ export function createGame(
   composer.addPass(bloom)
   composer.addPass(new OutputPass())
 
-  /** Place the camera on its fixed angle at a distance that fits the whole square. */
+  /** Frame the square at the default angle, used on first load and Reset view. */
   function fit(width: number, height: number) {
     camera.aspect = width / height
     target.set(COLS / 2, 0.4, ROWS / 2)
@@ -143,6 +164,15 @@ export function createGame(
 
   let width = 1
   let height = 1
+  function resetView() {
+    // Drain any remaining inertia before fitting the current viewport.
+    controls.enableDamping = false
+    controls.update()
+    fit(width, height)
+    controls.update()
+    controls.enableDamping = true
+    cameraTouched = false
+  }
   function resize() {
     const rect = parent.getBoundingClientRect()
     width = Math.max(320, Math.floor(rect.width))
@@ -152,16 +182,54 @@ export function createGame(
     renderer.domElement.style.height = `${height}px`
     composer.setSize(width, height)
     bloom.setSize(width / 4, height / 4)
-    fit(width, height)
+    if (!cameraTouched) resetView()
+    else {
+      camera.aspect = width / height
+      camera.updateProjectionMatrix()
+    }
   }
   resize()
   const ro = new ResizeObserver(() => resize())
   ro.observe(parent)
 
-  // picking: click a character to select it, empty ground to clear
+  const cameraTools = document.createElement('div')
+  cameraTools.className = 'scene-camera-controls'
+  const hint = document.createElement('span')
+  hint.className = 'camera-hint desktop'
+  hint.textContent = 'Drag to orbit · Scroll to zoom · Right-drag to pan'
+  const touchHint = document.createElement('span')
+  touchHint.className = 'camera-hint touch'
+  touchHint.textContent = 'Drag to orbit · Pinch to zoom · Two fingers to pan'
+  const resetButton = document.createElement('button')
+  resetButton.type = 'button'
+  resetButton.textContent = 'Reset view'
+  resetButton.title =
+    'Return to the default cafe view. Pan with right-drag, Mac secondary-click drag, or Shift-drag.'
+  resetButton.addEventListener('click', resetView)
+  cameraTools.append(hint, touchHint, resetButton)
+  parent.appendChild(cameraTools)
+
+  // Pick on release only: orbiting, panning and multi-touch must never select staff.
   const raycaster = new THREE.Raycaster()
   const pointer = new THREE.Vector2()
+  const activePointers = new Set<number>()
+  let click: { id: number; x: number; y: number; eligible: boolean } | null = null
   const onPointerDown = (ev: PointerEvent) => {
+    activePointers.add(ev.pointerId)
+    if (activePointers.size > 1) {
+      if (click) click.eligible = false
+      return
+    }
+    click = {
+      id: ev.pointerId,
+      x: ev.clientX,
+      y: ev.clientY,
+      eligible: ev.button === 0 && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey,
+    }
+    scene.setHover(null)
+    renderer.domElement.style.cursor = 'grabbing'
+  }
+  const pick = (ev: PointerEvent) => {
     const rect = renderer.domElement.getBoundingClientRect()
     pointer.set(
       ((ev.clientX - rect.left) / rect.width) * 2 - 1,
@@ -174,8 +242,15 @@ export function createGame(
       | undefined
     scene.select(id ?? null)
   }
-  renderer.domElement.addEventListener('pointerdown', onPointerDown)
-  renderer.domElement.addEventListener('pointermove', (ev) => {
+  const onPointerMove = (ev: PointerEvent) => {
+    if (
+      click &&
+      ev.pointerId === click.id &&
+      Math.hypot(ev.clientX - click.x, ev.clientY - click.y) > 5
+    )
+      click.eligible = false
+    if (activePointers.size > 0) return
+    if (ev.target !== renderer.domElement || ev.pointerType === 'touch') return
     const rect = renderer.domElement.getBoundingClientRect()
     pointer.set(
       ((ev.clientX - rect.left) / rect.width) * 2 - 1,
@@ -186,9 +261,34 @@ export function createGame(
     const id = hit.find((h) => h.object.userData.characterId)?.object.userData.characterId as
       | string
       | undefined
-    renderer.domElement.style.cursor = id ? 'pointer' : 'default'
+    renderer.domElement.style.cursor = id ? 'pointer' : 'grab'
     scene.setHover(id ?? null)
-  })
+  }
+  const onPointerUp = (ev: PointerEvent) => {
+    if (!activePointers.has(ev.pointerId)) return
+    activePointers.delete(ev.pointerId)
+    if (click?.id === ev.pointerId) {
+      if (click.eligible && Math.hypot(ev.clientX - click.x, ev.clientY - click.y) <= 5) pick(ev)
+      click = null
+    }
+    if (activePointers.size === 0) renderer.domElement.style.cursor = 'grab'
+  }
+  const onPointerCancel = (ev: PointerEvent) => {
+    activePointers.delete(ev.pointerId)
+    if (click) click.eligible = false
+    if (activePointers.size === 0) {
+      click = null
+      renderer.domElement.style.cursor = 'grab'
+    }
+  }
+  const onPointerLeave = () => scene.setHover(null)
+  renderer.domElement.style.cursor = 'grab'
+  renderer.domElement.addEventListener('pointerdown', onPointerDown)
+  renderer.domElement.addEventListener('pointerleave', onPointerLeave)
+  const doc = renderer.domElement.ownerDocument
+  doc.addEventListener('pointermove', onPointerMove, true)
+  doc.addEventListener('pointerup', onPointerUp, true)
+  doc.addEventListener('pointercancel', onPointerCancel, true)
 
   let last: number | null = null
   let raf = 0
@@ -202,6 +302,7 @@ export function createGame(
       const dt = last === null ? 0 : Math.min(0.1, (now - last) / 1000)
       last = now
       scene.update(dt, now)
+      controls.update()
       composer.render()
       scene.overlay.update(camera, width, height)
       game.frameMs = performance.now() - t0
@@ -210,6 +311,14 @@ export function createGame(
       cancelAnimationFrame(raf)
       ro.disconnect()
       renderer.domElement.removeEventListener('pointerdown', onPointerDown)
+      renderer.domElement.removeEventListener('pointerleave', onPointerLeave)
+      doc.removeEventListener('pointermove', onPointerMove, true)
+      doc.removeEventListener('pointerup', onPointerUp, true)
+      doc.removeEventListener('pointercancel', onPointerCancel, true)
+      controls.removeEventListener('start', onCameraStart)
+      controls.dispose()
+      resetButton.removeEventListener('click', resetView)
+      cameraTools.remove()
       scene.dispose()
       renderer.dispose()
       renderer.domElement.remove()

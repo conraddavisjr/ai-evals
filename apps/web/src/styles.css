@@ -1105,3 +1105,105 @@ button:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 3px;
 }
+
+.scene-camera-controls {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  pointer-events: none;
+}
+.scene-camera-controls button {
+  pointer-events: auto;
+  background: #183541ed;
+  border-color: #597b80;
+  font-size: 12px;
+}
+.camera-hint {
+  color: #c5d9d7;
+  background: #0d2632d9;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.camera-hint.touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .camera-hint.desktop {
+    display: none;
+  }
+  .camera-hint.touch {
+    display: inline;
+  }
+}
+@media (max-width: 600px) {
+  .scene-camera-controls {
+    left: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+  .camera-hint {
+    font-size: 9px;
+  }
+}
+
+/* Stack the scene and a scrollable panel on phones without overlapping grid rows. */
+@media (max-width: 900px) {
+  .app {
+    height: auto;
+    min-height: 100%;
+  }
+  header {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+  .status {
+    flex-wrap: wrap;
+    max-width: 100%;
+    gap: 8px;
+  }
+  main {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    min-width: 0;
+  }
+  .stage {
+    flex: none;
+  }
+  .canvas-wrap {
+    flex: none;
+    height: clamp(320px, 60svh, 560px);
+    min-height: 320px;
+  }
+  .panel {
+    flex: none;
+    height: min(75svh, 720px);
+    min-height: 360px;
+    border-left: none;
+  }
+  .playback-row {
+    gap: 8px;
+  }
+  .segmented {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .scrubber-row {
+    flex-wrap: wrap;
+  }
+  .scrubber {
+    min-width: 100px;
+  }
+  .readout {
+    flex-wrap: wrap;
+    white-space: normal;
+    font-size: 11px;
+    gap: 6px;
+  }
+}

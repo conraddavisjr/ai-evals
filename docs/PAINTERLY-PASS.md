@@ -15,7 +15,7 @@ Ticket labels retain simulation-driven age colors and add a glow when overdue.
 Staff names remain visible, and selected staff retain their gold ring.
 The panels use stone-like headers and a pale ledger treatment for Inspector speech.
 
-The camera fits the expanded perimeter and resets its target on resize.
+The camera fits the expanded perimeter by default and preserves a manually adjusted view on resize.
 Water and lamp animation use relative simulation seconds from `clockEpoch()` to preserve shader precision and repeatability when seeking.
 `onApply`, `onSnap`, the station grid, routes, progress rings, steam, speech, alerts and picking remain in place.
 No files under `packages/`, `apps/server/`, `apps/web/src/playback/` or `apps/web/src/state/` were changed.
@@ -54,3 +54,29 @@ The scene contains eight real point lights and retains `mergeStatic()` and quart
 - A single-worker retry with a longer CLI hook timeout still reproduced the project-level 10-second setup timeout.
 - The failing tests and all backend implementation files remain unchanged.
 - `pnpm test --project web`: all 8 playback and layout tests passed.
+
+
+## Interactive camera follow-up
+
+The default camera pitch is now 40 degrees above the ground instead of 55 degrees.
+OrbitControls provides smooth drag rotation, wheel zoom, secondary-button or Shift-drag panning, one-finger touch rotation, and two-finger pinch/pan.
+A Reset view button drains camera inertia and reframes the current viewport.
+Rotation stays above the ground, and zoom distance is bounded.
+The controls and all pointer listeners are disposed with the scene.
+
+Character picking waits for pointer release and ignores movement beyond five pixels, modified mouse gestures, and multi-touch.
+The browser verified orbiting from a character without changing selection, wheel zoom, right-drag and Shift-drag panning, preserved camera position after resize, reset, and ordinary character clicks.
+Chromium touch-event emulation verified one-finger rotation and two-finger pinch and pan without accidental selection.
+Replay and director's cut continue advancing with the controls installed.
+No browser page errors occurred.
+A 60-frame CPU sample with the controls measured 2.2 ms median and 3.9 ms p95.
+Web typecheck, repository lint, and all eight web tests passed after this change.
+The full backend suite limitations from the preceding pass still apply.
+
+- [Default camera](screenshots/camera-default.png)
+- [Rotated camera](screenshots/camera-orbit.png)
+
+The phone layout stacks the scene above the panel with enough height for both, avoiding overlapping playback controls and panel taps.
+At a 390-pixel viewport, the browser verified no horizontal overflow, touch Reset view, and tapping the animated red alert to open Hazel's crash details.
+
+- [Phone layout](screenshots/camera-mobile.png)
