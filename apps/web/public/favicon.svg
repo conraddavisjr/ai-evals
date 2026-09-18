@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <title>Stardust Cafe</title>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#ffd27a" stop-opacity=".95"/>
+      <stop offset="60%" stop-color="#ff9d3d" stop-opacity=".35"/>
+      <stop offset="100%" stop-color="#ff9d3d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="48" height="48" rx="10" fill="#10262f"/>
+  <circle cx="24" cy="22" r="22" fill="url(#glow)"/>
+  <path d="M14 18h20v13a10 10 0 0 1-20 0z" fill="#f6efdd" stroke="#23485a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M34 21h4a4 4 0 0 1 0 8h-4" fill="none" stroke="#23485a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M16 40h16" stroke="#23485a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M20 14c0-3 3-3 3-6M27 14c0-3 3-3 3-6" fill="none" stroke="#ffd27a" stroke-width="2.5" stroke-linecap="round"/>
+  <ellipse cx="24" cy="18" rx="10" ry="2.5" fill="#d28a5a"/>
+</svg>
