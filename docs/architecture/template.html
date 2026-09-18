@@ -7,7 +7,7 @@
 __BASE_CSS__
 __THEME_CSS__
 </style>
-<div class="app">
+<div class="archv archv-page">
   <header class="bar">
     <h1 class="title">__TITLE__</h1>
     <span class="sub">__SUB__</span>
@@ -25,8 +25,18 @@ __THEME_CSS__
 </div>
 <script>
 __DATA_JS__
-</script>
-<script>
-window.ARCH_THEME = __THEME_JS__;
 __ENGINE_JS__
+mountArchitecture(document.getElementById('canvas'), {
+  data: ARCH,
+  nicknames: __NICK__,
+  controls: {
+    zoomIn: document.getElementById('zoom-in'),
+    zoomOut: document.getElementById('zoom-out'),
+    fit: document.getElementById('zoom-fit'),
+    zoom: document.getElementById('zoom'),
+    status: document.getElementById('status'),
+    search: document.getElementById('search'),
+    searchList: document.getElementById('search-list'),
+  },
+})
 </script>

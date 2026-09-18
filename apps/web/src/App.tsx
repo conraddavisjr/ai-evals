@@ -1,6 +1,7 @@
 import type { RunConfigInput, Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type ModelsInfo, openStream, type RunRow } from './api.js'
+import { ArchitectureView } from './architecture/ArchitectureView.js'
 import { AgentInspector } from './components/AgentInspector.js'
 import { EventLog } from './components/EventLog.js'
 import { MetricsDashboard } from './components/MetricsDashboard.js'
@@ -32,6 +33,8 @@ export function App() {
   const [isLive, setIsLive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('run')
+  const [view, setView] = useState<'cafe' | 'architecture'>('cafe')
+  const [menuOpen, setMenuOpen] = useState(false)
   const closeStream = useRef<(() => void) | null>(null)
 
   const onSelect = useCallback((id: string | null) => {
@@ -126,6 +129,22 @@ export function App() {
     if (runId) await api.cancelRun(runId)
   }, [runId])
 
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    const onClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.menu-wrap')) setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onClick)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onClick)
+    }
+  }, [menuOpen])
+
   // Phaser sleeps in hidden tabs; keep the player (and the panels) current at a low rate meanwhile.
   useEffect(() => {
     const id = setInterval(() => {
@@ -163,6 +182,44 @@ export function App() {
   return (
     <div className="app">
       <header>
+        <div className="menu-wrap">
+          <button
+            type="button"
+            className={`hamburger ${menuOpen ? 'on' : ''}`}
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            aria-controls="main-menu"
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+          {menuOpen && (
+            <nav id="main-menu" className="menu" aria-label="Main">
+              <button
+                type="button"
+                className={view === 'cafe' ? 'on' : ''}
+                onClick={() => {
+                  setView('cafe')
+                  setMenuOpen(false)
+                }}
+              >
+                Cafe
+              </button>
+              <button
+                type="button"
+                className={view === 'architecture' ? 'on' : ''}
+                onClick={() => {
+                  setView('architecture')
+                  setMenuOpen(false)
+                }}
+              >
+                Architecture
+              </button>
+            </nav>
+          )}
+        </div>
         <div className="brand">
           <LanternMark />
           <div className="brand-text">
@@ -195,6 +252,7 @@ export function App() {
       </header>
 
       <main>
+        {view === 'architecture' && <ArchitectureView />}
         <section className="stage">
           <div className="canvas-wrap" ref={mountRef} />
           <PlaybackControls player={player} isLiveRun={isLive} />

@@ -1,14 +1,20 @@
 /* Pannable, zoomable architecture canvas. Reads window.ARCH; theme decides copy and chrome. */
-;(function () {
+/**
+ * Mount the diagram into `container`. `options.controls` are optional toolbar elements
+ * the caller renders (zoomIn, zoomOut, fit, zoom, status, search, searchList).
+ * Returns { destroy, fit, expand }.
+ */
+export function mountArchitecture(container, options) {
   const NS = 'http://www.w3.org/2000/svg'
   const XH = 'http://www.w3.org/1999/xhtml'
   const DEF_W = 250
   const DEF_H = 120
   const EXP_W = 470
 
-  const opts = window.ARCH_THEME || {}
+  const opts = options || {}
+  const controls = opts.controls || {}
   const useNick = !!opts.nicknames
-  const data = window.ARCH
+  const data = opts.data
   const segById = Object.fromEntries(data.segments.map((s) => [s.id, s]))
   const nodeById = Object.fromEntries(data.nodes.map((n) => [n.id, n]))
   for (const n of data.nodes) {
@@ -29,14 +35,36 @@
     return e
   }
 
-  const root = document.getElementById('canvas')
-  const svg = el('svg', { class: 'arch', tabindex: '0', role: 'application', 'aria-label': 'Architecture diagram' }, root)
+  const root = container
+  root.classList.add('archv-canvas')
+  const svg = el(
+    'svg',
+    {
+      class: 'archv-svg',
+      tabindex: '0',
+      role: 'application',
+      'aria-label': 'Architecture diagram',
+    },
+    root,
+  )
   const defs = el('defs', {}, svg)
   for (const [id, cls] of [
     ['arrow', 'arrow'],
     ['arrow-hi', 'arrow hi'],
   ]) {
-    const m = el('marker', { id, viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '8', markerHeight: '8', orient: 'auto-start-reverse' }, defs)
+    const m = el(
+      'marker',
+      {
+        id,
+        viewBox: '0 0 10 10',
+        refX: '9',
+        refY: '5',
+        markerWidth: '8',
+        markerHeight: '8',
+        orient: 'auto-start-reverse',
+      },
+      defs,
+    )
     el('path', { d: 'M0,0 L10,5 L0,10 z', class: cls }, m)
   }
   const world = el('g', { class: 'world' }, svg)
@@ -77,10 +105,19 @@
   }
   function pathFor(a, b) {
     const { s, t, horiz } = anchors(a, b)
-    const k = horiz ? Math.max(40, Math.abs(t.x - s.x) * 0.45) : Math.max(40, Math.abs(t.y - s.y) * 0.45)
-    const c1 = horiz ? { x: s.x + Math.sign(t.x - s.x) * k, y: s.y } : { x: s.x, y: s.y + Math.sign(t.y - s.y) * k }
-    const c2 = horiz ? { x: t.x - Math.sign(t.x - s.x) * k, y: t.y } : { x: t.x, y: t.y - Math.sign(t.y - s.y) * k }
-    const mid = { x: (s.x + 3 * c1.x + 3 * c2.x + t.x) / 8, y: (s.y + 3 * c1.y + 3 * c2.y + t.y) / 8 }
+    const k = horiz
+      ? Math.max(40, Math.abs(t.x - s.x) * 0.45)
+      : Math.max(40, Math.abs(t.y - s.y) * 0.45)
+    const c1 = horiz
+      ? { x: s.x + Math.sign(t.x - s.x) * k, y: s.y }
+      : { x: s.x, y: s.y + Math.sign(t.y - s.y) * k }
+    const c2 = horiz
+      ? { x: t.x - Math.sign(t.x - s.x) * k, y: t.y }
+      : { x: t.x, y: t.y - Math.sign(t.y - s.y) * k }
+    const mid = {
+      x: (s.x + 3 * c1.x + 3 * c2.x + t.x) / 8,
+      y: (s.y + 3 * c1.y + 3 * c2.y + t.y) / 8,
+    }
     return { d: `M${s.x},${s.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${t.x},${t.y}`, mid }
   }
   const edgeEls = []
@@ -93,7 +130,11 @@
     el('path', { d, class: 'edge-hit' }, g)
     const p = el('path', { d, class: 'edge-line', 'marker-end': 'url(#arrow)' }, g)
     if (e.label) {
-      const t = el('text', { x: mid.x, y: mid.y - 6, class: 'edge-label', 'text-anchor': 'middle' }, g)
+      const t = el(
+        'text',
+        { x: mid.x, y: mid.y - 6, class: 'edge-label', 'text-anchor': 'middle' },
+        g,
+      )
       t.textContent = e.label
     }
     edgeEls.push({ g, p, e })
@@ -117,17 +158,21 @@
     card.appendChild(head)
     card.appendChild(html('p', 'card-summary', n.summary))
     const more = html('div', 'card-more')
-    if (n.details && n.details.length) {
+    if (n.details?.length) {
       const ul = html('ul', 'card-details')
       for (const d of n.details) ul.appendChild(html('li', '', d))
       more.appendChild(ul)
     }
-    if (n.files && n.files.length) {
+    if (n.files?.length) {
       const files = html('div', 'card-files')
       for (const f of n.files) files.appendChild(html('code', '', f))
       more.appendChild(files)
     }
-    const hint = html('div', 'card-hint', useNick ? 'tap to peek behind the counter' : 'click to expand')
+    const hint = html(
+      'div',
+      'card-hint',
+      useNick ? 'tap to peek behind the counter' : 'click to expand',
+    )
     card.appendChild(more)
     card.appendChild(hint)
     fo.appendChild(card)
@@ -159,7 +204,9 @@
     svg.classList.toggle('has-open', !!id)
     for (const { g, e } of edgeEls) g.classList.toggle('hi', !!id && (e.from === id || e.to === id))
     for (const k in nodeEls) {
-      const isLinked = !!id && data.edges.some((e) => (e.from === id && e.to === k) || (e.to === id && e.from === k))
+      const isLinked =
+        !!id &&
+        data.edges.some((e) => (e.from === id && e.to === k) || (e.to === id && e.from === k))
       nodeEls[k].g.classList.toggle('linked', isLinked)
       nodeEls[k].g.classList.toggle('dim', !!id && k !== id && !isLinked)
     }
@@ -169,7 +216,7 @@
     cur.fo.setAttribute('width', EXP_W)
     cur.card.style.width = `${EXP_W}px`
     gNode.appendChild(cur.g) // on top
-    const info = document.getElementById('status')
+    const info = controls.status
     if (info) info.textContent = `${cur.n.title} · ${segById[cur.n.seg].title}`
   }
 
@@ -181,10 +228,10 @@
   const apply = () => {
     world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`)
     svg.classList.toggle('zoomed-in', view.k >= 0.7)
-    const z = document.getElementById('zoom')
+    const z = controls.zoom
     if (z) z.textContent = `${Math.round(view.k * 100)}%`
   }
-  function fit() {
+  function fitView() {
     const r = root.getBoundingClientRect()
     const pad = 40
     const k = Math.min((r.width - pad * 2) / data.world.w, (r.height - pad * 2) / data.world.h)
@@ -201,12 +248,16 @@
     view.k = nk
     apply()
   }
-  svg.addEventListener('wheel', (ev) => {
-    ev.preventDefault()
-    const r = root.getBoundingClientRect()
-    const factor = Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015))
-    zoomAt(factor, ev.clientX - r.left, ev.clientY - r.top)
-  }, { passive: false })
+  svg.addEventListener(
+    'wheel',
+    (ev) => {
+      ev.preventDefault()
+      const r = root.getBoundingClientRect()
+      const factor = Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015))
+      zoomAt(factor, ev.clientX - r.left, ev.clientY - r.top)
+    },
+    { passive: false },
+  )
   svg.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0) return
     dragging = true
@@ -250,62 +301,79 @@
   // pinch on touch devices
   const touches = new Map()
   let pinchStart = null
-  svg.addEventListener('touchstart', (ev) => {
-    for (const t of ev.changedTouches) touches.set(t.identifier, t)
-    if (ev.touches.length === 2) {
-      const [a, b] = [ev.touches[0], ev.touches[1]]
-      pinchStart = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), k: view.k }
-    }
-  }, { passive: true })
-  svg.addEventListener('touchmove', (ev) => {
-    if (ev.touches.length === 2 && pinchStart) {
-      const [a, b] = [ev.touches[0], ev.touches[1]]
-      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
-      const r = root.getBoundingClientRect()
-      const cx = (a.clientX + b.clientX) / 2 - r.left
-      const cy = (a.clientY + b.clientY) / 2 - r.top
-      zoomAt((pinchStart.k * (d / pinchStart.d)) / view.k, cx, cy)
-    }
-  }, { passive: true })
+  svg.addEventListener(
+    'touchstart',
+    (ev) => {
+      for (const t of ev.changedTouches) touches.set(t.identifier, t)
+      if (ev.touches.length === 2) {
+        const [a, b] = [ev.touches[0], ev.touches[1]]
+        pinchStart = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), k: view.k }
+      }
+    },
+    { passive: true },
+  )
+  svg.addEventListener(
+    'touchmove',
+    (ev) => {
+      if (ev.touches.length === 2 && pinchStart) {
+        const [a, b] = [ev.touches[0], ev.touches[1]]
+        const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+        const r = root.getBoundingClientRect()
+        const cx = (a.clientX + b.clientX) / 2 - r.left
+        const cy = (a.clientY + b.clientY) / 2 - r.top
+        zoomAt((pinchStart.k * (d / pinchStart.d)) / view.k, cx, cy)
+      }
+    },
+    { passive: true },
+  )
   svg.addEventListener('touchend', () => {
     if (touches.size < 2) pinchStart = null
     touches.clear()
   })
 
-  document.getElementById('zoom-in')?.addEventListener('click', () => {
+  controls.zoomIn?.addEventListener('click', () => {
     const r = root.getBoundingClientRect()
     zoomAt(1.25, r.width / 2, r.height / 2)
   })
-  document.getElementById('zoom-out')?.addEventListener('click', () => {
+  controls.zoomOut?.addEventListener('click', () => {
     const r = root.getBoundingClientRect()
     zoomAt(0.8, r.width / 2, r.height / 2)
   })
-  document.getElementById('zoom-fit')?.addEventListener('click', fit)
-  window.addEventListener('keydown', (ev) => {
+  controls.fit?.addEventListener('click', fitView)
+  const onKey = (ev) => {
     if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return
     const r = root.getBoundingClientRect()
     if (ev.key === '+' || ev.key === '=') zoomAt(1.25, r.width / 2, r.height / 2)
     else if (ev.key === '-') zoomAt(0.8, r.width / 2, r.height / 2)
-    else if (ev.key === '0') fit()
+    else if (ev.key === '0') fitView()
     else if (ev.key === 'Escape') expand(null)
-  })
+  }
+  window.addEventListener('keydown', onKey)
   const ro = new ResizeObserver(() => {
-    if (!userMoved) fit()
+    if (!userMoved) fitView()
   })
   let userMoved = false
-  svg.addEventListener('pointerdown', () => {
-    userMoved = true
-  }, { once: true })
+  svg.addEventListener(
+    'pointerdown',
+    () => {
+      userMoved = true
+    },
+    { once: true },
+  )
   ro.observe(root)
 
   // ---- search / jump
-  const search = document.getElementById('search')
+  const search = controls.search
   if (search) {
-    const list = document.getElementById('search-list')
-    if (list) for (const n of data.nodes) list.appendChild(Object.assign(html('option'), { value: n.title }))
+    const list = controls.searchList
+    if (list)
+      for (const n of data.nodes)
+        list.appendChild(Object.assign(html('option'), { value: n.title }))
     search.addEventListener('change', () => {
       const q = search.value.trim().toLowerCase()
-      const n = data.nodes.find((x) => x.title.toLowerCase() === q) || data.nodes.find((x) => x.title.toLowerCase().includes(q))
+      const n =
+        data.nodes.find((x) => x.title.toLowerCase() === q) ||
+        data.nodes.find((x) => x.title.toLowerCase().includes(q))
       if (!n) return
       const r = root.getBoundingClientRect()
       view.k = Math.max(view.k, 0.9)
@@ -317,5 +385,14 @@
     })
   }
 
-  fit()
-})()
+  fitView()
+  return {
+    fit: fitView,
+    expand,
+    destroy() {
+      ro.disconnect()
+      window.removeEventListener('keydown', onKey)
+      svg.remove()
+    },
+  }
+}

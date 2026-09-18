@@ -186,7 +186,7 @@ h4 {
 header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   padding: 8px 18px;
   border-bottom: 1px solid var(--line);
@@ -194,6 +194,73 @@ header {
   box-shadow:
     var(--edge),
     0 6px 20px rgba(0, 0, 0, 0.3);
+}
+main {
+  position: relative;
+}
+.menu-wrap {
+  position: relative;
+}
+.hamburger {
+  width: 40px;
+  height: 36px;
+  padding: 8px 9px;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 10px;
+}
+.hamburger span {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--gold);
+  transition:
+    transform 0.18s,
+    opacity 0.18s;
+}
+.hamburger.on span:nth-child(1) {
+  transform: translateY(8.5px) rotate(45deg);
+}
+.hamburger.on span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger.on span:nth-child(3) {
+  transform: translateY(-8.5px) rotate(-45deg);
+}
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 2px;
+  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  box-shadow: var(--shadow), var(--edge);
+}
+.menu button {
+  text-align: left;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.menu button:hover {
+  background: rgba(255, 210, 122, 0.1);
+}
+.menu button.on {
+  color: var(--gold);
 }
 .brand {
   display: flex;
@@ -228,6 +295,7 @@ header {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
 }
 .cost {
   color: var(--gold);
