@@ -37,7 +37,7 @@ export function createGame(
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.3
+  renderer.toneMappingExposure = 1.05
   renderer.outputColorSpace = THREE.SRGBColorSpace
   parent.appendChild(renderer.domElement)
 
@@ -46,9 +46,9 @@ export function createGame(
   scene.scene.fog = new THREE.FogExp2('#0e2231', 0.012)
 
   // lights: cool dusk ambient from the sky, warm bounce from the ground, a low key light for shadows
-  const hemi = new THREE.HemisphereLight('#6fb6d8', '#4a3550', 1.7)
+  const hemi = new THREE.HemisphereLight('#8dbfda', '#253d51', 1.35)
   scene.scene.add(hemi)
-  const key = new THREE.DirectionalLight('#cfe3f0', 1.9)
+  const key = new THREE.DirectionalLight('#cfe3f0', 1.6)
   key.position.set(-8, 14, 10)
   key.target.position.set(COLS / 2, 0, ROWS / 2)
   key.castShadow = true
@@ -63,10 +63,10 @@ export function createGame(
   sc.near = 1
   sc.far = 50
   scene.scene.add(key, key.target)
-  const lane = new THREE.PointLight('#ffd7a0', 9, 10, 1.6)
+  const lane = new THREE.PointLight('#b4e3e5', 5, 10, 1.6)
   lane.position.set(COLS * 0.35, 3.4, 3.4)
   scene.scene.add(lane)
-  const fill = new THREE.DirectionalLight('#ffb27a', 0.45)
+  const fill = new THREE.DirectionalLight('#b4a2d3', 0.3)
   fill.position.set(12, 6, 16)
   scene.scene.add(fill)
 
@@ -75,21 +75,23 @@ export function createGame(
 
   const composer = new EffectComposer(renderer)
   composer.addPass(new RenderPass(scene.scene, camera))
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.5, 0.88)
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 1.05)
   composer.addPass(bloom)
   composer.addPass(new OutputPass())
 
   /** Place the camera on its fixed angle at a distance that fits the whole square. */
   function fit(width: number, height: number) {
     camera.aspect = width / height
+    target.set(COLS / 2, 0.4, ROWS / 2)
     let dist = 24
     const corners = [
-      new THREE.Vector3(-0.5, 0, -1.5),
-      new THREE.Vector3(COLS + 0.5, 0, -1.5),
-      new THREE.Vector3(-0.5, 0, ROWS + 0.5),
-      new THREE.Vector3(COLS + 0.5, 0, ROWS + 0.5),
-      new THREE.Vector3(COLS / 2, 4.5, -1.5),
-      new THREE.Vector3(COLS / 2, 0, ROWS + 1.5),
+      new THREE.Vector3(-3.1, -1.6, -2),
+      new THREE.Vector3(0.5, 5.2, -2),
+      new THREE.Vector3(13.8, 5.4, -2),
+      new THREE.Vector3(19.7, 3.8, -1.5),
+      new THREE.Vector3(-3.1, -1.6, ROWS + 1.8),
+      new THREE.Vector3(COLS + 3, 0, ROWS + 0.5),
+      new THREE.Vector3(COLS + 3, 4.2, 6),
     ]
     for (let iter = 0; iter < 6; iter++) {
       place(dist)
@@ -100,7 +102,7 @@ export function createGame(
         const p = c.clone().project(camera)
         maxNdc = Math.max(maxNdc, Math.abs(p.x), Math.abs(p.y))
       }
-      dist *= maxNdc / 0.985
+      dist *= maxNdc / 0.91
     }
     place(dist)
     camera.updateProjectionMatrix()

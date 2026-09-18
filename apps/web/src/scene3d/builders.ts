@@ -26,6 +26,29 @@ const shadowed = <T extends THREE.Object3D>(o: T, cast = true, receive = true): 
   return o
 }
 
+/** Painted local-space lighting survives static batching and costs no extra draw calls. */
+function paintGeometry(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  g.computeBoundingBox()
+  const bounds = g.boundingBox
+  if (!bounds) return g
+  const height = Math.max(0.001, bounds.max.y - bounds.min.y)
+  const pos = g.getAttribute('position')
+  const normal = g.getAttribute('normal')
+  const colors = new Float32Array(pos.count * 3)
+  for (let i = 0; i < pos.count; i++) {
+    const y = (pos.getY(i) - bounds.min.y) / height
+    const ny = normal.getY(i)
+    // Cool pooled shadow at the foot, broad brush gradient, pale upper bevel.
+    const edge = ny > 0.12 && ny < 0.97 && y > 0.55 ? 0.16 : 0
+    const value = 0.59 + y * 0.3 + Math.max(0, ny) * 0.12 + edge
+    colors[i * 3] = value * (0.91 + y * 0.09)
+    colors[i * 3 + 1] = value
+    colors[i * 3 + 2] = value * (1.08 - y * 0.08)
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  return g
+}
+
 /** Chunky beveled block: the workhorse of the whole style. */
 export function block(
   w: number,
@@ -35,10 +58,11 @@ export function block(
   opts: { radius?: number; emissive?: string; emissiveIntensity?: number; opacity?: number } = {},
 ): THREE.Mesh {
   const r = Math.min(opts.radius ?? Math.min(w, h, d) * 0.22, Math.min(w, h, d) / 2 - 0.001)
-  const g = new RoundedBoxGeometry(w, h, d, 3, r)
+  const g = paintGeometry(new RoundedBoxGeometry(w, h, d, 2, r))
   const m = new THREE.Mesh(
     g,
     mat(color, {
+      vertexColors: true,
       emissive: opts.emissive,
       emissiveIntensity: opts.emissiveIntensity,
       opacity: opts.opacity,
@@ -56,7 +80,10 @@ export function cylinder(
   segments = 12,
   opts: { emissive?: string; emissiveIntensity?: number } = {},
 ): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBottom, h, segments), mat(color, opts))
+  const m = new THREE.Mesh(
+    paintGeometry(new THREE.CylinderGeometry(rTop, rBottom, h, segments)),
+    mat(color, { ...opts, vertexColors: true }),
+  )
   m.position.y = h / 2
   return shadowed(m)
 }
@@ -67,8 +94,8 @@ export function sphere(
   opts: { emissive?: string; emissiveIntensity?: number; segments?: number } = {},
 ): THREE.Mesh {
   const m = new THREE.Mesh(
-    new THREE.SphereGeometry(r, opts.segments ?? 12, opts.segments ?? 10),
-    mat(color, opts),
+    paintGeometry(new THREE.SphereGeometry(r, opts.segments ?? 12, opts.segments ?? 10)),
+    mat(color, { ...opts, vertexColors: true }),
   )
   return shadowed(m)
 }
@@ -154,20 +181,20 @@ export function counter(length: number, depth = 0.9): THREE.Group {
 /** Brass till: boxy, angled top, glowing display. Reads as "money", not "coffee". */
 export function register(): THREE.Group {
   const g = new THREE.Group()
-  const body = block(0.6, 0.32, 0.5, P.brass, { radius: 0.06 })
+  const body = block(0.78, 0.32, 0.62, '#336c68', { radius: 0.06 })
   g.add(body)
-  const slope = block(0.56, 0.18, 0.36, '#c9a04a', { radius: 0.05 })
+  const slope = block(0.72, 0.18, 0.46, '#4e9690', { radius: 0.05 })
   slope.position.set(0, 0.38, -0.05)
   slope.rotation.x = -0.5
   g.add(slope)
-  const display = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.05), glow('#9fe8ff', 1.6))
+  const display = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.22, 0.05), glow('#9fe8ff', 1.6))
   display.position.set(0, 0.62, -0.08)
   display.rotation.x = -0.35
   g.add(display)
-  const keys = block(0.44, 0.06, 0.2, '#f1e5c4', { radius: 0.02 })
+  const keys = block(0.6, 0.06, 0.2, '#f1e5c4', { radius: 0.02 })
   keys.position.set(0, 0.34, 0.12)
   g.add(keys)
-  const drawer = block(0.56, 0.08, 0.04, '#8b6a2e', { radius: 0.02 })
+  const drawer = block(0.7, 0.08, 0.04, '#8b6a2e', { radius: 0.02 })
   drawer.position.set(0, 0.1, 0.25)
   g.add(drawer)
   return g
@@ -178,10 +205,10 @@ export function espressoMachine(): THREE.Group {
   const g = new THREE.Group()
   const base = block(0.9, 0.35, 0.7, P.iron, { radius: 0.06 })
   g.add(base)
-  const boiler = cylinder(0.34, 0.36, 0.7, P.copper, 16)
+  const boiler = cylinder(0.42, 0.44, 0.7, P.copper, 16)
   boiler.position.set(0, 0.35 + 0.35, -0.05)
   g.add(boiler)
-  const lid = cylinder(0.2, 0.34, 0.14, '#d98c5a', 16)
+  const lid = cylinder(0.25, 0.44, 0.2, '#d98c5a', 16)
   lid.position.set(0, 1.05 + 0.07, -0.05)
   g.add(lid)
   const dome = sphere(0.14, P.brass)
@@ -199,8 +226,8 @@ export function espressoMachine(): THREE.Group {
   wand.position.set(0.48, 0.55, 0.15)
   wand.rotation.z = 0.5
   g.add(wand)
-  const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.07, 12), glow('#ffd27a', 1.2))
-  gauge.position.set(0, 0.75, 0.32)
+  const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.12, 12), glow('#ffd27a', 1.2))
+  gauge.position.set(0, 0.85, 0.4)
   g.add(gauge)
   const cup = cylinder(0.07, 0.06, 0.1, P.paper, 10)
   cup.position.set(-0.25, 0.42, 0.28)
@@ -328,32 +355,35 @@ export function awning(
 export function ticketRail(length: number): THREE.Group {
   const g = new THREE.Group()
   for (const x of [-length / 2, length / 2]) {
-    const post = block(0.08, 1.6, 0.08, P.iron, { radius: 0.02 })
+    const post = block(0.12, 1.6, 0.12, P.iron, { radius: 0.02 })
     post.position.set(x, 0.97, 0)
     g.add(post)
   }
-  const wire = cylinder(0.012, 0.012, length, '#d5dde6', 6)
+  const wire = cylinder(0.035, 0.035, length, '#dbc394', 8)
   wire.rotation.z = Math.PI / 2
   wire.position.set(0, 2.45, 0)
   g.add(wire)
   const sign = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.4, 0.45),
+    new THREE.PlaneGeometry(2.3, 0.52),
     new THREE.MeshBasicMaterial({
-      map: textTexture('ORDER UP', { color: '#f6efdd', bg: '#3a3a42', w: 320, h: 100 }),
+      map: textTexture('ORDER UP', { color: '#f6efdd', bg: '#173d43', w: 320, h: 100 }),
       toneMapped: false,
     }),
   )
-  sign.position.set(0, 2.8, 0)
+  g.add(at(block(2.48, 0.68, 0.13, P.brass), 0, -0.08, 2.8))
+  sign.position.set(0, 2.8, 0.01)
   g.add(sign)
-  const lantern = lanternHead()
+  const lantern = lanternHead(false)
   lantern.position.set(0, 3.15, 0)
   g.add(lantern)
   return g
 }
 
 export function ticketCard(): THREE.Mesh {
-  const m = block(0.34, 0.42, 0.03, P.paper, { radius: 0.02 })
+  const m = block(0.48, 0.58, 0.04, P.paper, { radius: 0.02 })
   m.castShadow = false
+  m.add(at(block(0.09, 0.17, 0.07, P.copper), 0, 0.03, 0.27))
+  for (const y of [-0.08, 0.01]) m.add(at(block(0.28, 0.018, 0.01, '#9dbaa9'), 0, 0.03, y))
   return m
 }
 
@@ -597,6 +627,7 @@ export function cottage(
   const g = new THREE.Group()
   const body = block(w, h, d, P.plaster, { radius: 0.06 })
   g.add(body)
+  g.add(at(block(w + 0.18, 0.42, d + 0.16, P.stoneDark), 0, 0, 0.12))
   // timber frame lines on the front face (+z)
   for (const x of [-w / 2 + 0.15, 0, w / 2 - 0.15]) {
     const beam = block(0.14, h - 0.2, 0.1, P.timberDark, { radius: 0.03 })
@@ -612,9 +643,18 @@ export function cottage(
     const frame = block(0.6, 0.7, 0.1, P.timberDark, { radius: 0.03 })
     frame.position.set(x, h * 0.55 + 0.2, d / 2 + 0.02)
     g.add(frame)
-    const pane = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.58, 0.06), glow('#ffcf8a', 2.4))
+    const pane = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.58, 0.06), glow('#ffcf8a', 1.35))
     pane.position.set(x, h * 0.55 + 0.55, d / 2 + 0.06)
     g.add(pane)
+    for (const side of [-1, 1]) {
+      g.add(at(block(0.22, 0.73, 0.12, '#3e7472'), x + side * 0.44, d / 2 + 0.09, h * 0.55 + 0.55))
+      const brace = block(0.1, h * 0.42, 0.12, P.timberDark)
+      brace.rotation.z = side * 0.65
+      g.add(at(brace, x + side * 0.44, d / 2 + 0.04, h * 0.3))
+    }
+    g.add(at(block(0.06, 0.6, 0.08, P.timberDark), x, d / 2 + 0.11, h * 0.55 + 0.55))
+    g.add(at(block(0.55, 0.06, 0.08, P.timberDark), x, d / 2 + 0.11, h * 0.55 + 0.55))
+    g.add(at(block(1.05, 0.14, 0.32, P.stone), x, d / 2 + 0.12, h * 0.55 + 0.12))
   }
   if (opts.door) {
     const door = block(0.8, 1.5, 0.1, '#a8632b', { radius: 0.05 })
@@ -629,6 +669,25 @@ export function cottage(
     slab.position.set(side * (w / 4 + 0.15), h + 0.55, 0)
     slab.rotation.z = side * -Math.atan2(1.2, w / 2 + 0.35)
     g.add(slab)
+    const courses = 5
+    const tiles = Math.ceil(roofDepth / 0.55)
+    for (let row = 0; row < courses; row++) {
+      for (let col = 0; col < tiles; col++) {
+        const tile = block(
+          slabW / courses + 0.06,
+          0.095,
+          roofDepth / tiles - 0.035,
+          row % 2 ? P.roof : '#396e78',
+          { radius: 0.04 },
+        )
+        tile.position.set(
+          -slabW / 2 + ((row + 0.5) * slabW) / courses,
+          0.12,
+          -roofDepth / 2 + ((col + 0.5) * roofDepth) / tiles,
+        )
+        slab.add(tile)
+      }
+    }
     // a darker eave strip along the lower edge sells the tile rows
     const eave = block(0.1, 0.05, roofDepth - 0.05, P.roofDark, { radius: 0.01 })
     eave.position.set(side * (w / 2 + 0.3), h + 0.02, 0)
@@ -640,6 +699,22 @@ export function cottage(
   const chimney = block(0.4, 0.9, 0.4, P.stoneDark, { radius: 0.05 })
   chimney.position.set(w / 4, h + 0.6, -d / 4)
   g.add(chimney)
+  g.add(at(block(0.58, 0.16, 0.58, P.stone), w / 4, -d / 4, h + 1.1))
+  // A little copper-roofed dormer breaks the broad roof silhouette.
+  g.add(at(block(0.95, 0.85, 0.65, P.plaster), -w * 0.2, d * 0.3, h + 0.65))
+  g.add(
+    at(
+      block(0.46, 0.52, 0.08, '#f3bb69', { emissive: '#e89c48', emissiveIntensity: 0.45 }),
+      -w * 0.2,
+      d * 0.3 + 0.35,
+      h + 0.65,
+    ),
+  )
+  for (const side of [-1, 1]) {
+    const hood = block(0.72, 0.14, 0.92, P.copper)
+    hood.rotation.z = side * -0.55
+    g.add(at(hood, -w * 0.2 + side * 0.25, d * 0.3, h + 1.2))
+  }
   return g
 }
 
@@ -682,7 +757,6 @@ export function mergeStatic(root: THREE.Object3D): void {
     const material = m.material as THREE.Material
     if (Array.isArray(m.material) || !(material as THREE.MeshToonMaterial).isMeshToonMaterial)
       return
-    if ((material as THREE.MeshToonMaterial).vertexColors) return // the cobbles are already merged
     let hasDynamicAncestor = false
     for (let p: THREE.Object3D | null = o; p; p = p.parent)
       if (p.userData.dynamic) hasDynamicAncestor = true
@@ -690,7 +764,8 @@ export function mergeStatic(root: THREE.Object3D): void {
     const geo = m.geometry.clone()
     geo.applyMatrix4(m.matrixWorld)
     for (const name of Object.keys(geo.attributes))
-      if (name !== 'position' && name !== 'normal' && name !== 'uv') geo.deleteAttribute(name)
+      if (name !== 'position' && name !== 'normal' && name !== 'uv' && name !== 'color')
+        geo.deleteAttribute(name)
     if (geo.index) geo.setIndex(geo.index) // keep indexing; mergeGeometries handles indexed sets uniformly
     const b = buckets.get(material) ?? { geos: [], cast: false, receive: false }
     b.geos.push(geo)

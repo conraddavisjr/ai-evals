@@ -80,10 +80,44 @@ export class Character {
     hair.scale.set(1, 0.75, 1)
     hair.position.y = 0.09
     this.head.add(hair)
+    // Swept fringe, ears and a nose read as a face at the overview scale.
+    for (const side of [-1, 1]) {
+      const ear = sphere(0.075, L.skin, { segments: 8 })
+      ear.position.set(side * 0.29, -0.015, 0)
+      this.head.add(ear)
+    }
+    const nose = sphere(0.055, L.skin, { segments: 8 })
+    nose.position.set(0, -0.03, 0.3)
+    this.head.add(nose)
+    const fringe = sphere(0.18, L.hair, { segments: 8 })
+    fringe.scale.set(1.2, 0.5, 0.65)
+    fringe.position.set(-0.11, 0.2, 0.2)
+    fringe.rotation.z = -0.3
+    this.head.add(fringe)
+    if (sprite === 'cashier_a' || sprite === 'customer_f') {
+      const bun = sphere(0.19, L.hair, { segments: 9 })
+      bun.position.set(0.2, 0.19, -0.16)
+      this.head.add(bun)
+    }
     if (L.hat) {
       const cap = cylinder(0.3, 0.32, 0.14, L.hat, 14)
       cap.position.y = 0.22
       this.head.add(cap)
+      const brim = block(0.44, 0.05, 0.25, L.hat)
+      brim.position.set(0, 0.24, 0.24)
+      this.head.add(brim)
+    }
+    if (sprite === 'judge' || sprite === 'manager') {
+      for (const side of [-1, 1]) {
+        const glasses = new THREE.Mesh(new THREE.TorusGeometry(0.072, 0.014, 5, 10), mat('#d6c395'))
+        glasses.position.set(side * 0.1, 0.02, 0.29)
+        this.head.add(glasses)
+      }
+    }
+    if (L.apron) {
+      const pocket = block(0.2, 0.16, 0.04, L.shirt, { radius: 0.03 })
+      pocket.position.set(0.06, 0.52, 0.22)
+      this.body.add(pocket)
     }
     // eyes
     for (const dx of [-0.1, 0.1]) {

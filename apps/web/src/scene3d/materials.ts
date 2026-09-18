@@ -8,11 +8,11 @@ import * as THREE from 'three'
 let gradient: THREE.DataTexture | null = null
 function gradientMap(): THREE.DataTexture {
   if (gradient) return gradient
-  // 4 bands, slightly lifted shadows so nothing goes to black
-  const data = new Uint8Array([96, 150, 210, 255])
-  gradient = new THREE.DataTexture(data, 4, 1, THREE.RedFormat)
-  gradient.minFilter = THREE.NearestFilter
-  gradient.magFilter = THREE.NearestFilter
+  // Broad, blended value steps support the painted vertex gradients.
+  const data = new Uint8Array([100, 135, 170, 210, 239, 255])
+  gradient = new THREE.DataTexture(data, 6, 1, THREE.RedFormat)
+  gradient.minFilter = THREE.LinearFilter
+  gradient.magFilter = THREE.LinearFilter
   gradient.generateMipmaps = false
   gradient.needsUpdate = true
   return gradient

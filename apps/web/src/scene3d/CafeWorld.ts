@@ -5,6 +5,7 @@ import {
   awning,
   backBar,
   barrel,
+  block,
   brazier,
   chair,
   cobblestones,
@@ -26,8 +27,10 @@ import {
   ticketRail,
 } from './builders.js'
 import { Steam, waterMaterial } from './effects.js'
+import { landscape } from './landscape.js'
 import { COLS, ROWS, worldX, worldZ } from './layout.js'
-import { mat } from './materials.js'
+import { mat, textTexture } from './materials.js'
+import { P } from './palette.js'
 
 export interface World {
   group: THREE.Group
@@ -45,10 +48,12 @@ export interface World {
 export function buildWorld(): World {
   const g = new THREE.Group()
   g.add(cobblestones(COLS, ROWS))
+  const land = landscape()
+  g.add(land.group)
   // the world beyond the plaza: dark mossy ground so the square does not float in the void
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), mat('#1f3f3b'))
   ground.rotation.x = -Math.PI / 2
-  ground.position.set(COLS / 2, -0.32, ROWS / 2)
+  ground.position.set(COLS / 2, -1.65, ROWS / 2)
   ground.receiveShadow = true
   g.add(ground)
 
@@ -61,6 +66,19 @@ export function buildWorld(): World {
     g.add(at(r, worldX(x), worldZ(4), 0.97))
   }
   // back-bar working surface for the machines
+  for (const [label, x, width] of [
+    ['PAY HERE', 5, 3.1],
+    ['PICKUP', 11.5, 2.2],
+  ] as const) {
+    g.add(at(block(width + 0.14, 0.5, 0.1, P.brass), x, 5.03, 0.52))
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, 0.39),
+      new THREE.MeshBasicMaterial({
+        map: textTexture(label, { color: '#e5dbb6', bg: '#1d4148', w: 512, h: 96 }),
+      }),
+    )
+    g.add(at(sign, x, 5.09, 0.52))
+  }
   const backTop = counter(13, 0.8)
   g.add(at(backTop, worldX(7) - 0.5, worldZ(2) + 0.25))
   for (const x of [4, 7]) {
@@ -70,7 +88,7 @@ export function buildWorld(): World {
   }
   g.add(at(grinder(), worldX(2), worldZ(2) + 0.25, 0.97))
   g.add(at(pastryCase(), worldX(12), worldZ(2) + 0.25, 0.97))
-  g.add(at(ticketRail(2.6), worldX(11), worldZ(3.5), 0))
+  g.add(at(ticketRail(4.4), worldX(11), worldZ(3.5), 0))
   // canopy over the back bar only: a deeper one would hide the staff lane from this camera pitch
   g.add(at(awning(13.6, 1.5, 2.7, 3.0), worldX(7) - 0.5, worldZ(1.6)))
 
@@ -80,8 +98,8 @@ export function buildWorld(): World {
   g.add(at(awning(4.4, 1.3, 2.5, 2.8), worldX(16.5), worldZ(1.6)))
 
   // ----- north cottage row behind the kiosk gives the square its back wall
-  g.add(at(cottage(7, 2.4, 3.2, { windows: 3 }), worldX(4), worldZ(0) - 1.0))
-  g.add(at(cottage(5, 2.4, 2.8, { windows: 2 }), worldX(10.5), worldZ(0) - 1.0))
+  g.add(at(cottage(7, 2.4, 3.7, { windows: 3 }), worldX(4), worldZ(0) - 1.0))
+  g.add(at(cottage(5, 2.4, 3.8, { windows: 2 }), worldX(10.5), worldZ(0) - 1.0))
 
   // ----- east cottage with the door, and the entrance gate at the south-east
   g.add(
@@ -144,10 +162,11 @@ export function buildWorld(): World {
     group: g,
     steam,
     water,
-    rail: { x: worldX(11) - 1.3, y: 2.45, z: worldZ(3.5), length: 2.6 },
+    rail: { x: worldX(11) - 2.2, y: 2.45, z: worldZ(3.5), length: 4.4 },
     update(dt, t) {
       const u = water.uniforms.uTime
       if (u) u.value = t
+      if (land.water.uniforms.uTime) land.water.uniforms.uTime.value = t
       for (const s of Object.values(steam)) s?.update(dt)
     },
   }

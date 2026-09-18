@@ -38,6 +38,31 @@ export function waterMaterial(): THREE.ShaderMaterial {
   })
 }
 
+/** Long, quiet brush strokes for the millstream, rather than stretched fountain rings. */
+export function streamMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform float uTime;
+      varying vec2 vUv;
+      void main() {
+        float edge = pow(abs(vUv.x - 0.5) * 2.0, 3.0);
+        vec3 col = mix(vec3(0.018, 0.19, 0.23), vec3(0.08, 0.42, 0.43), edge);
+        float bend = sin(vUv.y * 22.0 + uTime * 0.5) * 0.025;
+        float stroke = pow(max(0.0, sin((vUv.x + bend) * 42.0)), 24.0);
+        float flow = smoothstep(0.35, 0.9, sin(vUv.y * 65.0 - uTime * 1.8));
+        col += vec3(0.12, 0.26, 0.24) * stroke * flow;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  })
+}
+
 /** Rising steam puffs above a machine. */
 export class Steam {
   readonly points: THREE.Points

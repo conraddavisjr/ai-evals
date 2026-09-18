@@ -159,7 +159,7 @@ export class CafeScene3D {
         Overlay.tag(firstName(a.name)),
         () => this.feet(ch as Character),
         {
-          dy: 6,
+          dy: a.role === 'barista' ? -10 : 6,
           origin: 'top',
         },
       )
@@ -254,7 +254,11 @@ export class CafeScene3D {
 
   private ticketPos(index: number): THREE.Vector3 {
     const r = this.world.rail
-    return new THREE.Vector3(r.x + 0.25 + index * 0.55, r.y - 0.25, r.z)
+    return new THREE.Vector3(
+      r.x + 0.55 + (index % 4) * 1.1,
+      r.y - 0.25 - Math.floor(index / 4) * 0.64,
+      r.z,
+    )
   }
 
   private addTicket(orderId: string, name: string, requeued: boolean) {
@@ -528,12 +532,14 @@ export class CafeScene3D {
   // ---------- per frame ----------
 
   update(dt: number, now: number) {
-    this.time += dt
     this.player.tick(now)
+    this.time += dt
     const state = this.player.state
     const clock = this.player.clockEpoch()
-    this.world.update(dt, this.time)
-    updateFlicker(this.time)
+    // Relative simulation seconds retain shader precision even for epoch timestamps.
+    const sceneSeconds = (clock - (this.player.events[0]?.t ?? clock)) / 1000
+    this.world.update(dt, sceneSeconds)
+    updateFlicker(sceneSeconds)
 
     for (const ch of this.characters.values()) ch.update(dt)
 
@@ -589,6 +595,8 @@ export class CafeScene3D {
               ? '#ffe1a6'
               : '#f6efdd'
       t.mesh.material = glowPaper(color)
+      const label = this.overlay.get(`ticket:${orderId}`)
+      if (label) label.dataset.age = waited > 30_000 ? 'hot' : waited > 10_000 ? 'warm' : 'fresh'
       const target = t.target.clone()
       if (i === 0 && anyBaristaFree) target.y += Math.abs(Math.sin(this.time * 6)) * 0.12
       t.mesh.position.lerp(target, Math.min(1, dt * 8))
