@@ -1,0 +1,366 @@
+/* Shared structure for both treatments. Colors and type come from the theme file. */
+.archv,
+.archv * {
+  box-sizing: border-box;
+}
+.archv {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.archv .bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid var(--line);
+  background: var(--bar);
+  flex-wrap: wrap;
+}
+.archv .bar .title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: var(--display-weight);
+  letter-spacing: 0.01em;
+  color: var(--title);
+  margin: 0;
+}
+.archv .bar .sub {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.archv .bar .spacer {
+  flex: 1;
+}
+.archv .bar button {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.archv .bar button:hover {
+  border-color: var(--accent);
+}
+.archv .bar button:focus-visible,
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.archv .bar input {
+  font: inherit;
+  color: var(--ink);
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  min-width: 180px;
+}
+.archv .bar .zoom {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 44px;
+  text-align: center;
+}
+.archv .bar .status {
+  color: var(--muted);
+  font-size: 12.5px;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.archv .legend {
+  display: flex;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bar);
+  font-size: 12px;
+  color: var(--muted);
+}
+.archv .legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.archv .legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+  border: 1px dashed var(--seg-line);
+}
+.archv-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--canvas);
+}
+.archv-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.archv-svg.grabbing {
+  cursor: grabbing;
+}
+.archv .seg-box {
+  fill: var(--seg-fill);
+  stroke: var(--seg-line);
+  stroke-width: 2;
+  stroke-dasharray: 10 8;
+}
+.archv .seg-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-display);
+  pointer-events: none;
+}
+.archv .seg-name {
+  font-size: 22px;
+  font-weight: var(--display-weight);
+  color: var(--seg-title);
+  background: var(--canvas);
+  padding: 0 8px;
+  border-radius: 6px;
+}
+.archv .seg-sub {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--canvas);
+  padding: 0 6px;
+  border-radius: 6px;
+}
+.archv .edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+}
+.archv .edge-line {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 2;
+  opacity: 0.8;
+  transition:
+    opacity 0.2s,
+    stroke 0.2s;
+}
+.archv .edge-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  fill: var(--edge-label);
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.archv .zoomed-in .edge-label {
+  opacity: 0.9;
+}
+.archv .arrow {
+  fill: var(--edge);
+}
+.archv .arrow.hi {
+  fill: var(--accent);
+}
+.archv .edge.hi .edge-line {
+  stroke: var(--accent);
+  stroke-width: 3;
+  opacity: 1;
+}
+.archv .edge.hi .edge-line {
+  marker-end: url(#arrow-hi);
+}
+.archv .edge.hi .edge-label {
+  opacity: 1;
+  fill: var(--accent-ink);
+  font-weight: 700;
+}
+.archv .has-open .edge:not(.hi) .edge-line {
+  opacity: 0.12;
+}
+.archv .has-open .edge:not(.hi) .edge-label {
+  opacity: 0;
+}
+.archv .node {
+  transition: opacity 0.2s;
+}
+.archv .node.dim {
+  opacity: 0.35;
+}
+.archv .card {
+  background: var(--card);
+  color: var(--ink);
+  border: 1.5px solid var(--card-line);
+  border-radius: var(--card-radius);
+  padding: 10px 12px 8px;
+  box-shadow: var(--card-shadow);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition:
+    box-shadow 0.15s,
+    transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.archv .card:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-1px);
+}
+.archv .node.open .card {
+  border-color: var(--accent);
+  box-shadow: var(--card-shadow-open);
+}
+.archv .node.linked .card {
+  border-color: var(--accent-soft);
+}
+.archv .card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.archv .card-title {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 16px;
+  line-height: 1.15;
+  color: var(--card-title);
+  text-wrap: balance;
+}
+.archv .card-nick {
+  font-size: 11.5px;
+  color: var(--accent-ink);
+  font-style: italic;
+}
+.archv .card-summary {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.archv .card-more {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px dashed var(--card-line);
+  padding-top: 8px;
+}
+.archv .node.open .card-more {
+  display: flex;
+}
+.archv .card-details {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.archv .card-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.archv .card-files code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.archv .card-hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.archv .node.open .card-hint {
+  display: none;
+}
+.archv .tone-sky {
+  --seg-line: var(--t-sky);
+  --seg-title: var(--t-sky-ink);
+  --card-title: var(--t-sky-ink);
+}
+.archv .tone-slate {
+  --seg-line: var(--t-slate);
+  --seg-title: var(--t-slate-ink);
+  --card-title: var(--t-slate-ink);
+}
+.archv .tone-teal {
+  --seg-line: var(--t-teal);
+  --seg-title: var(--t-teal-ink);
+  --card-title: var(--t-teal-ink);
+}
+.archv .tone-moss {
+  --seg-line: var(--t-moss);
+  --seg-title: var(--t-moss-ink);
+  --card-title: var(--t-moss-ink);
+}
+.archv .tone-gold {
+  --seg-line: var(--t-gold);
+  --seg-title: var(--t-gold-ink);
+  --card-title: var(--t-gold-ink);
+}
+.archv .tone-copper {
+  --seg-line: var(--t-copper);
+  --seg-title: var(--t-copper-ink);
+  --card-title: var(--t-copper-ink);
+}
+.archv .tone-lavender {
+  --seg-line: var(--t-lavender);
+  --seg-title: var(--t-lavender-ink);
+  --card-title: var(--t-lavender-ink);
+}
+.archv .tone-rose {
+  --seg-line: var(--t-rose);
+  --seg-title: var(--t-rose-ink);
+  --card-title: var(--t-rose-ink);
+}
+.archv .tone-stone {
+  --seg-line: var(--t-stone);
+  --seg-title: var(--t-stone-ink);
+  --card-title: var(--t-stone-ink);
+}
+.archv .tone-ink {
+  --seg-line: var(--t-ink);
+  --seg-title: var(--t-ink-ink);
+  --card-title: var(--t-ink-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .node,
+  .edge-line {
+    transition: none;
+  }
+}
+@media (max-width: 600px) {
+  .archv .bar .status,
+  .archv .legend {
+    display: none;
+  }
+  .archv .bar input {
+    min-width: 120px;
+  }
+}

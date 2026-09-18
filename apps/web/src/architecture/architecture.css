@@ -1,0 +1,67 @@
+/* Architecture map inside the app: the traditional layout in the app's own dusk tokens. */
+.archv-app {
+  --font-display: var(--font-ui);
+  --font-body: var(--font-ui);
+  --font-mono: var(--font-mono);
+  --display-weight: 800;
+  --bg: var(--bg);
+  --canvas: #0d2130;
+  --bar: var(--panel);
+  --btn: var(--panel-2);
+  --ink: var(--text);
+  --ink-2: #c8d6d8;
+  --title: #fff4dc;
+  --accent: var(--gold);
+  --accent-ink: #ffe2a8;
+  --accent-soft: #8a6b2a;
+  --card: #132c38;
+  --card-line: #2b4d5c;
+  --card-radius: 12px;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --card-shadow-open: 0 0 0 3px rgba(255, 210, 122, 0.3), 0 14px 36px rgba(0, 0, 0, 0.6);
+  --code-bg: #0e2231;
+  --code-ink: #cfeaf3;
+  --seg-fill: rgba(22, 52, 64, 0.28);
+  --edge: #5f8a99;
+  --edge-label: #a9c7cf;
+  --t-sky: #37a3c9;
+  --t-sky-ink: #8fd3ea;
+  --t-slate: #7f95a3;
+  --t-slate-ink: #b7c6cf;
+  --t-teal: #2f8f9d;
+  --t-teal-ink: #7fd0da;
+  --t-moss: #7fb069;
+  --t-moss-ink: #b9e2a6;
+  --t-gold: #ffd27a;
+  --t-gold-ink: #ffe2a8;
+  --t-copper: #d28a5a;
+  --t-copper-ink: #f4c4a0;
+  --t-lavender: #b79bea;
+  --t-lavender-ink: #d9c9f7;
+  --t-rose: #e46c8a;
+  --t-rose-ink: #f5b3c4;
+  --t-stone: #a89a86;
+  --t-stone-ink: #d9cfbf;
+  --t-ink: #8fb0b6;
+  --t-ink-ink: #cfe3e6;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+.archv-app .archv-canvas {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.archv-app .bar .title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(255, 210, 122, 0.25);
+}
+.archv-app .bar button {
+  border-radius: 10px;
+  box-shadow:
+    0 2px 0 #0a1820,
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}

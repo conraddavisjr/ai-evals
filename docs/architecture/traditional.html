@@ -1,0 +1,1796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Stardust Cafe Architecture</title>
+<meta name="description" content="Pannable architecture map of the Stardust Cafe agentic eval harness: client, API server, orchestration, agent runtime, MCP gateway, models, evals, data and the shared protocol." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+html, body { height: 100%; margin: 0; overflow: hidden; } body { background: var(--bg); }
+/* Shared structure for both treatments. Colors and type come from the theme file. */
+.archv,
+.archv * {
+  box-sizing: border-box;
+}
+.archv {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.archv .bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid var(--line);
+  background: var(--bar);
+  flex-wrap: wrap;
+}
+.archv .bar .title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: var(--display-weight);
+  letter-spacing: 0.01em;
+  color: var(--title);
+  margin: 0;
+}
+.archv .bar .sub {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.archv .bar .spacer {
+  flex: 1;
+}
+.archv .bar button {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.archv .bar button:hover {
+  border-color: var(--accent);
+}
+.archv .bar button:focus-visible,
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.archv .bar input {
+  font: inherit;
+  color: var(--ink);
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  min-width: 180px;
+}
+.archv .bar .zoom {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 44px;
+  text-align: center;
+}
+.archv .bar .status {
+  color: var(--muted);
+  font-size: 12.5px;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.archv .legend {
+  display: flex;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bar);
+  font-size: 12px;
+  color: var(--muted);
+}
+.archv .legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.archv .legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+  border: 1px dashed var(--seg-line);
+}
+.archv-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--canvas);
+}
+.archv-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.archv-svg.grabbing {
+  cursor: grabbing;
+}
+.archv .seg-box {
+  fill: var(--seg-fill);
+  stroke: var(--seg-line);
+  stroke-width: 2;
+  stroke-dasharray: 10 8;
+}
+.archv .seg-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-display);
+  pointer-events: none;
+}
+.archv .seg-name {
+  font-size: 22px;
+  font-weight: var(--display-weight);
+  color: var(--seg-title);
+  background: var(--canvas);
+  padding: 0 8px;
+  border-radius: 6px;
+}
+.archv .seg-sub {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--canvas);
+  padding: 0 6px;
+  border-radius: 6px;
+}
+.archv .edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+}
+.archv .edge-line {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 2;
+  opacity: 0.8;
+  transition:
+    opacity 0.2s,
+    stroke 0.2s;
+}
+.archv .edge-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  fill: var(--edge-label);
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.archv .zoomed-in .edge-label {
+  opacity: 0.9;
+}
+.archv .arrow {
+  fill: var(--edge);
+}
+.archv .arrow.hi {
+  fill: var(--accent);
+}
+.archv .edge.hi .edge-line {
+  stroke: var(--accent);
+  stroke-width: 3;
+  opacity: 1;
+}
+.archv .edge.hi .edge-line {
+  marker-end: url(#arrow-hi);
+}
+.archv .edge.hi .edge-label {
+  opacity: 1;
+  fill: var(--accent-ink);
+  font-weight: 700;
+}
+.archv .has-open .edge:not(.hi) .edge-line {
+  opacity: 0.12;
+}
+.archv .has-open .edge:not(.hi) .edge-label {
+  opacity: 0;
+}
+.archv .node {
+  transition: opacity 0.2s;
+}
+.archv .node.dim {
+  opacity: 0.35;
+}
+.archv .card {
+  background: var(--card);
+  color: var(--ink);
+  border: 1.5px solid var(--card-line);
+  border-radius: var(--card-radius);
+  padding: 10px 12px 8px;
+  box-shadow: var(--card-shadow);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition:
+    box-shadow 0.15s,
+    transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.archv .card:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-1px);
+}
+.archv .node.open .card {
+  border-color: var(--accent);
+  box-shadow: var(--card-shadow-open);
+}
+.archv .node.linked .card {
+  border-color: var(--accent-soft);
+}
+.archv .card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.archv .card-title {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 16px;
+  line-height: 1.15;
+  color: var(--card-title);
+  text-wrap: balance;
+}
+.archv .card-nick {
+  font-size: 11.5px;
+  color: var(--accent-ink);
+  font-style: italic;
+}
+.archv .card-summary {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.archv .card-more {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px dashed var(--card-line);
+  padding-top: 8px;
+}
+.archv .node.open .card-more {
+  display: flex;
+}
+.archv .card-details {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.archv .card-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.archv .card-files code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.archv .card-hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.archv .node.open .card-hint {
+  display: none;
+}
+.archv .tone-sky {
+  --seg-line: var(--t-sky);
+  --seg-title: var(--t-sky-ink);
+  --card-title: var(--t-sky-ink);
+}
+.archv .tone-slate {
+  --seg-line: var(--t-slate);
+  --seg-title: var(--t-slate-ink);
+  --card-title: var(--t-slate-ink);
+}
+.archv .tone-teal {
+  --seg-line: var(--t-teal);
+  --seg-title: var(--t-teal-ink);
+  --card-title: var(--t-teal-ink);
+}
+.archv .tone-moss {
+  --seg-line: var(--t-moss);
+  --seg-title: var(--t-moss-ink);
+  --card-title: var(--t-moss-ink);
+}
+.archv .tone-gold {
+  --seg-line: var(--t-gold);
+  --seg-title: var(--t-gold-ink);
+  --card-title: var(--t-gold-ink);
+}
+.archv .tone-copper {
+  --seg-line: var(--t-copper);
+  --seg-title: var(--t-copper-ink);
+  --card-title: var(--t-copper-ink);
+}
+.archv .tone-lavender {
+  --seg-line: var(--t-lavender);
+  --seg-title: var(--t-lavender-ink);
+  --card-title: var(--t-lavender-ink);
+}
+.archv .tone-rose {
+  --seg-line: var(--t-rose);
+  --seg-title: var(--t-rose-ink);
+  --card-title: var(--t-rose-ink);
+}
+.archv .tone-stone {
+  --seg-line: var(--t-stone);
+  --seg-title: var(--t-stone-ink);
+  --card-title: var(--t-stone-ink);
+}
+.archv .tone-ink {
+  --seg-line: var(--t-ink);
+  --seg-title: var(--t-ink-ink);
+  --card-title: var(--t-ink-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .node,
+  .edge-line {
+    transition: none;
+  }
+}
+@media (max-width: 600px) {
+  .archv .bar .status,
+  .archv .legend {
+    display: none;
+  }
+  .archv .bar input {
+    min-width: 120px;
+  }
+}
+
+/* Traditional: engineering diagram on paper; a considered dark variant. */
+:root {
+  --font-display: "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --display-weight: 600;
+  --bg: #f4f6f8;
+  --canvas: #f4f6f8;
+  --bar: #ffffff;
+  --btn: #ffffff;
+  --ink: #1d2833;
+  --ink-2: #44515e;
+  --muted: #6b7885;
+  --title: #1d2833;
+  --line: #d5dce3;
+  --accent: #2f6fdb;
+  --accent-ink: #1f56b3;
+  --accent-soft: #9dbcf0;
+  --card: #ffffff;
+  --card-line: #cfd7df;
+  --card-radius: 10px;
+  --card-shadow: 0 1px 2px rgba(29, 40, 51, 0.08);
+  --card-shadow-hover: 0 4px 12px rgba(29, 40, 51, 0.14);
+  --card-shadow-open: 0 12px 32px rgba(29, 40, 51, 0.22);
+  --code-bg: #eef2f6;
+  --code-ink: #2b3a49;
+  --seg-fill: rgba(255, 255, 255, 0.55);
+  --edge: #8b98a6;
+  --edge-label: #5b6875;
+  --t-sky: #4a86c8;
+  --t-sky-ink: #1f56b3;
+  --t-slate: #7a8896;
+  --t-slate-ink: #4a5866;
+  --t-teal: #2d9aa8;
+  --t-teal-ink: #1a6e79;
+  --t-moss: #5e9a4e;
+  --t-moss-ink: #3c6f2f;
+  --t-gold: #c9962a;
+  --t-gold-ink: #8a6210;
+  --t-copper: #c46a3b;
+  --t-copper-ink: #8f4620;
+  --t-lavender: #8b6fd1;
+  --t-lavender-ink: #5d47a0;
+  --t-rose: #c65a7c;
+  --t-rose-ink: #8f3a56;
+  --t-stone: #8d8579;
+  --t-stone-ink: #5f5850;
+  --t-ink: #3b4652;
+  --t-ink-ink: #2a3441;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131a21;
+    --canvas: #131a21;
+    --bar: #1a222b;
+    --btn: #1f2934;
+    --ink: #e6ecf2;
+    --ink-2: #c3ccd6;
+    --muted: #8d9aa8;
+    --title: #eef3f8;
+    --line: #2e3a47;
+    --accent: #6fa3f0;
+    --accent-ink: #9cc2f7;
+    --accent-soft: #3d5f92;
+    --card: #1c2632;
+    --card-line: #33404e;
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.5);
+    --card-shadow-open: 0 14px 36px rgba(0, 0, 0, 0.6);
+    --code-bg: #141c25;
+    --code-ink: #c9d4df;
+    --seg-fill: rgba(255, 255, 255, 0.025);
+    --edge: #6f7f90;
+    --edge-label: #a2afbd;
+    --t-sky-ink: #8fb6f2;
+    --t-slate-ink: #a9b6c3;
+    --t-teal-ink: #7fd0da;
+    --t-moss-ink: #9fd18d;
+    --t-gold-ink: #ecc266;
+    --t-copper-ink: #eea070;
+    --t-lavender-ink: #c3adf3;
+    --t-rose-ink: #f09ab6;
+    --t-stone-ink: #c9c0b2;
+    --t-ink-ink: #cbd5df;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131a21;
+  --canvas: #131a21;
+  --bar: #1a222b;
+  --btn: #1f2934;
+  --ink: #e6ecf2;
+  --ink-2: #c3ccd6;
+  --muted: #8d9aa8;
+  --title: #eef3f8;
+  --line: #2e3a47;
+  --accent: #6fa3f0;
+  --accent-ink: #9cc2f7;
+  --accent-soft: #3d5f92;
+  --card: #1c2632;
+  --card-line: #33404e;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.5);
+  --card-shadow-open: 0 14px 36px rgba(0, 0, 0, 0.6);
+  --code-bg: #141c25;
+  --code-ink: #c9d4df;
+  --seg-fill: rgba(255, 255, 255, 0.025);
+  --edge: #6f7f90;
+  --edge-label: #a2afbd;
+  --t-sky-ink: #8fb6f2;
+  --t-slate-ink: #a9b6c3;
+  --t-teal-ink: #7fd0da;
+  --t-moss-ink: #9fd18d;
+  --t-gold-ink: #ecc266;
+  --t-copper-ink: #eea070;
+  --t-lavender-ink: #c3adf3;
+  --t-rose-ink: #f09ab6;
+  --t-stone-ink: #c9c0b2;
+  --t-ink-ink: #cbd5df;
+  color-scheme: dark;
+}
+.archv .archv-canvas {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center;
+}
+
+</style>
+</head>
+<body>
+<div class="archv archv-page">
+  <header class="bar">
+    <h1 class="title">Stardust Cafe Architecture</h1>
+    <span class="sub">Drag to pan · scroll to zoom · click a component for details</span>
+    <span class="spacer"></span>
+    <input id="search" list="search-list" placeholder="Jump to a component…" aria-label="Jump to a component" />
+    <datalist id="search-list"></datalist>
+    <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+    <span class="zoom" id="zoom">100%</span>
+    <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+    <button id="zoom-fit" type="button">Fit</button>
+    <span class="status" id="status">Click any component to expand it. Esc collapses.</span>
+  </header>
+  <div class="legend"><span class="tone-sky"><i></i>Client</span><span class="tone-teal"><i></i>API server</span><span class="tone-moss"><i></i>Orchestration</span><span class="tone-gold"><i></i>Agent runtime</span><span class="tone-copper"><i></i>MCP gateway</span><span class="tone-lavender"><i></i>Models</span><span class="tone-rose"><i></i>Evals</span><span class="tone-stone"><i></i>Data</span><span class="tone-ink"><i></i>Protocol</span><span class="tone-slate"><i></i>External</span></div>
+  <div id="canvas"></div>
+</div>
+<script>
+/* Architecture model for Stardust Cafe. One source for both diagram treatments. */
+const ARCH = {
+  world: { w: 2620, h: 1580 },
+  segments: [
+    {
+      id: 'client',
+      title: 'Client',
+      sub: 'apps/web (browser)',
+      nick: 'The Storefront',
+      x: 40,
+      y: 40,
+      w: 1220,
+      h: 440,
+      tone: 'sky',
+    },
+    {
+      id: 'external',
+      title: 'External model providers',
+      sub: 'reached over HTTPS',
+      nick: 'Out of Town',
+      x: 1300,
+      y: 40,
+      w: 1280,
+      h: 200,
+      tone: 'slate',
+    },
+    {
+      id: 'clients-ext',
+      title: 'External callers',
+      sub: 'MCP clients and the CLI',
+      nick: 'Regulars at the Door',
+      x: 1300,
+      y: 270,
+      w: 1280,
+      h: 210,
+      tone: 'slate',
+    },
+    {
+      id: 'server',
+      title: 'API server',
+      sub: 'apps/server (Hono on Node)',
+      nick: 'The Back Office',
+      x: 40,
+      y: 530,
+      w: 640,
+      h: 400,
+      tone: 'teal',
+    },
+    {
+      id: 'orch',
+      title: 'Orchestration',
+      sub: 'apps/server/src/orchestrator.ts',
+      nick: 'The Floor',
+      x: 720,
+      y: 530,
+      w: 660,
+      h: 400,
+      tone: 'moss',
+    },
+    {
+      id: 'agents',
+      title: 'Agent runtime',
+      sub: 'packages/agents',
+      nick: 'The Staff',
+      x: 1420,
+      y: 530,
+      w: 560,
+      h: 400,
+      tone: 'gold',
+    },
+    {
+      id: 'gateway',
+      title: 'MCP gateway',
+      sub: 'packages/mcp-gateway',
+      nick: 'The Pass',
+      x: 2020,
+      y: 530,
+      w: 560,
+      h: 400,
+      tone: 'copper',
+    },
+    {
+      id: 'models',
+      title: 'Models',
+      sub: 'packages/models',
+      nick: 'The Roster',
+      x: 40,
+      y: 990,
+      w: 900,
+      h: 300,
+      tone: 'lavender',
+    },
+    {
+      id: 'evals',
+      title: 'Evals',
+      sub: 'packages/evals',
+      nick: "The Inspector's Desk",
+      x: 980,
+      y: 990,
+      w: 860,
+      h: 300,
+      tone: 'rose',
+    },
+    {
+      id: 'data',
+      title: 'Data',
+      sub: 'packages/db + Postgres',
+      nick: 'The Cellar',
+      x: 1880,
+      y: 990,
+      w: 700,
+      h: 300,
+      tone: 'stone',
+    },
+    {
+      id: 'protocol',
+      title: 'Protocol (shared contract)',
+      sub: 'packages/protocol, imported by everything',
+      nick: 'House Rules',
+      x: 40,
+      y: 1350,
+      w: 2540,
+      h: 190,
+      tone: 'ink',
+    },
+  ],
+  nodes: [
+    // client
+    {
+      id: 'panels',
+      seg: 'client',
+      x: 70,
+      y: 110,
+      title: 'React panels',
+      nick: 'the menu board',
+      summary: 'Shift config, Visits (waterfalls), Queue, Inspector, Metrics, Log.',
+      details: [
+        'Run config with per-role model specs, scenarios, staffing, chaos, budget and a pre-run cost estimate.',
+        'Visits tab renders one waterfall per customer with beat percentages.',
+        'Inspector shows an agent’s model, latency, usage, tool trail and last words; clicking a red “!” lands here.',
+        'Metrics tab reads /api/runs/:id/metrics and compares recent shifts.',
+      ],
+      files: ['apps/web/src/App.tsx', 'apps/web/src/components/*.tsx'],
+    },
+    {
+      id: 'apiclient',
+      seg: 'client',
+      x: 360,
+      y: 110,
+      title: 'REST + SSE client',
+      nick: 'the runner',
+      summary: 'fetch() wrappers and an EventSource tail of the run.',
+      details: [
+        'POST /api/runs starts a shift; GET /api/runs/:id/events fetches history for replay.',
+        'openStream() tails /api/runs/:id/stream and feeds each CafeEvent into the TimelinePlayer, closing on the “done” frame.',
+      ],
+      files: ['apps/web/src/api.ts'],
+    },
+    {
+      id: 'player',
+      seg: 'client',
+      x: 650,
+      y: 110,
+      title: 'TimelinePlayer',
+      nick: 'the metronome',
+      summary:
+        'Decides when each event is applied: live-buffered, raw, replay, step, director’s cut.',
+      details: [
+        'Holds the ordered event list and a cursor; never uses the wall clock for simulation time.',
+        'Live-buffered renders a few seconds behind real time; replay advances a virtual clock at a chosen speed.',
+        'Step pauses on beats and exposes the real delta; director’s cut clamps gaps per character (tiny steps stretched, hangs compressed).',
+        'Seeking rebuilds state from scratch and emits onSnap; normal playback emits onApply per event.',
+      ],
+      files: ['apps/web/src/playback/TimelinePlayer.ts', 'apps/web/src/playback/usePlayer.ts'],
+    },
+    {
+      id: 'reducer',
+      seg: 'client',
+      x: 940,
+      y: 110,
+      title: 'CafeState reducer',
+      nick: 'the ledger',
+      summary: 'Pure fold of events into agents, customers, orders, queue, verdicts.',
+      details: [
+        'Tracks per-agent busy state, work start time, tool calls, usage and errors.',
+        'Tracks the FIFO rail, ticket ageing inputs and requeues.',
+        'Same reducer serves the scene and every panel, so they never disagree.',
+      ],
+      files: ['apps/web/src/state/cafe-state.ts'],
+    },
+    {
+      id: 'scene3d',
+      seg: 'client',
+      x: 70,
+      y: 290,
+      title: 'Scene: stylized 3D',
+      nick: 'the village square',
+      summary: 'Three.js world; consumes onApply/onSnap and animates events.',
+      details: [
+        'Procedural chunky props (rounded boxes, cylinders), toon shading, warm point lights, ACES + bloom.',
+        'Static props are baked into one mesh per material (mergeStatic) for ~8 ms frames.',
+        'Walks along the aisle/lane routes, ticket rail, steam, flicker, selection ring, click-to-inspect.',
+      ],
+      files: ['apps/web/src/scene3d/*.ts (branch style/painterly-topdown)'],
+    },
+    {
+      id: 'scenepx',
+      seg: 'client',
+      x: 360,
+      y: 290,
+      title: 'Scene: pixel art',
+      nick: 'the old shop',
+      summary: 'Phaser 3 scene with procedural pixel sprites (on main).',
+      details: [
+        'Same contract as the 3D scene; kept on the main branch as the rollback style.',
+        'Sprites and tiles defined as text grids compiled to canvas textures at boot.',
+      ],
+      files: ['apps/web/src/scene/*.ts (branch main)'],
+    },
+    {
+      id: 'overlay',
+      seg: 'client',
+      x: 650,
+      y: 290,
+      title: 'HTML overlay',
+      nick: 'the chalk signs',
+      summary: 'Name tags, bubbles, progress rings and the red “!” projected over the canvas.',
+      details: [
+        'DOM nodes anchored to world positions; re-projected each frame.',
+        'Rings fill against the role’s median work duration and turn amber then red on overshoot.',
+        'The alert badge is the one interactive overlay element: click opens the Inspector.',
+      ],
+      files: ['apps/web/src/scene3d/Overlay.ts'],
+    },
+    {
+      id: 'layout',
+      seg: 'client',
+      x: 940,
+      y: 290,
+      title: 'Layout grid',
+      nick: 'the floor plan',
+      summary: '20 x 13 tiles; stations, waiting slots, aisle routing shared by both scenes.',
+      details: [
+        'Tile (x, y) maps to world (x + 0.5, 0, y + 0.5); 1 tile = 1 m.',
+        'Customers travel the row-10 aisle, staff the row-3 lane, so nobody walks through furniture.',
+      ],
+      files: ['apps/web/src/scene3d/layout.ts'],
+    },
+    // external providers
+    {
+      id: 'anthropic',
+      seg: 'external',
+      x: 1330,
+      y: 110,
+      w: 220,
+      title: 'Anthropic',
+      nick: 'Claude',
+      summary: 'Chat models and a native evaluation adapter.',
+      details: ['Used via @ai-sdk/anthropic with ANTHROPIC_API_KEY.'],
+      files: ['@ai-sdk/anthropic'],
+    },
+    {
+      id: 'openai',
+      seg: 'external',
+      x: 1580,
+      y: 110,
+      w: 220,
+      title: 'OpenAI',
+      nick: 'GPT',
+      summary: 'Chat models and a native evaluation adapter.',
+      details: ['Used via @ai-sdk/openai with OPENAI_API_KEY.'],
+      files: ['@ai-sdk/openai'],
+    },
+    {
+      id: 'google',
+      seg: 'external',
+      x: 1830,
+      y: 110,
+      w: 220,
+      title: 'Google',
+      nick: 'Gemini',
+      summary: 'Chat models and a native evaluation adapter.',
+      details: ['Used via @ai-sdk/google with GOOGLE_GENERATIVE_AI_API_KEY.'],
+      files: ['@ai-sdk/google'],
+    },
+    {
+      id: 'jev',
+      seg: 'external',
+      x: 2080,
+      y: 110,
+      w: 240,
+      title: 'Vercel AI Gateway → TypeSafe Jev',
+      nick: 'the calibrated inspector',
+      summary:
+        'Jev answers typed questions with calibrated probabilities; the only current route to it.',
+      details: [
+        'Jev is a decision model, not a chat model: it cannot run a tool loop, so it is a judge or triage model, never a barista.',
+        'Model id on the gateway: typesafe-ai/jev-latest; spec in this repo: gateway:typesafe-ai/jev.',
+        'Any other gateway model works too (gateway:anthropic/…, gateway:openai/…).',
+      ],
+      files: ['@ai-sdk/gateway'],
+    },
+    {
+      id: 'ollama',
+      seg: 'external',
+      x: 2350,
+      y: 110,
+      w: 200,
+      title: 'Ollama / OpenAI-compatible',
+      nick: 'open weights',
+      summary: 'Any local or self-hosted OpenAI-compatible server.',
+      details: [
+        'Judged through the repo’s own LLM→evaluation adapter since these providers have no native one.',
+      ],
+      files: ['@ai-sdk/openai-compatible'],
+    },
+    // external callers
+    {
+      id: 'mcpclient',
+      seg: 'clients-ext',
+      x: 1330,
+      y: 340,
+      w: 560,
+      title: 'External MCP client',
+      nick: 'a visiting barista',
+      summary:
+        'Claude Desktop, MCP Inspector or any agent framework can hold one role’s tool slice.',
+      details: [
+        'POST /mcp/:runId/:role speaks streamable HTTP; the client sees exactly that role’s tools and nothing else.',
+      ],
+      files: ["apps/server/src/http.ts (app.all('/mcp/:runId/:role'))"],
+    },
+    {
+      id: 'cli',
+      seg: 'clients-ext',
+      x: 1930,
+      y: 340,
+      w: 620,
+      title: 'Eval CLI',
+      nick: 'the auditor',
+      summary: 'pnpm eval runs shifts headlessly and prints a comparison table.',
+      details: [
+        'Same ShiftOrchestrator as the server, in-process; every run is persisted and replayable in the UI.',
+        'Config files under runs/ (e.g. compare-models.json, frontier-vs-jev.example.json).',
+      ],
+      files: ['apps/server/src/cli.ts', 'runs/*.json'],
+    },
+    // server
+    {
+      id: 'routes',
+      seg: 'server',
+      x: 70,
+      y: 600,
+      title: 'REST routes',
+      nick: 'the front desk',
+      summary: '/api/runs, /scenarios, /models, /metrics, /orders, /judgements, /usage.',
+      details: [
+        'POST /api/runs validates the RunConfig and refuses live specs unless CAFE_ALLOW_LIVE_MODELS=true.',
+        'GET /api/runs/:id/events serves the persisted stream for replay.',
+      ],
+      files: ['apps/server/src/http.ts'],
+    },
+    {
+      id: 'sse',
+      seg: 'server',
+      x: 360,
+      y: 600,
+      title: 'SSE stream',
+      nick: 'the loudspeaker',
+      summary: 'Replays the buffer, then tails live events; heartbeat; “done” on finish.',
+      details: [
+        'GET /api/runs/:id/stream?afterSeq=n resumes from a sequence number.',
+        'Backed by the EventBus subscription for active runs, the database for finished ones.',
+      ],
+      files: ['apps/server/src/http.ts'],
+    },
+    {
+      id: 'runmanager',
+      seg: 'server',
+      x: 70,
+      y: 770,
+      title: 'RunManager',
+      nick: 'the shift board',
+      summary:
+        'Owns live runs; starts, cancels, subscribes; falls back to the DB when a run is over.',
+      details: [
+        'One EventBus + one ShiftOrchestrator per active run.',
+        'Keeps a finished run’s buffer briefly so late SSE subscribers get a clean hand-off.',
+      ],
+      files: ['apps/server/src/run-manager.ts'],
+    },
+    {
+      id: 'eventbus',
+      seg: 'server',
+      x: 360,
+      y: 770,
+      title: 'EventBus',
+      nick: 'the bell',
+      summary:
+        'Stamps id/seq/t, validates against the protocol, buffers, persists in order, fans out.',
+      details: [
+        'Every subsystem’s emit() ends here; persistence is a serial chain so order is never lost.',
+        'waitFor(predicate) lets the orchestrator await “order.delivered” for a visit.',
+      ],
+      files: ['apps/server/src/event-bus.ts'],
+    },
+    // orchestration
+    {
+      id: 'shift',
+      seg: 'orch',
+      x: 750,
+      y: 600,
+      title: 'ShiftOrchestrator',
+      nick: 'the floor manager',
+      summary: 'Deterministic glue: arrivals, registers, rail, baristas, judge, metrics.',
+      details: [
+        'Customers arrive on a schedule; each visit acquires a free cashier FIFO.',
+        'Closes out half-opened orders on refusal; fails what a crashed cashier left behind.',
+        'At close: metrics roll-up, run.finished, status persisted.',
+      ],
+      files: ['apps/server/src/orchestrator.ts'],
+    },
+    {
+      id: 'staff',
+      seg: 'orch',
+      x: 1040,
+      y: 600,
+      title: 'StaffPool',
+      nick: 'the roster on the wall',
+      summary:
+        'Hires cashiers/baristas/manager, tracks busy state and station, hands customers over FIFO.',
+      details: [
+        'Implements the gateway’s StaffingService so the manager’s tools can list and spawn staff.',
+      ],
+      files: ['apps/server/src/staff.ts'],
+    },
+    {
+      id: 'barista-loop',
+      seg: 'orch',
+      x: 750,
+      y: 770,
+      title: 'Barista worker loop',
+      nick: 'the espresso bar',
+      summary:
+        'Waits for tickets, runs the barista agent, requeues on crash (max 3), fails otherwise.',
+      details: [
+        'Event-driven wake on order.queued/requeued with a real-time fallback so a missed event cannot hang it.',
+        'Exits when customers are done and nothing is queued, claimed or ready.',
+      ],
+      files: ['apps/server/src/orchestrator.ts (baristaLoop)'],
+    },
+    {
+      id: 'triage',
+      seg: 'orch',
+      x: 1040,
+      y: 770,
+      title: 'Door triage + judge step',
+      nick: 'the maître d’ and the inspector',
+      summary:
+        'Two experimental_evaluate() calls per visit: intent/escalate at the door, verdict at the end.',
+      details: [
+        'Both use the manager’s / judge’s evaluation model, so Jev and LLMs are interchangeable here.',
+        'Verdicts are emitted as judge.verdict and stored with the blinded transcript for audit.',
+      ],
+      files: ['apps/server/src/orchestrator.ts (triage, judge)'],
+    },
+    // agent runtime
+    {
+      id: 'runagent',
+      seg: 'agents',
+      x: 1450,
+      y: 600,
+      title: 'runAgent()',
+      nick: 'a shift',
+      summary: 'One agent turn: persona + sliced tools + AI SDK generateText loop.',
+      details: [
+        'Advertises only the role’s tool slice; every call still goes through the gateway.',
+        'Returns outcome, text, tool trail, tokens, cost, per-step model latency and the full message transcript.',
+        'A call to a tool the model was never given is routed to the gateway anyway so it is recorded as a scope violation.',
+      ],
+      files: ['packages/agents/src/run-agent.ts'],
+    },
+    {
+      id: 'budget',
+      seg: 'agents',
+      x: 1740,
+      y: 600,
+      title: 'BudgetGuard',
+      nick: 'the till limit',
+      summary: 'Step, token and USD caps; timeout; abort.',
+      details: [
+        'maxStepsPerAgent, maxTokensPerAgent, agentTimeoutMs per agent; maxUsdPerRun per run.',
+        'Over-budget turns end with agent.error kind=budget.',
+      ],
+      files: ['packages/agents/src/run-agent.ts'],
+    },
+    {
+      id: 'personas',
+      seg: 'agents',
+      x: 1450,
+      y: 770,
+      title: 'Personas',
+      nick: 'the name tags',
+      summary: 'System prompts, names and sprites for cashier, barista, manager.',
+      details: ['Prompts spell out the tool order and what each role must refuse.'],
+      files: ['packages/agents/src/personas.ts'],
+    },
+    {
+      id: 'crash',
+      seg: 'agents',
+      x: 1740,
+      y: 770,
+      title: 'Crash + usage emission',
+      nick: 'the dropped tray',
+      summary: 'Simulated crashes by role; model.usage and agent.* events per step.',
+      details: [
+        'chaos.agentCrashRate with crashRoles targets baristas, cashiers or everyone.',
+        'Usage rows are written per step so cost tallies live.',
+      ],
+      files: ['packages/agents/src/run-agent.ts'],
+    },
+    // gateway
+    {
+      id: 'gw',
+      seg: 'gateway',
+      x: 2050,
+      y: 600,
+      w: 500,
+      title: 'Gateway: capability + scope check',
+      nick: 'the pass window',
+      summary: 'Every tool call: scope check, arg validation, chaos, timing, events.',
+      details: [
+        'A capability names agent, role, run, visit and scopes; the model may be told about a slice, but the token decides.',
+        'Out-of-scope calls are rejected and emitted as agent.scope_violation.',
+        'Tool results and errors are handed back as data so the model can recover.',
+      ],
+      files: ['packages/mcp-gateway/src/gateway.ts', 'packages/mcp-gateway/src/roles.ts'],
+    },
+    {
+      id: 'tools',
+      seg: 'gateway',
+      x: 2050,
+      y: 770,
+      w: 235,
+      title: 'Tool slices',
+      nick: 'the stations',
+      summary:
+        'Cashier (menu, orders, payments), barista (rail, recipes, inventory), manager (staffing, requeue).',
+      details: [
+        'cashier: menu.lookup, customers.lookup, orders.create/add_item/refuse, payments.charge, orders.enqueue',
+        'barista: orders.claim_next (FOR UPDATE SKIP LOCKED), recipes.get, inventory.consume, drinks.log_made, orders.mark_ready/call_out',
+        'manager: orders.queue_status/requeue, staffing.list/spawn_barista, inventory.restock, incidents.log',
+      ],
+      files: ['packages/mcp-gateway/src/tools/*.ts'],
+    },
+    {
+      id: 'mcpserver',
+      seg: 'gateway',
+      x: 2315,
+      y: 770,
+      w: 235,
+      title: 'MCP server + chaos',
+      nick: 'the side door',
+      summary: 'Real MCP server per capability; seeded tool errors and latency.',
+      details: [
+        'createMcpServer(gateway, capability) exposes exactly one slice over any SDK transport.',
+        'Chaos: toolErrorRate, toolLatencyMs, deterministic seed.',
+      ],
+      files: ['packages/mcp-gateway/src/mcp-server.ts', 'packages/mcp-gateway/src/chaos.ts'],
+    },
+    // models
+    {
+      id: 'registry',
+      seg: 'models',
+      x: 70,
+      y: 1060,
+      title: 'ModelRegistry',
+      nick: 'the hiring desk',
+      summary: 'One string spec → chat model or evaluation model.',
+      details: [
+        'anthropic/…, openai/…, google/…, gateway:…, ollama/…, mock:…',
+        'languageModel(spec) for agents; evaluationModel(spec) for judge and triage.',
+        'Refuses live specs unless CAFE_ALLOW_LIVE_MODELS=true.',
+      ],
+      files: ['packages/models/src/registry.ts'],
+    },
+    {
+      id: 'pricing',
+      seg: 'models',
+      x: 360,
+      y: 1060,
+      title: 'Pricing + live guard',
+      nick: 'the price list',
+      summary: 'USD per MTok by model family; mock and Ollama are free.',
+      details: [
+        'Longest-prefix match so dated ids resolve to their family.',
+        'Override with MODEL_PRICES_JSON.',
+      ],
+      files: ['packages/models/src/pricing.ts'],
+    },
+    {
+      id: 'mock',
+      seg: 'models',
+      x: 650,
+      y: 1060,
+      title: 'Mock models',
+      nick: 'the understudies',
+      summary:
+        'Scripted personas drive the real tools; a mock evaluation model answers the judge questions.',
+      details: [
+        'cashier, cashier-naive, barista, barista-forgetful, manager; realistic pacing and an optional hang.',
+        'Zero cost, deterministic, exercises gateway, DB, events, scene and metrics for real.',
+      ],
+      files: ['packages/models/src/mock/*.ts'],
+    },
+    {
+      id: 'adapter',
+      seg: 'models',
+      x: 70,
+      y: 1200,
+      w: 820,
+      h: 70,
+      title: 'LLM → evaluation adapter',
+      nick: 'the translator',
+      summary:
+        'Any chat model becomes an EvaluationModelV4 by answering the same typed questions as JSON, so open-weights models can sit in the judge’s chair.',
+      details: ['Used automatically for ollama/… evaluation specs.'],
+      files: ['packages/models/src/llm-evaluation-adapter.ts'],
+    },
+    // evals
+    {
+      id: 'scenarios',
+      seg: 'evals',
+      x: 1010,
+      y: 1060,
+      title: 'Scenarios',
+      nick: 'the regulars',
+      summary: '14 scripted customers: happy, edge, adversarial.',
+      details: [
+        'Each carries expected items/total, expected tools per role, shouldRefuse and a rubric for the judge.',
+      ],
+      files: ['packages/evals/src/scenarios/index.ts'],
+    },
+    {
+      id: 'groundtruth',
+      seg: 'evals',
+      x: 1300,
+      y: 1060,
+      title: 'Ground truth',
+      nick: 'the receipt check',
+      summary: 'Deterministic pass/fail from DB rows vs the scenario.',
+      details: [
+        'Outcome match, item/size/modifier match, total match; role-aware tool precision/recall.',
+      ],
+      files: ['packages/evals/src/ground-truth.ts'],
+    },
+    {
+      id: 'judge',
+      seg: 'evals',
+      x: 1590,
+      y: 1060,
+      w: 225,
+      title: 'Blinded judge',
+      nick: 'Inspector Wren',
+      summary: 'Strips model names, agent ids and staff names; one question set for every judge.',
+      details: [
+        'Questions: correct, refusalAppropriate (boolean), helpfulness, tone, toolUseQuality (5-level scores).',
+        'Same call for Jev, Claude, GPT, Gemini or an open-weights model.',
+      ],
+      files: ['packages/evals/src/judge.ts'],
+    },
+    {
+      id: 'metrics',
+      seg: 'evals',
+      x: 1010,
+      y: 1200,
+      w: 805,
+      h: 70,
+      title: 'Metrics roll-up',
+      nick: 'the end-of-day report',
+      summary:
+        'Task success, refusal accuracy, tool P/R, scope violations, retries, latency percentiles per role and per beat, tokens, USD, judge means.',
+      details: ['Per visit and per run; persisted to run_metrics and shown in the Metrics tab.'],
+      files: ['packages/evals/src/metrics.ts'],
+    },
+    // data
+    {
+      id: 'store',
+      seg: 'data',
+      x: 1910,
+      y: 1060,
+      w: 300,
+      title: 'CafeStore interface',
+      nick: 'the pantry list',
+      summary: 'The only way anything touches persistence; Postgres today, others later.',
+      details: [
+        'runs, events, menu, customers, inventory (per run), orders, payments, drinks, usage, judgements, incidents, metrics.',
+        'claimNext() uses FOR UPDATE SKIP LOCKED so several baristas never grab the same ticket.',
+      ],
+      files: ['packages/db/src/store.ts'],
+    },
+    {
+      id: 'schema',
+      seg: 'data',
+      x: 2240,
+      y: 1060,
+      w: 310,
+      title: 'Drizzle schema + seed',
+      nick: 'the shelves',
+      summary: '14 tables; catalog seeded with menu, recipes, ingredients, loyalty customers.',
+      details: ['Migrations generated with drizzle-kit; pnpm db:migrate / db:seed / db:reset.'],
+      files: ['packages/db/src/schema.ts', 'packages/db/src/seed-data.ts'],
+    },
+    {
+      id: 'postgres',
+      seg: 'data',
+      x: 1910,
+      y: 1200,
+      w: 640,
+      h: 70,
+      title: 'Postgres 16',
+      nick: 'the cellar itself',
+      summary:
+        'Docker container on localhost:5434 (docker-compose.yml); every run’s events, orders and metrics live here.',
+      details: ['Named volume cafe-pgdata; inventory is copied per run so evals are reproducible.'],
+      files: ['docker-compose.yml'],
+    },
+    // protocol
+    {
+      id: 'events',
+      seg: 'protocol',
+      x: 70,
+      y: 1420,
+      w: 480,
+      h: 90,
+      title: 'CafeEvent schema',
+      nick: 'the order slips',
+      summary:
+        '~35 event types (run.*, customer.*, agent.*, order.*, payment, inventory, model.usage, judge.verdict) with id, seq, t, txId.',
+      details: ['Discriminated union in Zod; validated on every emit.'],
+      files: ['packages/protocol/src/events.ts'],
+    },
+    {
+      id: 'domain',
+      seg: 'protocol',
+      x: 580,
+      y: 1420,
+      w: 480,
+      h: 90,
+      title: 'Domain + RunConfig',
+      nick: 'the rulebook',
+      summary:
+        'Order, Scenario, RunConfig (roles, staffing, chaos, budget, mockPacing), Station, Role.',
+      details: ['Defaults via .prefault so a partial config is enough.'],
+      files: ['packages/protocol/src/domain.ts'],
+    },
+    {
+      id: 'beats',
+      seg: 'protocol',
+      x: 1090,
+      y: 1420,
+      w: 480,
+      h: 90,
+      title: 'Beats / waterfall',
+      nick: 'the stopwatch',
+      summary:
+        'beatsOf(events, txId): arrive, order_taken, queued, making, called_out, left, judged, with durations and percentages.',
+      details: ['Used by the Visits tab, step mode markers and the metrics beat latency table.'],
+      files: ['packages/protocol/src/beats.ts'],
+    },
+    {
+      id: 'modelspec',
+      seg: 'protocol',
+      x: 1600,
+      y: 1420,
+      w: 480,
+      h: 90,
+      title: 'ModelSpec + metrics types',
+      nick: 'the name badges',
+      summary: 'The provider/model string grammar and the TransactionMetrics / RunMetrics shapes.',
+      details: ['parseModelSpec() is what every registry call starts with.'],
+      files: ['packages/protocol/src/model-spec.ts', 'packages/protocol/src/metrics.ts'],
+    },
+    {
+      id: 'stations',
+      seg: 'protocol',
+      x: 2110,
+      y: 1420,
+      w: 440,
+      h: 90,
+      title: 'Stations',
+      nick: 'the floor markings',
+      summary: 'register_1/2, espresso_1/2, pickup, office, judge_table, waiting, door, offscreen.',
+      details: ['Home station per role; the scenes map these to tiles.'],
+      files: ['packages/protocol/src/stations.ts'],
+    },
+  ],
+  edges: [
+    { from: 'panels', to: 'apiclient', label: 'start / load run' },
+    { from: 'apiclient', to: 'routes', label: 'REST' },
+    { from: 'sse', to: 'apiclient', label: 'CafeEvent stream' },
+    { from: 'apiclient', to: 'player', label: 'ingest()' },
+    { from: 'player', to: 'reducer', label: 'reduce per event' },
+    { from: 'player', to: 'scene3d', label: 'onApply / onSnap' },
+    { from: 'player', to: 'scenepx', label: 'same contract' },
+    { from: 'reducer', to: 'panels', label: 'state' },
+    { from: 'scene3d', to: 'overlay', label: 'anchors' },
+    { from: 'layout', to: 'scene3d', label: 'tiles → world' },
+    { from: 'routes', to: 'runmanager', label: 'start / cancel' },
+    { from: 'runmanager', to: 'eventbus', label: 'one per run' },
+    { from: 'runmanager', to: 'shift', label: 'run()' },
+    { from: 'eventbus', to: 'sse', label: 'subscribe' },
+    { from: 'eventbus', to: 'store', label: 'append (serial)' },
+    { from: 'shift', to: 'staff', label: 'acquire / release' },
+    { from: 'shift', to: 'barista-loop', label: 'spawns per barista' },
+    { from: 'shift', to: 'triage', label: 'per visit' },
+    { from: 'shift', to: 'runagent', label: 'cashier turn' },
+    { from: 'barista-loop', to: 'runagent', label: 'barista turn' },
+    { from: 'triage', to: 'judge', label: 'judgeTransaction()' },
+    { from: 'triage', to: 'registry', label: 'evaluationModel()' },
+    { from: 'runagent', to: 'registry', label: 'languageModel()' },
+    { from: 'runagent', to: 'gw', label: 'tool calls' },
+    { from: 'runagent', to: 'budget', label: '' },
+    { from: 'personas', to: 'runagent', label: 'system prompt' },
+    { from: 'crash', to: 'eventbus', label: 'agent.*, model.usage' },
+    { from: 'gw', to: 'tools', label: 'dispatch' },
+    { from: 'gw', to: 'mcpserver', label: 'expose slice' },
+    { from: 'tools', to: 'store', label: 'reads / writes' },
+    { from: 'gw', to: 'eventbus', label: 'tool_called / returned' },
+    { from: 'mcpclient', to: 'mcpserver', label: 'streamable HTTP' },
+    { from: 'cli', to: 'shift', label: 'in-process' },
+    { from: 'registry', to: 'anthropic', label: '' },
+    { from: 'registry', to: 'openai', label: '' },
+    { from: 'registry', to: 'google', label: '' },
+    { from: 'registry', to: 'jev', label: 'evaluate()' },
+    { from: 'registry', to: 'ollama', label: '' },
+    { from: 'registry', to: 'mock', label: 'mock:*' },
+    { from: 'registry', to: 'pricing', label: '' },
+    { from: 'adapter', to: 'registry', label: 'wraps ollama' },
+    { from: 'scenarios', to: 'shift', label: 'customer scripts' },
+    { from: 'groundtruth', to: 'judge', label: 'matchesExpected' },
+    { from: 'judge', to: 'metrics', label: 'verdicts' },
+    { from: 'shift', to: 'metrics', label: 'roll-up at close' },
+    { from: 'metrics', to: 'store', label: 'run_metrics' },
+    { from: 'store', to: 'schema', label: 'Drizzle' },
+    { from: 'schema', to: 'postgres', label: 'SQL' },
+    { from: 'routes', to: 'store', label: 'reads' },
+  ],
+}
+
+/* Pannable, zoomable architecture canvas. Reads window.ARCH; theme decides copy and chrome. */
+/**
+ * Mount the diagram into `container`. `options.controls` are optional toolbar elements
+ * the caller renders (zoomIn, zoomOut, fit, zoom, status, search, searchList).
+ * Returns { destroy, fit, expand }.
+ */
+function mountArchitecture(container, options) {
+  const NS = 'http://www.w3.org/2000/svg'
+  const XH = 'http://www.w3.org/1999/xhtml'
+  const DEF_W = 250
+  const DEF_H = 120
+  const EXP_W = 470
+
+  const opts = options || {}
+  const controls = opts.controls || {}
+  const useNick = !!opts.nicknames
+  const data = opts.data
+  const segById = Object.fromEntries(data.segments.map((s) => [s.id, s]))
+  const nodeById = Object.fromEntries(data.nodes.map((n) => [n.id, n]))
+  for (const n of data.nodes) {
+    n.w = n.w || DEF_W
+    n.h = n.h || DEF_H
+  }
+
+  const el = (tag, attrs, parent) => {
+    const e = document.createElementNS(NS, tag)
+    for (const k in attrs) e.setAttribute(k, attrs[k])
+    if (parent) parent.appendChild(e)
+    return e
+  }
+  const html = (tag, cls, text) => {
+    const e = document.createElementNS(XH, tag)
+    if (cls) e.className = cls
+    if (text !== undefined) e.textContent = text
+    return e
+  }
+
+  const root = container
+  root.classList.add('archv-canvas')
+  const svg = el(
+    'svg',
+    {
+      class: 'archv-svg',
+      tabindex: '0',
+      role: 'application',
+      'aria-label': 'Architecture diagram',
+    },
+    root,
+  )
+  const defs = el('defs', {}, svg)
+  for (const [id, cls] of [
+    ['arrow', 'arrow'],
+    ['arrow-hi', 'arrow hi'],
+  ]) {
+    const m = el(
+      'marker',
+      {
+        id,
+        viewBox: '0 0 10 10',
+        refX: '9',
+        refY: '5',
+        markerWidth: '8',
+        markerHeight: '8',
+        orient: 'auto-start-reverse',
+      },
+      defs,
+    )
+    el('path', { d: 'M0,0 L10,5 L0,10 z', class: cls }, m)
+  }
+  const world = el('g', { class: 'world' }, svg)
+  const gSeg = el('g', { class: 'segments' }, world)
+  const gEdge = el('g', { class: 'edges' }, world)
+  const gNode = el('g', { class: 'nodes' }, world)
+
+  // ---- segments
+  for (const s of data.segments) {
+    const g = el('g', { class: `seg tone-${s.tone}`, 'data-id': s.id }, gSeg)
+    el('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 18, class: 'seg-box' }, g)
+    const title = useNick ? s.nick : s.title
+    const sub = useNick ? `${s.title} · ${s.sub}` : s.sub
+    const fo = el('foreignObject', { x: s.x + 18, y: s.y - 22, width: s.w - 36, height: 60 }, g)
+    const wrap = html('div', 'seg-title')
+    const t = html('span', 'seg-name', title)
+    const u = html('span', 'seg-sub', sub)
+    wrap.appendChild(t)
+    wrap.appendChild(u)
+    fo.appendChild(wrap)
+  }
+
+  // ---- edges
+  const center = (n) => ({ x: n.x + n.w / 2, y: n.y + n.h / 2 })
+  function anchors(a, b) {
+    const ca = center(a)
+    const cb = center(b)
+    const dx = cb.x - ca.x
+    const dy = cb.y - ca.y
+    if (Math.abs(dx) * 0.8 > Math.abs(dy)) {
+      const sx = dx > 0 ? a.x + a.w : a.x
+      const tx = dx > 0 ? b.x : b.x + b.w
+      return { s: { x: sx, y: ca.y }, t: { x: tx, y: cb.y }, horiz: true }
+    }
+    const sy = dy > 0 ? a.y + a.h : a.y
+    const ty = dy > 0 ? b.y : b.y + b.h
+    return { s: { x: ca.x, y: sy }, t: { x: cb.x, y: ty }, horiz: false }
+  }
+  function pathFor(a, b) {
+    const { s, t, horiz } = anchors(a, b)
+    const k = horiz
+      ? Math.max(40, Math.abs(t.x - s.x) * 0.45)
+      : Math.max(40, Math.abs(t.y - s.y) * 0.45)
+    const c1 = horiz
+      ? { x: s.x + Math.sign(t.x - s.x) * k, y: s.y }
+      : { x: s.x, y: s.y + Math.sign(t.y - s.y) * k }
+    const c2 = horiz
+      ? { x: t.x - Math.sign(t.x - s.x) * k, y: t.y }
+      : { x: t.x, y: t.y - Math.sign(t.y - s.y) * k }
+    const mid = {
+      x: (s.x + 3 * c1.x + 3 * c2.x + t.x) / 8,
+      y: (s.y + 3 * c1.y + 3 * c2.y + t.y) / 8,
+    }
+    return { d: `M${s.x},${s.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${t.x},${t.y}`, mid }
+  }
+  const edgeEls = []
+  for (const e of data.edges) {
+    const a = nodeById[e.from]
+    const b = nodeById[e.to]
+    if (!a || !b) continue
+    const g = el('g', { class: 'edge', 'data-from': e.from, 'data-to': e.to }, gEdge)
+    const { d, mid } = pathFor(a, b)
+    el('path', { d, class: 'edge-hit' }, g)
+    const p = el('path', { d, class: 'edge-line', 'marker-end': 'url(#arrow)' }, g)
+    if (e.label) {
+      const t = el(
+        'text',
+        { x: mid.x, y: mid.y - 6, class: 'edge-label', 'text-anchor': 'middle' },
+        g,
+      )
+      t.textContent = e.label
+    }
+    edgeEls.push({ g, p, e })
+  }
+
+  // ---- nodes
+  const nodeEls = {}
+  let expanded = null
+  for (const n of data.nodes) {
+    const seg = segById[n.seg]
+    const g = el('g', { class: `node tone-${seg.tone}`, 'data-id': n.id }, gNode)
+    const fo = el('foreignObject', { x: n.x, y: n.y, width: n.w, height: n.h + 400 }, g)
+    const card = html('div', 'card')
+    card.setAttribute('role', 'button')
+    card.setAttribute('tabindex', '0')
+    card.style.width = `${n.w}px`
+    card.style.minHeight = `${n.h}px`
+    const head = html('div', 'card-head')
+    head.appendChild(html('div', 'card-title', useNick ? n.title : n.title))
+    if (useNick && n.nick) head.appendChild(html('div', 'card-nick', n.nick))
+    card.appendChild(head)
+    card.appendChild(html('p', 'card-summary', n.summary))
+    const more = html('div', 'card-more')
+    if (n.details?.length) {
+      const ul = html('ul', 'card-details')
+      for (const d of n.details) ul.appendChild(html('li', '', d))
+      more.appendChild(ul)
+    }
+    if (n.files?.length) {
+      const files = html('div', 'card-files')
+      for (const f of n.files) files.appendChild(html('code', '', f))
+      more.appendChild(files)
+    }
+    const hint = html(
+      'div',
+      'card-hint',
+      useNick ? 'tap to peek behind the counter' : 'click to expand',
+    )
+    card.appendChild(more)
+    card.appendChild(hint)
+    fo.appendChild(card)
+    nodeEls[n.id] = { g, fo, card, n }
+    const toggle = (ev) => {
+      ev.stopPropagation()
+      expand(expanded === n.id ? null : n.id)
+    }
+    card.addEventListener('click', (ev) => {
+      if (dragMoved) return
+      toggle(ev)
+    })
+    card.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault()
+        toggle(ev)
+      }
+    })
+  }
+
+  function expand(id) {
+    if (expanded && nodeEls[expanded]) {
+      const prev = nodeEls[expanded]
+      prev.g.classList.remove('open')
+      prev.fo.setAttribute('width', prev.n.w)
+      prev.card.style.width = `${prev.n.w}px`
+    }
+    expanded = id
+    svg.classList.toggle('has-open', !!id)
+    for (const { g, e } of edgeEls) g.classList.toggle('hi', !!id && (e.from === id || e.to === id))
+    for (const k in nodeEls) {
+      const isLinked =
+        !!id &&
+        data.edges.some((e) => (e.from === id && e.to === k) || (e.to === id && e.from === k))
+      nodeEls[k].g.classList.toggle('linked', isLinked)
+      nodeEls[k].g.classList.toggle('dim', !!id && k !== id && !isLinked)
+    }
+    if (!id) return
+    const cur = nodeEls[id]
+    cur.g.classList.add('open')
+    cur.fo.setAttribute('width', EXP_W)
+    cur.card.style.width = `${EXP_W}px`
+    gNode.appendChild(cur.g) // on top
+    const info = controls.status
+    if (info) info.textContent = `${cur.n.title} · ${segById[cur.n.seg].title}`
+  }
+
+  // ---- pan & zoom
+  const view = { x: 0, y: 0, k: 1 }
+  let dragging = false
+  let dragMoved = false
+  let start = null
+  const apply = () => {
+    world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`)
+    svg.classList.toggle('zoomed-in', view.k >= 0.7)
+    const z = controls.zoom
+    if (z) z.textContent = `${Math.round(view.k * 100)}%`
+  }
+  function fitView() {
+    const r = root.getBoundingClientRect()
+    const pad = 40
+    const k = Math.min((r.width - pad * 2) / data.world.w, (r.height - pad * 2) / data.world.h)
+    view.k = Math.max(0.12, Math.min(2.5, k))
+    view.x = (r.width - data.world.w * view.k) / 2
+    view.y = (r.height - data.world.h * view.k) / 2
+    apply()
+  }
+  function zoomAt(factor, cx, cy) {
+    const nk = Math.max(0.12, Math.min(3, view.k * factor))
+    const f = nk / view.k
+    view.x = cx - (cx - view.x) * f
+    view.y = cy - (cy - view.y) * f
+    view.k = nk
+    apply()
+  }
+  svg.addEventListener(
+    'wheel',
+    (ev) => {
+      ev.preventDefault()
+      const r = root.getBoundingClientRect()
+      const factor = Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015))
+      zoomAt(factor, ev.clientX - r.left, ev.clientY - r.top)
+    },
+    { passive: false },
+  )
+  svg.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return
+    dragging = true
+    dragMoved = false
+    start = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y, id: ev.pointerId }
+  })
+  svg.addEventListener('pointermove', (ev) => {
+    if (!dragging || !start) return
+    const dx = ev.clientX - start.x
+    const dy = ev.clientY - start.y
+    if (!dragMoved && Math.hypot(dx, dy) > 4) {
+      dragMoved = true
+      svg.classList.add('grabbing')
+      // capture only once a real drag starts, so plain clicks still reach the cards
+      try {
+        svg.setPointerCapture(start.id)
+      } catch {
+        /* ignore */
+      }
+    }
+    if (dragMoved) {
+      view.x = start.vx + dx
+      view.y = start.vy + dy
+      apply()
+    }
+  })
+  const endDrag = (ev) => {
+    if (!dragging) return
+    dragging = false
+    svg.classList.remove('grabbing')
+    if (!dragMoved && ev.target === svg) expand(null)
+    setTimeout(() => {
+      dragMoved = false
+    }, 0)
+  }
+  svg.addEventListener('pointerup', endDrag)
+  svg.addEventListener('pointercancel', endDrag)
+  svg.addEventListener('click', (ev) => {
+    if (ev.target === svg && !dragMoved) expand(null)
+  })
+  // pinch on touch devices
+  const touches = new Map()
+  let pinchStart = null
+  svg.addEventListener(
+    'touchstart',
+    (ev) => {
+      for (const t of ev.changedTouches) touches.set(t.identifier, t)
+      if (ev.touches.length === 2) {
+        const [a, b] = [ev.touches[0], ev.touches[1]]
+        pinchStart = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), k: view.k }
+      }
+    },
+    { passive: true },
+  )
+  svg.addEventListener(
+    'touchmove',
+    (ev) => {
+      if (ev.touches.length === 2 && pinchStart) {
+        const [a, b] = [ev.touches[0], ev.touches[1]]
+        const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+        const r = root.getBoundingClientRect()
+        const cx = (a.clientX + b.clientX) / 2 - r.left
+        const cy = (a.clientY + b.clientY) / 2 - r.top
+        zoomAt((pinchStart.k * (d / pinchStart.d)) / view.k, cx, cy)
+      }
+    },
+    { passive: true },
+  )
+  svg.addEventListener('touchend', () => {
+    if (touches.size < 2) pinchStart = null
+    touches.clear()
+  })
+
+  controls.zoomIn?.addEventListener('click', () => {
+    const r = root.getBoundingClientRect()
+    zoomAt(1.25, r.width / 2, r.height / 2)
+  })
+  controls.zoomOut?.addEventListener('click', () => {
+    const r = root.getBoundingClientRect()
+    zoomAt(0.8, r.width / 2, r.height / 2)
+  })
+  controls.fit?.addEventListener('click', fitView)
+  const onKey = (ev) => {
+    if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return
+    const r = root.getBoundingClientRect()
+    if (ev.key === '+' || ev.key === '=') zoomAt(1.25, r.width / 2, r.height / 2)
+    else if (ev.key === '-') zoomAt(0.8, r.width / 2, r.height / 2)
+    else if (ev.key === '0') fitView()
+    else if (ev.key === 'Escape') expand(null)
+  }
+  window.addEventListener('keydown', onKey)
+  const ro = new ResizeObserver(() => {
+    if (!userMoved) fitView()
+  })
+  let userMoved = false
+  svg.addEventListener(
+    'pointerdown',
+    () => {
+      userMoved = true
+    },
+    { once: true },
+  )
+  ro.observe(root)
+
+  // ---- search / jump
+  const search = controls.search
+  if (search) {
+    const list = controls.searchList
+    if (list)
+      for (const n of data.nodes)
+        list.appendChild(Object.assign(html('option'), { value: n.title }))
+    search.addEventListener('change', () => {
+      const q = search.value.trim().toLowerCase()
+      const n =
+        data.nodes.find((x) => x.title.toLowerCase() === q) ||
+        data.nodes.find((x) => x.title.toLowerCase().includes(q))
+      if (!n) return
+      const r = root.getBoundingClientRect()
+      view.k = Math.max(view.k, 0.9)
+      view.x = r.width / 2 - (n.x + n.w / 2) * view.k
+      view.y = r.height / 2 - (n.y + n.h / 2) * view.k
+      userMoved = true
+      apply()
+      expand(n.id)
+    })
+  }
+
+  fitView()
+  return {
+    fit: fitView,
+    expand,
+    destroy() {
+      ro.disconnect()
+      window.removeEventListener('keydown', onKey)
+      svg.remove()
+    },
+  }
+}
+
+mountArchitecture(document.getElementById('canvas'), {
+  data: ARCH,
+  nicknames: false,
+  controls: {
+    zoomIn: document.getElementById('zoom-in'),
+    zoomOut: document.getElementById('zoom-out'),
+    fit: document.getElementById('zoom-fit'),
+    zoom: document.getElementById('zoom'),
+    status: document.getElementById('status'),
+    search: document.getElementById('search'),
+    searchList: document.getElementById('search-list'),
+  },
+})
+</script>
+
+</body>
+</html>
