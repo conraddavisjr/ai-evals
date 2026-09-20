@@ -1,4 +1,12 @@
-import type { CafeEvent, RunConfig, RunConfigInput, RunMetrics, Scenario } from '@cafe/protocol'
+import type {
+  CafeEvent,
+  RunConfig,
+  RunConfigInput,
+  RunMetrics,
+  RunTelemetry,
+  Scenario,
+  SpanSummary,
+} from '@cafe/protocol'
 
 export interface RunRow {
   id: string
@@ -48,4 +56,19 @@ export interface HarnessClient {
   ): Promise<Array<{ txId: string; blindedTranscript: string; judgeSpec: string }>>
   /** Tail a live run. Returns a closer. */
   stream(id: string, handlers: StreamHandlers, afterSeq?: number): () => void
+}
+
+/**
+ * The experiment side of the harness: telemetry today, datasets and suites next.
+ * Kept apart from HarnessClient so a minimal harness (events only) still satisfies
+ * the stage; anything here may reject with "not supported" and the UI copes.
+ */
+export interface ExperimentClient {
+  /** Aggregated OpenTelemetry view of a run (works while the run is live). */
+  telemetry(runId: string): Promise<RunTelemetry>
+  /** Raw spans for drill-down. */
+  spans(
+    runId: string,
+    query?: { txId?: string; kinds?: string[]; limit?: number; offset?: number },
+  ): Promise<SpanSummary[]>
 }

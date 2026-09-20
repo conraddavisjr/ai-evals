@@ -1,6 +1,7 @@
 import type { JSONObject } from '@ai-sdk/provider'
 import type { ModelRegistry } from '@cafe/models'
 import type { CafeEvent, Order, ReviewIssue, ReviewVerdict, Scenario } from '@cafe/protocol'
+import { ATTR, type Context, type Span, withSpan } from '@cafe/telemetry'
 import { experimental_evaluate as evaluate } from 'ai'
 import { groundTruth, type Outcome } from './ground-truth.js'
 import { type StaffActivity, staffActivity } from './staff-trail.js'
@@ -159,6 +160,8 @@ export async function reviewTransaction(input: {
   order: Pick<Order, 'items' | 'totalCents' | 'status'> | null
   outcome: Outcome | null
   now?: () => number
+  /** OpenTelemetry parent (the visit span). */
+  parentContext?: Context | Span | null | undefined
 }): Promise<ReviewResult> {
   const now = input.now ?? (() => Date.now())
   const model = input.registry.evaluationModel(input.reviewerSpec)
@@ -167,7 +170,21 @@ export async function reviewTransaction(input: {
   )
   const state = JSON.parse(brief) as JSONObject
   const started = now()
-  const res = await evaluate({ model, state, questions: REVIEW_QUESTIONS })
+  const res = await withSpan(
+    'review',
+    'review',
+    { [ATTR.MODEL_SPEC]: input.reviewerSpec },
+    async (span) => {
+      const r = await evaluate({ model, state, questions: REVIEW_QUESTIONS })
+      span.setAttributes({
+        [ATTR.INPUT_TOKENS]: r.usage.inputTokens ?? 0,
+        [ATTR.OUTPUT_TOKENS]: r.usage.outputTokens ?? 0,
+        [ATTR.LATENCY_MS]: now() - started,
+      })
+      return r
+    },
+    input.parentContext,
+  )
   const latencyMs = now() - started
   const choice = res.answers.verdict.choice
   const verdict: ReviewVerdict =

@@ -17,6 +17,7 @@
     "@cafe/mcp-gateway": "workspace:*",
     "@cafe/models": "workspace:*",
     "@cafe/protocol": "workspace:*",
+    "@cafe/telemetry": "workspace:*",
     "ai": "^7.0.105",
     "zod": "^4.6.5"
   }

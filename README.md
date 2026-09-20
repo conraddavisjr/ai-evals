@@ -58,6 +58,9 @@ mock:cashier                     # deterministic, zero cost
 ```
 
 Set them per role in the UI or in a run config file.
+Every run is traced with OpenTelemetry (suite > run > visit > agent turn > step > tool call, plus triage, review and judge).
+Spans land in the `spans` table as they close, so `GET /api/runs/:id/telemetry` (tool latency, reasoning latency per step, cost trajectory, errors by layer, per-visit items) works while a run is live; set `OTEL_EXPORTER_OTLP_ENDPOINT` to also export to Jaeger, Grafana or any OTLP collector.
+
 Live models are refused until `CAFE_ALLOW_LIVE_MODELS=true` is set in `.env`, and every run has a hard USD cap (`budget.maxUsdPerRun`), a step cap, and a token cap per agent.
 
 ### Where Jev fits
