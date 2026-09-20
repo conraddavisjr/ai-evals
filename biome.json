@@ -32,5 +32,17 @@
       "semicolons": "asNeeded",
       "trailingCommas": "all"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/src/charts/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "off"
+          }
+        }
+      }
+    }
+  ]
 }

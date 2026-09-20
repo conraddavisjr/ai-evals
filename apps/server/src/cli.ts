@@ -9,6 +9,7 @@ import { RunManager } from './run-manager.js'
 import { getDataset, resolveScenarios } from './scenarios.js'
 import { suiteMetrics } from './suite-results.js'
 import { SuiteRunner } from './suite-runner.js'
+import { initTracing } from './telemetry/tracing.js'
 
 /**
  * Headless eval runner. Runs one or more shift configs back to back and prints a
@@ -88,9 +89,15 @@ async function main() {
   await runMigrations(db)
   await seedCatalog(db)
   const store = createPgStore(db)
+  // CLI runs are persisted and replayable, so they get the same spans as server runs.
+  const tracing =
+    process.env.CAFE_TRACING === 'false'
+      ? null
+      : initTracing({ store, otlpUrl: process.env.OTEL_EXPORTER_OTLP_ENDPOINT })
 
   if (typeof args.suite === 'string') {
     await runSuite(store, resolve(process.env.INIT_CWD ?? process.cwd(), args.suite))
+    await tracing?.shutdown()
     await close()
     return
   }
@@ -184,6 +191,7 @@ async function main() {
   console.log(`\n${line(header)}\n${widths.map((w) => '-'.repeat(w)).join('  ')}`)
   for (const r of rows) console.log(line(r))
   console.log('\nReplay any run in the cafe UI from the Shift tab.')
+  await tracing?.shutdown()
   await close()
 }
 
