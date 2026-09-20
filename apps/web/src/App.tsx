@@ -1,6 +1,5 @@
-import type { RunConfigInput, Scenario } from '@cafe/protocol'
+import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type ModelsInfo, openStream, type RunRow } from './api.js'
 import { ArchitectureView } from './architecture/ArchitectureView.js'
 import { AgentInspector } from './components/AgentInspector.js'
 import { EventLog } from './components/EventLog.js'
@@ -8,13 +7,16 @@ import { MetricsDashboard } from './components/MetricsDashboard.js'
 import { PlaybackControls } from './components/PlaybackControls.js'
 import { QueuePanel } from './components/QueuePanel.js'
 import { RunConfigPanel } from './components/RunConfigPanel.js'
+import { initialDraft, type RunDraft, toRunConfig } from './components/run-draft.js'
 import { TransactionList } from './components/TransactionList.js'
 import { fmtUsd } from './format.js'
+import { type ModelsInfo, type RunRow, useHarness } from './harness/index.js'
 import { TimelinePlayer } from './playback/TimelinePlayer.js'
 import { usePlayer } from './playback/usePlayer.js'
-import { createGame, type Game } from './scene3d/game.js'
+import { DEFAULT_VIEW_ID, findView, SCENE_VIEWS, type SceneHandle } from './views/index.js'
 
 type Tab = 'run' | 'inspector' | 'queue' | 'visits' | 'metrics' | 'log'
+const VIEW_KEY = 'cafe.sceneView'
 
 // One player per page, surviving Vite HMR so a live stream is never orphaned mid-run.
 const hotData = import.meta.hot?.data as { player?: TimelinePlayer } | undefined
@@ -23,17 +25,27 @@ if (hotData) hotData.player = player
 
 export function App() {
   usePlayer(player)
+  const api = useHarness()
   const mountRef = useRef<HTMLDivElement>(null)
-  const gameRef = useRef<Game | null>(null)
+  const gameRef = useRef<SceneHandle | null>(null)
   const [models, setModels] = useState<ModelsInfo | null>(null)
   const [scenarios, setScenarios] = useState<Scenario[]>([])
+  const [draft, setDraft] = useState<RunDraft | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
+  const [startError, setStartError] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
   const [runStatus, setRunStatus] = useState<string>('idle')
   const [isLive, setIsLive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('run')
-  const [view, setView] = useState<'cafe' | 'architecture'>('cafe')
+  const [page, setPage] = useState<'cafe' | 'architecture'>('cafe')
+  const [sceneId, setSceneId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) ?? DEFAULT_VIEW_ID
+    } catch {
+      return DEFAULT_VIEW_ID
+    }
+  })
   const [menuOpen, setMenuOpen] = useState(false)
   const closeStream = useRef<(() => void) | null>(null)
 
@@ -47,59 +59,90 @@ export function App() {
       .then(([m, s]) => {
         setModels(m)
         setScenarios(s)
+        setDraft(initialDraft(m, s))
       })
       .catch((e) =>
         setBootError(
           `Cannot reach the server: ${e instanceof Error ? e.message : e}. Is \`pnpm dev\` running?`,
         ),
       )
-  }, [])
+  }, [api])
 
+  // Mount the chosen view; switching tears the old one down and the new one snaps to player.state.
   useEffect(() => {
-    if (!mountRef.current || gameRef.current) return
-    gameRef.current = createGame(mountRef.current, player, { onSelect })
-    if (import.meta.env.DEV)
-      (window as unknown as { __cafe: unknown }).__cafe = { player, game: gameRef.current }
+    const parent = mountRef.current
+    if (!parent) return
+    const view = findView(sceneId)
+    let handle: SceneHandle | null = null
+    let cancelled = false
+    void view.mount(parent, player, { onSelect }).then((h) => {
+      // the user switched again while the renderer was still loading
+      if (cancelled) return h.destroy()
+      handle = h
+      gameRef.current = h
+      if (import.meta.env.DEV)
+        (window as unknown as { __cafe: unknown }).__cafe = { player, game: h, view: view.id }
+    })
     return () => {
-      gameRef.current?.destroy()
+      cancelled = true
+      handle?.destroy()
       gameRef.current = null
     }
-  }, [onSelect])
+  }, [onSelect, sceneId])
 
-  const attach = useCallback((id: string, live: boolean, afterSeq = -1) => {
-    closeStream.current?.()
-    closeStream.current = null
-    setRunId(id)
-    setIsLive(live)
-    setSelectedId(null)
-    if (live) {
-      setRunStatus('running')
-      closeStream.current = openStream(
-        id,
-        {
-          onEvent: (e) => player.ingest([e]),
-          onDone: (status) => {
-            player.markComplete()
-            setRunStatus(status)
-            setIsLive(false)
-          },
-        },
-        afterSeq,
-      )
+  const chooseScene = useCallback((id: string) => {
+    setSceneId(id)
+    try {
+      localStorage.setItem(VIEW_KEY, id)
+    } catch {
+      /* private mode: the choice just does not persist */
     }
   }, [])
 
-  const startRun = useCallback(
-    async (config: RunConfigInput) => {
-      const { runId: id } = await api.startRun(config)
+  const attach = useCallback(
+    (id: string, live: boolean, afterSeq = -1) => {
+      closeStream.current?.()
+      closeStream.current = null
+      setRunId(id)
+      setIsLive(live)
+      setSelectedId(null)
+      if (live) {
+        setRunStatus('running')
+        closeStream.current = api.stream(
+          id,
+          {
+            onEvent: (e) => player.ingest([e]),
+            onDone: (status) => {
+              player.markComplete()
+              setRunStatus(status)
+              setIsLive(false)
+            },
+          },
+          afterSeq,
+        )
+      }
+    },
+    [api],
+  )
+
+  /** Start the drafted shift. The one entry point behind every "Open the cafe" button. */
+  const openCafe = useCallback(async () => {
+    if (!draft) return
+    setStartError(null)
+    try {
+      const { runId: id } = await api.startRun(toRunConfig(draft))
       player.reset()
       player.setMode('live-buffered')
       player.play()
       attach(id, true)
       setTab('visits')
-    },
-    [attach],
-  )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setStartError(msg)
+      setTab('run')
+      throw err
+    }
+  }, [api, attach, draft])
 
   const loadRun = useCallback(
     async (run: RunRow) => {
@@ -122,12 +165,12 @@ export function App() {
       }
       setTab('visits')
     },
-    [attach],
+    [api, attach],
   )
 
   const cancel = useCallback(async () => {
     if (runId) await api.cancelRun(runId)
-  }, [runId])
+  }, [api, runId])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -199,9 +242,9 @@ export function App() {
             <nav id="main-menu" className="menu" aria-label="Main">
               <button
                 type="button"
-                className={view === 'cafe' ? 'on' : ''}
+                className={page === 'cafe' ? 'on' : ''}
                 onClick={() => {
-                  setView('cafe')
+                  setPage('cafe')
                   setMenuOpen(false)
                 }}
               >
@@ -209,9 +252,9 @@ export function App() {
               </button>
               <button
                 type="button"
-                className={view === 'architecture' ? 'on' : ''}
+                className={page === 'architecture' ? 'on' : ''}
                 onClick={() => {
-                  setView('architecture')
+                  setPage('architecture')
                   setMenuOpen(false)
                 }}
               >
@@ -227,12 +270,27 @@ export function App() {
             <span className="subtitle">agentic eval harness</span>
           </div>
         </div>
+        <div className="segmented view-switch" role="tablist" aria-label="Scene style">
+          {SCENE_VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={sceneId === v.id}
+              className={sceneId === v.id ? 'on' : ''}
+              title={v.blurb}
+              onClick={() => chooseScene(v.id)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
         <div className="status">
           {runId ? (
             <>
               <span className={`pill ${runStatus}`}>{runStatus}</span>
-              <span className="muted mono">{runId.slice(-8)}</span>
-              <span className="muted">{staffSummary}</span>
+              <span className="muted mono runid">{runId.slice(-8)}</span>
+              <span className="muted staff">{staffSummary}</span>
               <span className="muted">
                 {Object.values(state.customers).filter((c) => c.outcome === 'served').length} served
               </span>
@@ -248,14 +306,53 @@ export function App() {
           ) : (
             <span className="muted">no shift loaded</span>
           )}
+          {!isLive && (
+            <button
+              type="button"
+              className="primary open-cafe"
+              disabled={!draft || draft.scenarioIds.length === 0}
+              title={
+                !draft
+                  ? 'Waiting for the server'
+                  : draft.scenarioIds.length === 0
+                    ? 'Pick at least one customer in the Shift tab'
+                    : 'Start a shift with the settings in the Shift tab'
+              }
+              onClick={() => void openCafe().catch(() => {})}
+            >
+              Open the cafe
+            </button>
+          )}
         </div>
       </header>
 
       <main>
-        {view === 'architecture' && <ArchitectureView />}
+        {page === 'architecture' && <ArchitectureView />}
         <section className="stage">
-          <div className="canvas-wrap" ref={mountRef} />
-          <PlaybackControls player={player} isLiveRun={isLive} />
+          <div className="canvas-wrap">
+            <div className="scene-host" ref={mountRef} />
+            {!runId && (
+              <div className="stage-empty">
+                <div className="stage-empty-card">
+                  <h2>The cafe is closed</h2>
+                  <p className="muted">
+                    Nothing is playing yet. Start a shift with the current settings, or pick a
+                    recent one in the Shift tab to replay it.
+                  </p>
+                  <button
+                    type="button"
+                    className="primary big"
+                    disabled={!draft || draft.scenarioIds.length === 0}
+                    onClick={() => void openCafe().catch(() => {})}
+                  >
+                    Open the cafe
+                  </button>
+                  {startError && <div className="error-box">{startError}</div>}
+                </div>
+              </div>
+            )}
+          </div>
+          <PlaybackControls player={player} />
         </section>
 
         <aside className="panel">
@@ -282,14 +379,17 @@ export function App() {
           </nav>
           <div className="panel-body">
             {bootError && <div className="error-box">{bootError}</div>}
-            {tab === 'run' && models && (
+            {tab === 'run' && models && draft && (
               <RunConfigPanel
                 models={models}
                 scenarios={scenarios}
-                onStart={startRun}
+                draft={draft}
+                onDraftChange={setDraft}
+                onStart={openCafe}
                 onLoadRun={loadRun}
                 currentRunId={runId}
                 busy={isLive}
+                startError={startError}
               />
             )}
             {tab === 'visits' && <TransactionList player={player} onSelect={onSelect} />}

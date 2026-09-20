@@ -1,13 +1,14 @@
 import type { RunMetrics } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
-import { api, type RunRow } from '../api.js'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
+import { type RunRow, useHarness } from '../harness/index.js'
 import { BEAT_COLORS, BEAT_LABELS } from './OrderWaterfall.js'
 
 export function MetricsDashboard({ runId, status }: { runId: string | null; status: string }) {
   const [metrics, setMetrics] = useState<RunMetrics | null>(null)
   const [compare, setCompare] = useState<Array<{ run: RunRow; m: RunMetrics }>>([])
   const [err, setErr] = useState<string | null>(null)
+  const api = useHarness()
 
   useEffect(() => {
     setMetrics(null)
@@ -29,7 +30,7 @@ export function MetricsDashboard({ runId, status }: { runId: string | null; stat
         setCompare(rows.filter((r): r is { run: RunRow; m: RunMetrics } => r.m !== null))
       })
       .catch(() => {})
-  }, [runId, status])
+  }, [api, runId, status])
 
   return (
     <div className="metrics">

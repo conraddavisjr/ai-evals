@@ -297,6 +297,35 @@ main {
   gap: 12px;
   margin-left: auto;
 }
+.brand .title,
+.status {
+  white-space: nowrap;
+}
+.view-switch {
+  margin-left: 6px;
+  flex: none;
+}
+@media (max-width: 1240px) {
+  .status .staff {
+    display: none;
+  }
+}
+@media (max-width: 1080px) {
+  .status .runid {
+    display: none;
+  }
+}
+.view-switch button {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.open-cafe {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  padding: 7px 16px;
+  margin-left: 4px;
+}
 .cost {
   color: var(--gold);
   font-weight: 800;
@@ -331,6 +360,53 @@ main {
 }
 .canvas-wrap canvas {
   display: block;
+}
+.scene-host {
+  position: absolute;
+  inset: 0;
+}
+/* The pixel view draws at an integer scale and is letterboxed by Phaser's FIT scaler. */
+.scene-host.pixel-mount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1b120c;
+}
+.scene-host.pixel-mount canvas {
+  image-rendering: pixelated;
+}
+
+/* ---------- empty stage ---------- */
+.stage-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: radial-gradient(60% 50% at 50% 45%, rgba(8, 24, 34, 0.55), rgba(8, 24, 34, 0.15));
+}
+.stage-empty-card {
+  pointer-events: auto;
+  max-width: 380px;
+  padding: 22px 26px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(28, 63, 77, 0.96), rgba(16, 38, 47, 0.96));
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  box-shadow: var(--edge), var(--shadow);
+}
+.stage-empty-card h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 24px;
+  color: var(--gold);
+  letter-spacing: 0.01em;
+}
+.stage-empty-card p {
+  margin: 0 0 14px;
+  line-height: 1.45;
 }
 
 /* ---------- in-scene overlay ---------- */
@@ -532,6 +608,44 @@ main {
   box-shadow: var(--shadow), var(--edge);
 }
 
+/* ---------- mode help ---------- */
+.mode-help {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: 900px;
+}
+.mode-help p {
+  margin: 0;
+}
+/* Reserve the tallest collapsed summary so the stage does not resize on every mode switch. */
+.mode-help:not(.open) {
+  min-height: calc(1.45em * 4);
+}
+.mode-help.open p {
+  margin: 0 0 8px;
+  color: #c9d8d6;
+}
+.mode-help-summary {
+  all: unset;
+  cursor: pointer;
+  color: inherit;
+}
+.mode-help-summary:hover,
+.mode-help-summary:focus-visible {
+  color: var(--text);
+}
+.mode-help-summary:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.mode-help .link {
+  font-size: 12.5px;
+  padding: 0;
+  margin: 0;
+}
+
 /* ---------- playback ---------- */
 .playback {
   border-top: 1px solid var(--line);
@@ -719,6 +833,25 @@ label.inline {
   border-radius: 6px;
   margin-bottom: 2px;
   font-weight: 800;
+  box-shadow: none;
+  line-height: 1.5;
+}
+button.tag {
+  cursor: pointer;
+  font-family: var(--font-ui);
+}
+button.tag:hover:not(:disabled) {
+  filter: brightness(1.2);
+  transform: none;
+}
+button.tag.off {
+  opacity: 0.55;
+}
+.tag .count {
+  margin-left: 4px;
+  opacity: 0.8;
+  letter-spacing: 0;
+  font-weight: 700;
 }
 .tag.happy {
   background: rgba(127, 176, 105, 0.22);
@@ -773,18 +906,29 @@ label.check input {
   padding: 8px 10px;
   margin: 8px 0;
 }
+.stage-empty-card .error-box {
+  text-align: left;
+  margin-bottom: 0;
+}
 .runs {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 .runs li {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
   align-items: center;
-  gap: 8px;
   padding: 4px 0;
   border-bottom: 1px dashed var(--line);
-  flex-wrap: wrap;
+}
+.runs li > .link {
+  text-align: left;
+  justify-self: start;
+}
+.runs li > .small {
+  grid-column: 1 / -1;
 }
 .runs li.current {
   background: rgba(255, 210, 122, 0.08);
@@ -817,6 +961,11 @@ label.check input {
   background: rgba(255, 107, 94, 0.18);
   color: #ffc4bd;
   border: 1px solid rgba(255, 107, 94, 0.55);
+}
+.pill.interrupted {
+  background: rgba(183, 155, 234, 0.18);
+  color: #d9c9f7;
+  border: 1px solid rgba(183, 155, 234, 0.5);
 }
 .pill.running,
 .pill.open {

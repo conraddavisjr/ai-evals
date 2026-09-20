@@ -11,6 +11,11 @@ await runMigrations(db)
 await seedCatalog(db)
 const store = createPgStore(db)
 const runs = new RunManager(store, allowLive)
+const orphans = await runs.reapOrphans()
+if (orphans.length > 0)
+  console.warn(
+    `[runs] marked ${orphans.length} interrupted shift(s) as failed: ${orphans.join(', ')}`,
+  )
 const app = createApp({ store, runs, allowLive })
 
 serve({ fetch: app.fetch, port }, () => {

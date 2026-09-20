@@ -2,6 +2,7 @@ import type { CafeEvent, Station } from '@cafe/protocol'
 import * as THREE from 'three'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { AgentView, CafeState, CustomerView } from '../state/cafe-state.js'
+import type { SceneCallbacks } from '../views/types.js'
 import { ticketCard } from './builders.js'
 import { buildWorld, type World } from './CafeWorld.js'
 import { Character } from './Character.js'
@@ -16,10 +17,6 @@ import {
   WAITING_SLOTS,
 } from './layout.js'
 import { type BubbleKind, Overlay } from './Overlay.js'
-
-export interface SceneCallbacks {
-  onSelect: (id: string | null) => void
-}
 
 const EXPECTED_WORK_MS: Record<string, number> = {
   cashier: 12000,

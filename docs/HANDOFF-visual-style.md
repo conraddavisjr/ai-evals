@@ -13,10 +13,10 @@ Everything that happens is an event in a typed stream (`packages/protocol/src/ev
 The visual job of the scene is not decoration: it must make the pipeline legible.
 A viewer should be able to tell at a glance who is working, what tool they are calling, how long they have been at it, which tickets are waiting, and where something went wrong.
 
-Two styles exist:
+Two styles exist, both on `main` and switchable from the header:
 
-- `main`: Stardew-style pixel art in Phaser 3 (`apps/web/src/scene/`).
-- `style/painterly-topdown`: stylized top-down 3D in Three.js (`apps/web/src/scene3d/`). This is the direction to push further.
+- Pixel: Stardew-style pixel art in Phaser 3 (`apps/web/src/scene2d/`).
+- Village: stylized top-down 3D in Three.js (`apps/web/src/scene3d/`). This is the direction to push further.
 
 Side by side: `docs/screenshots/style-comparison.png`.
 
@@ -41,7 +41,9 @@ Current UI tokens live at the top of `apps/web/src/styles.css`; fonts are Lilita
 Do not change anything under `packages/` or `apps/server/`, and do not change `apps/web/src/playback/`, `apps/web/src/state/`, or the React panels' behaviour. Style them freely.
 
 The scene is created by `createGame(parent, player, callbacks)` in `apps/web/src/scene3d/game.ts` and must return `{ scene, renderer, camera, step(now), destroy(), frameMs }`.
-`App.tsx` mounts it once and exposes `window.__cafe = { player, game }` in dev.
+That signature is the `SceneView.mount` contract in `apps/web/src/views/types.ts`; both styles are registered in `apps/web/src/views/index.ts` and the header switches between them, so a new style is a new entry there.
+`App.tsx` mounts the chosen view and exposes `window.__cafe = { player, game, view }` in dev.
+See `docs/EMBEDDING.md` for the seams that let the whole stage move to another harness.
 
 The scene subscribes to the `TimelinePlayer` (`apps/web/src/playback/TimelinePlayer.ts`):
 
@@ -99,5 +101,5 @@ Keep that approach unless you have a strong reason.
 - Verify: `pnpm typecheck`, `pnpm lint`, `pnpm test` (needs the database); then a mock shift from the Shift tab. Check live, replay, step, director's cut, click a character, click a red `!` (set `agentCrashRate` in the Chaos section to get one).
 - Budget: keep a frame under ~8 ms on a laptop GPU; every real `PointLight` costs in every toon shader, so prefer emissive sprites for glow and keep real lights to about eight; keep bloom at quarter resolution.
 - Hidden tabs pause `requestAnimationFrame`. In dev, `window.__cafe.game.step(performance.now())` renders one frame on demand.
-- Rollback: `git checkout main` is the pixel version; do the 3D work on `style/painterly-topdown` or a branch from it.
+- Rollback: the pixel view is always one click away in the header, so a broken 3D build never hides the pipeline.
 - Conrad's conventions: no em dashes in prose, one sentence per line in long Markdown, no agent co-author lines in commits.
