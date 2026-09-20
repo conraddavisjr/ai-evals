@@ -29,7 +29,10 @@ export function Heatmap({
   const ref = useRef<HTMLDivElement>(null)
   const width = useWidth(ref)
   const { tip, show, hide } = useTooltip()
-  const labelW = Math.min(180, Math.max(80, ...rows.map((r) => r.length * 6.4 + 10)))
+  const labelW = Math.min(210, Math.max(80, ...rows.map((r) => r.length * 6.4 + 10)))
+  const maxChars = Math.floor((labelW - 10) / 6.4)
+  const clip = (r: string) =>
+    r.length > maxChars ? `${r.slice(0, Math.max(3, maxChars - 1))}…` : r
   const headH = 28
   const plotW = Math.max(40 * cols.length, width - labelW - 8)
   const cw = plotW / Math.max(1, cols.length)
@@ -58,7 +61,8 @@ export function Heatmap({
               y={headH + i * cellHeight + cellHeight / 2 + 4}
               textAnchor="end"
             >
-              {r}
+              <title>{r}</title>
+              {clip(r)}
             </text>
             {cols.map((c, j) => {
               const h = cell(i, j)

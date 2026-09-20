@@ -1,8 +1,11 @@
-/* Pannable, zoomable architecture canvas. Reads window.ARCH; theme decides copy and chrome. */
+/* Pannable, zoomable architecture canvas. Renders `options.data`; theme decides copy and chrome. */
 /**
  * Mount the diagram into `container`. `options.controls` are optional toolbar elements
  * the caller renders (zoomIn, zoomOut, fit, zoom, status, search, searchList).
- * Returns { destroy, fit, expand }.
+ * `options.onSelect(id | null)` fires whenever the selection changes; with
+ * `options.expandOnClick === false` a click selects the node (highlighting its edges,
+ * dimming the rest) without widening the card, which lets a host render the node's
+ * controls elsewhere. Returns { destroy, fit, expand, select, setSummary }.
  */
 export function mountArchitecture(container, options) {
   const NS = 'http://www.w3.org/2000/svg'
@@ -14,6 +17,8 @@ export function mountArchitecture(container, options) {
   const opts = options || {}
   const controls = opts.controls || {}
   const useNick = !!opts.nicknames
+  const expandOnClick = opts.expandOnClick !== false
+  const onSelect = typeof opts.onSelect === 'function' ? opts.onSelect : null
   const data = opts.data
   const segById = Object.fromEntries(data.segments.map((s) => [s.id, s]))
   const nodeById = Object.fromEntries(data.nodes.map((n) => [n.id, n]))
@@ -171,12 +176,12 @@ export function mountArchitecture(container, options) {
     const hint = html(
       'div',
       'card-hint',
-      useNick ? 'tap to peek behind the counter' : 'click to expand',
+      opts.hint || (useNick ? 'tap to peek behind the counter' : 'click to expand'),
     )
     card.appendChild(more)
     card.appendChild(hint)
     fo.appendChild(card)
-    nodeEls[n.id] = { g, fo, card, n }
+    nodeEls[n.id] = { g, fo, card, n, summary: card.querySelector('.card-summary') }
     const toggle = (ev) => {
       ev.stopPropagation()
       expand(expanded === n.id ? null : n.id)
@@ -196,10 +201,11 @@ export function mountArchitecture(container, options) {
   function expand(id) {
     if (expanded && nodeEls[expanded]) {
       const prev = nodeEls[expanded]
-      prev.g.classList.remove('open')
+      prev.g.classList.remove('open', 'selected')
       prev.fo.setAttribute('width', prev.n.w)
       prev.card.style.width = `${prev.n.w}px`
     }
+    const changed = expanded !== id
     expanded = id
     svg.classList.toggle('has-open', !!id)
     for (const { g, e } of edgeEls) g.classList.toggle('hi', !!id && (e.from === id || e.to === id))
@@ -210,14 +216,26 @@ export function mountArchitecture(container, options) {
       nodeEls[k].g.classList.toggle('linked', isLinked)
       nodeEls[k].g.classList.toggle('dim', !!id && k !== id && !isLinked)
     }
-    if (!id) return
+    if (!id) {
+      if (changed && onSelect) onSelect(null)
+      return
+    }
     const cur = nodeEls[id]
-    cur.g.classList.add('open')
-    cur.fo.setAttribute('width', EXP_W)
-    cur.card.style.width = `${EXP_W}px`
+    if (expandOnClick) {
+      cur.g.classList.add('open')
+      cur.fo.setAttribute('width', EXP_W)
+      cur.card.style.width = `${EXP_W}px`
+    } else cur.g.classList.add('selected')
     gNode.appendChild(cur.g) // on top
     const info = controls.status
     if (info) info.textContent = `${cur.n.title} · ${segById[cur.n.seg].title}`
+    if (changed && onSelect) onSelect(id)
+  }
+
+  /** Replace a node's summary line in place (a host showing live choices on the cards). */
+  function setSummary(id, text) {
+    const cur = nodeEls[id]
+    if (cur?.summary) cur.summary.textContent = text
   }
 
   // ---- pan & zoom
@@ -386,9 +404,12 @@ export function mountArchitecture(container, options) {
   }
 
   fitView()
+  if (opts.initialSelected) expand(opts.initialSelected)
   return {
     fit: fitView,
     expand,
+    select: expand,
+    setSummary,
     destroy() {
       ro.disconnect()
       window.removeEventListener('keydown', onKey)

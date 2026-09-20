@@ -2,32 +2,7 @@ import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fmtMs, fmtUsd, shortModel } from '../format.js'
 import { type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
-import { ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
-
-/** Rough per-visit token profile for the pre-run estimate. */
-const TOKENS_PER_VISIT: Record<RoleKey, { steps: number; inPerStep: number; outPerStep: number }> =
-  {
-    cashier: { steps: 6, inPerStep: 1100, outPerStep: 70 },
-    barista: { steps: 7, inPerStep: 900, outPerStep: 60 },
-    manager: { steps: 2, inPerStep: 400, outPerStep: 8 },
-    judge: { steps: 1, inPerStep: 700, outPerStep: 40 },
-  }
-/** Mirror of the server price table for the estimate (USD per MTok). */
-const PRICE: Array<[RegExp, number, number]> = [
-  [/^mock:/, 0, 0],
-  [/claude-haiku/, 1, 5],
-  [/claude-sonnet/, 3, 15],
-  [/claude-opus|claude-fable/, 15, 75],
-  [/gpt-5-nano/, 0.05, 0.4],
-  [/gpt-5-mini/, 0.25, 2],
-  [/gpt-5/, 1.25, 10],
-  [/flash-lite/, 0.1, 0.4],
-  [/flash/, 0.3, 2.5],
-  [/jev/, 0.042, 0],
-  [/^ollama/, 0, 0],
-]
-const priceOf = (spec: string): [number, number] =>
-  (PRICE.find(([re]) => re.test(spec))?.slice(1) as [number, number] | undefined) ?? [3, 15]
+import { estimateRunUsd, ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
 
 export interface RunConfigPanelProps {
   models: ModelsInfo
@@ -77,23 +52,15 @@ export function RunConfigPanel({
     onDraftChange({ ...draft, roles: { ...draft.roles, [role]: spec } })
 
   const n = draft.scenarioIds.length
-  const estimate = useMemo(() => {
-    let usd = 0
-    for (const role of ROLES) {
-      const spec = draft.roles[role]
-      const [pin, pout] = priceOf(spec)
-      const prof = TOKENS_PER_VISIT[role]
-      if (role === 'judge' && !draft.judgeEnabled) continue
-      let steps = prof.steps
-      // the manager's two calls per visit: door triage (tiny) and the post-visit review (reads the trail)
-      if (role === 'manager') {
-        steps = (draft.triageEnabled ? 1 : 0) + (draft.reviewEnabled ? 1 : 0)
-        if (steps === 0) continue
-      }
-      usd += (n * steps * (prof.inPerStep * pin + prof.outPerStep * pout)) / 1_000_000
-    }
-    return usd
-  }, [draft.roles, n, draft.judgeEnabled, draft.triageEnabled, draft.reviewEnabled])
+  const estimate = useMemo(
+    () =>
+      estimateRunUsd(n, draft.roles, {
+        judgeEnabled: draft.judgeEnabled ?? true,
+        triageEnabled: draft.triageEnabled ?? true,
+        reviewEnabled: draft.reviewEnabled ?? true,
+      }),
+    [draft.roles, n, draft.judgeEnabled, draft.triageEnabled, draft.reviewEnabled],
+  )
   const anyLive = ROLES.some((r) => !draft.roles[r].startsWith('mock:'))
 
   const allSpecs = useMemo(() => Object.values(models.presets).flat(), [models])

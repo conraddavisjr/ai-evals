@@ -11,6 +11,10 @@ import type {
   Scenario,
   ScenarioInput,
   SpanSummary,
+  SuiteConfigInput,
+  SuiteDetail,
+  SuiteMatrixRow,
+  SuiteVariantResult,
 } from '@cafe/protocol'
 
 export interface RunRow {
@@ -94,4 +98,32 @@ export interface ExperimentClient {
   reorderItems(datasetId: string, ids: string[]): Promise<DatasetDetail>
   /** The tool catalogue with scopes, for the expected-tools pickers. */
   tools(): Promise<{ tools: ToolInfo[]; roleScopes: Record<string, readonly string[]> }>
+  /** Engines that can drive a shift. */
+  orchestrators(): Promise<OrchestratorInfo[]>
+  /** Suites: variants x repeats over one dataset. */
+  suites(): Promise<SuiteDetail[]>
+  suite(id: string): Promise<SuiteDetail>
+  startSuite(config: SuiteConfigInput): Promise<{ suiteId: string }>
+  cancelSuite(id: string): Promise<{ cancelled: boolean }>
+  deleteSuite(id: string): Promise<{ deleted: boolean }>
+  suiteMetrics(id: string): Promise<SuiteMetricsView>
+  suiteTelemetry(id: string): Promise<SuiteTelemetryView>
+}
+
+export interface OrchestratorInfo {
+  id: string
+  label: string
+  description: string
+}
+
+export interface SuiteMetricsView {
+  suite: SuiteDetail
+  variants: Array<SuiteVariantResult<RunMetrics>>
+  matrix: SuiteMatrixRow[]
+}
+
+export interface SuiteTelemetryView {
+  suiteId: string
+  variants: Array<SuiteVariantResult<RunTelemetry>>
+  errorMatrix: Array<{ scenarioId: string; cells: Record<string, number> }>
 }
