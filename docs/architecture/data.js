@@ -360,11 +360,13 @@ export const ARCH = {
     {
       id: 'routes',
       seg: 'server',
-      x: 70,
+      x: 60,
       y: 600,
+      w: 195,
       title: 'REST routes',
       nick: 'the front desk',
-      summary: '/api/runs, /scenarios, /models, /metrics, /orders, /reviews, /judgements, /usage.',
+      summary:
+        '/api/runs, /scenarios, /models, /metrics, /telemetry, /spans, /orders, /reviews, /judgements, /usage.',
       details: [
         'POST /api/runs validates the RunConfig and refuses live specs unless CAFE_ALLOW_LIVE_MODELS=true.',
         'GET /api/runs/:id/events serves the persisted stream for replay.',
@@ -374,8 +376,9 @@ export const ARCH = {
     {
       id: 'sse',
       seg: 'server',
-      x: 360,
+      x: 270,
       y: 600,
+      w: 195,
       title: 'SSE stream',
       nick: 'the loudspeaker',
       summary: 'Replays the buffer, then tails live events; heartbeat; “done” on finish.',
@@ -388,8 +391,9 @@ export const ARCH = {
     {
       id: 'runmanager',
       seg: 'server',
-      x: 70,
+      x: 60,
       y: 770,
+      w: 195,
       title: 'RunManager',
       nick: 'the shift board',
       summary:
@@ -402,10 +406,35 @@ export const ARCH = {
       files: ['apps/server/src/run-manager.ts'],
     },
     {
+      id: 'tracing',
+      seg: 'server',
+      x: 480,
+      y: 600,
+      w: 195,
+      h: 290,
+      title: 'OpenTelemetry tracing',
+      nick: 'the stopwatch',
+      summary:
+        'Spans for suite > run > visit > turn > step > tool, plus triage, review and judge; written to Postgres and optionally to OTLP.',
+      details: [
+        '@cafe/telemetry holds the attribute names and withSpan(); every package starts spans through it, so without initTracing() (tests, CLI) they are no-ops.',
+        'initTracing() registers the SDK at boot: an attribute-inheriting processor (run/tx/scenario ids flow down), a SimpleSpanProcessor into the spans table (live charts), and a BatchSpanProcessor to OTEL_EXPORTER_OTLP_ENDPOINT when set.',
+        'GET /api/runs/:id/spans (raw) and /telemetry (aggregate: tool latency, step latency by role, cost trajectory, errors by layer, per-visit items).',
+        'The SDK’s own experimental_telemetry is a callback interface, not OTel; our spans come from the runAgent callbacks and Gateway.call.',
+      ],
+      files: [
+        'apps/server/src/telemetry/*.ts',
+        'packages/telemetry/src/index.ts',
+        'packages/evals/src/telemetry.ts',
+        'packages/protocol/src/telemetry.ts',
+      ],
+    },
+    {
       id: 'eventbus',
       seg: 'server',
-      x: 360,
+      x: 270,
       y: 770,
+      w: 195,
       title: 'EventBus',
       nick: 'the bell',
       summary:
@@ -712,7 +741,7 @@ export const ARCH = {
       nick: 'the pantry list',
       summary: 'The only way anything touches persistence; Postgres today, others later.',
       details: [
-        'runs, events, menu, customers, inventory (per run), orders, payments, drinks, usage, judgements, reviews, incidents, metrics.',
+        'runs, events, menu, customers, inventory (per run), orders, payments, drinks, usage, judgements, reviews, incidents, metrics, spans.',
         'claimNext() uses FOR UPDATE SKIP LOCKED so several baristas never grab the same ticket.',
       ],
       files: ['packages/db/src/store.ts'],
@@ -863,5 +892,9 @@ export const ARCH = {
     { from: 'store', to: 'schema', label: 'Drizzle' },
     { from: 'schema', to: 'postgres', label: 'SQL' },
     { from: 'routes', to: 'store', label: 'reads' },
+    { from: 'runagent', to: 'tracing', label: 'turn / step spans' },
+    { from: 'gw', to: 'tracing', label: 'tool spans' },
+    { from: 'shift', to: 'tracing', label: 'run / visit spans' },
+    { from: 'tracing', to: 'store', label: 'spans table' },
   ],
 }

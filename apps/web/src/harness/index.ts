@@ -1,3 +1,9 @@
-export { HarnessProvider, useHarness } from './context.js'
+export { HarnessProvider, useExperimentApi, useHarness } from './context.js'
 export { createHttpHarness } from './http.js'
-export type { HarnessClient, ModelsInfo, RunRow, StreamHandlers } from './types.js'
+export type {
+  ExperimentClient,
+  HarnessClient,
+  ModelsInfo,
+  RunRow,
+  StreamHandlers,
+} from './types.js'

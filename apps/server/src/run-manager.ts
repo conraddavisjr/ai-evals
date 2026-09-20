@@ -8,6 +8,7 @@ import {
 } from '@cafe/protocol'
 import { EventBus } from './event-bus.js'
 import { ShiftOrchestrator } from './orchestrator.js'
+import { flushTracing } from './telemetry/tracing.js'
 
 interface ActiveRun {
   bus: EventBus
@@ -62,6 +63,8 @@ export class RunManager {
     const done = orchestrator
       .run()
       .catch((err) => console.error(`[run ${run.id}] failed:`, err))
+      // whenDone() resolves only once the run's spans are queryable
+      .then(() => flushTracing())
       .finally(() => {
         // keep the buffer around briefly so late SSE subscribers still get a clean hand-off
         setTimeout(() => this.active.delete(run.id), 10_000)

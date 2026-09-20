@@ -12,6 +12,15 @@ import {
 import { createChaos, Gateway } from '@cafe/mcp-gateway'
 import { costUsd, ModelRegistry } from '@cafe/models'
 import type { RunConfig, Scenario, TransactionMetrics } from '@cafe/protocol'
+import {
+  ATTR,
+  type Context,
+  markOk,
+  recordError,
+  type Span,
+  startSpan,
+  withSpan,
+} from '@cafe/telemetry'
 import { experimental_evaluate as evaluate } from 'ai'
 import { ulid } from 'ulid'
 import type { EventBus } from './event-bus.js'
@@ -27,6 +36,8 @@ export interface OrchestratorDeps {
   now?: () => number
   /** Test hook: skip real waiting between arrivals. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
+  /** OpenTelemetry parent for the run span (a suite span, when the run is part of one). */
+  parentContext?: Context | Span | null | undefined
 }
 
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
@@ -66,8 +77,12 @@ export class ShiftOrchestrator {
   private readonly txMetrics: TransactionMetrics[] = []
   private baristaLoops: Promise<void>[] = []
   private customersDone = false
+  private readonly parentContext: Context | Span | null
+  private runSpan: Span | null = null
+  private visitIndex = 0
 
   constructor(deps: OrchestratorDeps) {
+    this.parentContext = deps.parentContext ?? null
     this.store = deps.store
     this.bus = deps.bus
     this.runId = deps.bus.runId
@@ -113,6 +128,19 @@ export class ShiftOrchestrator {
 
   async run(): Promise<void> {
     const scenarios = scenariosFor(this.config.scenarioIds)
+    this.runSpan = startSpan(
+      'run',
+      `run ${this.config.name}`,
+      {
+        [ATTR.RUN_ID]: this.runId,
+        'cafe.scenarios': scenarios.length,
+        'cafe.roles.cashier': this.config.roles.cashier,
+        'cafe.roles.barista': this.config.roles.barista,
+        'cafe.roles.manager': this.config.roles.manager,
+        'cafe.roles.judge': this.config.roles.judge,
+      },
+      this.parentContext,
+    )
     await this.store.runs.setStatus(this.runId, 'running', { startedAt: this.now() })
     await this.store.inventory.initForRun(this.runId)
     this.bus.emit({ type: 'run.started', config: this.config })
@@ -155,6 +183,12 @@ export class ShiftOrchestrator {
         this.abort.signal.aborted ? 'cancelled' : 'finished',
         { finishedAt: this.now() },
       )
+      this.runSpan.setAttributes({
+        [ATTR.OUTCOME]: this.abort.signal.aborted ? 'cancelled' : 'finished',
+        [ATTR.COST_USD]: metrics.costUsd,
+        'cafe.task_success_rate': metrics.taskSuccessRate,
+      })
+      markOk(this.runSpan)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       this.bus.emit({ type: 'run.failed', error: message })
@@ -162,17 +196,36 @@ export class ShiftOrchestrator {
         finishedAt: this.now(),
         error: message,
       })
+      recordError(this.runSpan, err, 'run')
       throw err
     } finally {
       this.customersDone = true
+      this.runSpan.end()
       await this.bus.flush()
     }
   }
 
   // ---------- customers ----------
 
-  private async customerVisit(scenario: Scenario): Promise<void> {
+  private customerVisit(scenario: Scenario): Promise<void> {
     const txId = ulid()
+    const index = this.visitIndex++
+    return withSpan(
+      'visit',
+      `visit ${scenario.id}`,
+      {
+        [ATTR.RUN_ID]: this.runId,
+        [ATTR.TX_ID]: txId,
+        [ATTR.SCENARIO_ID]: scenario.id,
+        [ATTR.VISIT_INDEX]: index,
+        'cafe.tags': scenario.tags.join(','),
+      },
+      (span) => this.visit(span, txId, scenario),
+      this.runSpan,
+    )
+  }
+
+  private async visit(visitSpan: Span, txId: string, scenario: Scenario): Promise<void> {
     const customerId = `cust-${txId.slice(-6).toLowerCase()}`
     const utterance = scenario.customer.utterances[0] ?? ''
     const emit = this.bus.emit
@@ -218,6 +271,7 @@ export class ShiftOrchestrator {
         chaos: this.chaos,
         overBudget: this.overBudget,
         now: this.now,
+        parentContext: visitSpan,
       })
     } finally {
       this.staff.release(cashier)
@@ -265,21 +319,44 @@ export class ShiftOrchestrator {
 
     emit({ type: 'customer.moved', txId, customerId, to: 'door' })
     emit({ type: 'customer.left', txId, customerId, outcome })
+    visitSpan.setAttribute(ATTR.OUTCOME, outcome)
 
     order = await this.store.orders.byTx(this.runId, txId)
-    const review = await this.review(txId, customerId, scenario, order, outcome)
-    await this.judge(txId, scenario, order, outcome, review)
+    const review = await this.review(txId, customerId, scenario, order, outcome, visitSpan)
+    await this.judge(txId, scenario, order, outcome, review, visitSpan)
+    const mine = this.txMetrics.at(-1)
+    if (mine?.txId === txId) {
+      visitSpan.setAttributes({
+        [ATTR.COST_USD]: mine.costUsd,
+        'cafe.task_success': mine.taskSuccess,
+        'cafe.errors': mine.errors,
+      })
+    }
   }
 
   private async triage(txId: string, customerId: string, utterance: string): Promise<void> {
     const modelSpec = this.config.roles.manager
     const model = this.registry.evaluationModel(modelSpec)
     const started = this.now()
-    const res = await evaluate({
-      model,
-      state: `Customer at the door said: ${JSON.stringify(utterance)}`,
-      questions: TRIAGE_QUESTIONS,
-    })
+    const res = await withSpan(
+      'triage',
+      'triage',
+      { [ATTR.MODEL_SPEC]: modelSpec },
+      async (span) => {
+        const r = await evaluate({
+          model,
+          state: `Customer at the door said: ${JSON.stringify(utterance)}`,
+          questions: TRIAGE_QUESTIONS,
+        })
+        span.setAttributes({
+          [ATTR.INPUT_TOKENS]: r.usage.inputTokens ?? 0,
+          [ATTR.OUTPUT_TOKENS]: r.usage.outputTokens ?? 0,
+          [ATTR.LATENCY_MS]: this.now() - started,
+          'cafe.intent': r.answers.intent.choice,
+        })
+        return r
+      },
+    )
     const latencyMs = this.now() - started
     this.bus.emit({
       type: 'triage.decided',
@@ -333,6 +410,7 @@ export class ShiftOrchestrator {
     scenario: Scenario,
     order: Awaited<ReturnType<CafeStore['orders']['byTx']>>,
     outcome: Outcome,
+    parent: Span | null = null,
   ): Promise<TransactionMetrics['review']> {
     if (!this.config.reviewEnabled || this.overBudget()) return null
     const modelSpec = this.config.roles.manager
@@ -345,6 +423,7 @@ export class ShiftOrchestrator {
         order,
         outcome,
         now: this.now,
+        parentContext: parent,
       })
       this.bus.emit({
         type: 'manager.reviewed',
@@ -392,6 +471,7 @@ export class ShiftOrchestrator {
     order: Awaited<ReturnType<CafeStore['orders']['byTx']>>,
     outcome: Outcome,
     review: TransactionMetrics['review'] = null,
+    parent: Span | null = null,
   ): Promise<void> {
     const events = this.bus.buffer.filter((e) => e.txId === txId)
     let verdict: Awaited<ReturnType<typeof judgeTransaction>> | null = null
@@ -405,6 +485,7 @@ export class ShiftOrchestrator {
           order,
           outcome,
           now: this.now,
+          parentContext: parent,
         })
         this.bus.emit({
           type: 'judge.verdict',
@@ -498,6 +579,7 @@ export class ShiftOrchestrator {
         chaos: this.chaos,
         overBudget: this.overBudget,
         now: this.now,
+        parentContext: this.runSpan,
       })
       // Whatever this barista claimed but did not deliver needs a decision.
       const mine = (await this.store.orders.listByRun(this.runId)).filter(
