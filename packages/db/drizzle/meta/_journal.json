@@ -22,6 +22,20 @@
       "when": 1789931705940,
       "tag": "0002_lush_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789932232258,
+      "tag": "0003_calm_jamie_braddock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789932587330,
+      "tag": "0004_nifty_microchip",
+      "breakpoints": true
     }
   ]
 }

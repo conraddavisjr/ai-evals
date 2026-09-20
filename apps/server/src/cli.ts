@@ -5,6 +5,7 @@ import { SCENARIOS } from '@cafe/evals'
 import { isMockSpec, RunConfig, type RunConfigInput } from '@cafe/protocol'
 import { EventBus } from './event-bus.js'
 import { ShiftOrchestrator } from './orchestrator.js'
+import { getDataset, resolveScenarios } from './scenarios.js'
 
 /**
  * Headless eval runner. Runs one or more shift configs back to back and prints a
@@ -13,6 +14,7 @@ import { ShiftOrchestrator } from './orchestrator.js'
  *   pnpm eval --config runs/compare-models.json
  *   pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe-ai/jev
  *   pnpm eval --scenarios latte-simple,prompt-injection --instant
+ *   pnpm eval --dataset <datasetId>        (a saved golden dataset; ids may be mixed in --scenarios)
  *   flags: --no-judge --no-triage --no-review --max-usd 0.5
  */
 function parseArgs(argv: string[]) {
@@ -37,7 +39,10 @@ const INSTANT = {
   hangMs: 0,
 }
 
-function configsFromArgs(args: Record<string, string | boolean>): RunConfigInput[] {
+function configsFromArgs(
+  args: Record<string, string | boolean>,
+  datasetIds: string[] | null,
+): RunConfigInput[] {
   if (typeof args.config === 'string') {
     // pnpm runs this from apps/server; resolve relative to where the user typed the command.
     const file = resolve(process.env.INIT_CWD ?? process.cwd(), args.config)
@@ -48,7 +53,9 @@ function configsFromArgs(args: Record<string, string | boolean>): RunConfigInput
   const cfg: RunConfigInput = {
     name: str('name', 'cli'),
     scenarioIds:
-      typeof args.scenarios === 'string' ? args.scenarios.split(',') : SCENARIOS.map((s) => s.id),
+      typeof args.scenarios === 'string'
+        ? args.scenarios.split(',')
+        : (datasetIds ?? SCENARIOS.map((s) => s.id)),
     roles: {
       cashier: str('cashier', 'mock:cashier'),
       barista: str('barista', 'mock:barista'),
@@ -72,7 +79,21 @@ const ms = (x: number) => (x < 1000 ? `${Math.round(x)}ms` : `${(x / 1000).toFix
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
-  const configs = configsFromArgs(args).map((c) => RunConfig.parse(c))
+  const { db, close } = createDb()
+  await runMigrations(db)
+  await seedCatalog(db)
+  const store = createPgStore(db)
+
+  let datasetIds: string[] | null = null
+  if (typeof args.dataset === 'string') {
+    const d = await getDataset(store, args.dataset)
+    if (!d) {
+      console.error(`Dataset ${args.dataset} not found.`)
+      process.exit(2)
+    }
+    datasetIds = d.items.map((i) => i.id)
+  }
+  const configs = configsFromArgs(args, datasetIds).map((c) => RunConfig.parse(c))
   const allowLive = process.env.CAFE_ALLOW_LIVE_MODELS === 'true'
   for (const c of configs) {
     const live = Object.values(c.roles).filter((s) => !isMockSpec(s))
@@ -83,13 +104,10 @@ async function main() {
       process.exit(2)
     }
   }
-  const { db, close } = createDb()
-  await runMigrations(db)
-  await seedCatalog(db)
-  const store = createPgStore(db)
 
   const rows: string[][] = []
   for (const [i, config] of configs.entries()) {
+    const scenarios = await resolveScenarios(store, config.scenarioIds)
     const run = await store.runs.create(config)
     const bus = new EventBus(run.id, store)
     const label = `${config.roles.cashier} / ${config.roles.barista} / ${config.roles.manager} / ${config.roles.judge}`
@@ -108,7 +126,7 @@ async function main() {
         process.stdout.write(`  ! ${e.agentId} ${e.kind}: ${e.message}\n`)
     })
     const started = Date.now()
-    await new ShiftOrchestrator({ store, bus, config }).run()
+    await new ShiftOrchestrator({ store, bus, config, scenarios }).run()
     const m = await store.metrics.get(run.id)
     if (!m) continue
     rows.push([

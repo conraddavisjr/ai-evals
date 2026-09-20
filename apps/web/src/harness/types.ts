@@ -1,10 +1,15 @@
 import type {
   CafeEvent,
+  DatasetDetail,
+  DatasetInput,
+  DatasetPatch,
+  DatasetSummary,
   RunConfig,
   RunConfigInput,
   RunMetrics,
   RunTelemetry,
   Scenario,
+  ScenarioInput,
   SpanSummary,
 } from '@cafe/protocol'
 
@@ -63,6 +68,12 @@ export interface HarnessClient {
  * Kept apart from HarnessClient so a minimal harness (events only) still satisfies
  * the stage; anything here may reject with "not supported" and the UI copes.
  */
+export interface ToolInfo {
+  name: string
+  scope: string
+  description: string
+}
+
 export interface ExperimentClient {
   /** Aggregated OpenTelemetry view of a run (works while the run is live). */
   telemetry(runId: string): Promise<RunTelemetry>
@@ -71,4 +82,16 @@ export interface ExperimentClient {
     runId: string,
     query?: { txId?: string; kinds?: string[]; limit?: number; offset?: number },
   ): Promise<SpanSummary[]>
+  /** Golden datasets: the built-in one plus everything saved from the editor. */
+  datasets(): Promise<DatasetSummary[]>
+  dataset(id: string): Promise<DatasetDetail>
+  createDataset(input: DatasetInput): Promise<DatasetDetail>
+  updateDataset(id: string, patch: DatasetPatch): Promise<DatasetDetail>
+  deleteDataset(id: string): Promise<{ deleted: boolean }>
+  addItem(datasetId: string, item: ScenarioInput): Promise<Scenario>
+  updateItem(datasetId: string, itemId: string, item: ScenarioInput): Promise<Scenario>
+  deleteItem(datasetId: string, itemId: string): Promise<{ deleted: boolean }>
+  reorderItems(datasetId: string, ids: string[]): Promise<DatasetDetail>
+  /** The tool catalogue with scopes, for the expected-tools pickers. */
+  tools(): Promise<{ tools: ToolInfo[]; roleScopes: Record<string, readonly string[]> }>
 }

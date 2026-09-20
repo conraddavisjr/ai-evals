@@ -9,6 +9,7 @@ import type {
   RunConfig,
   RunMetrics,
   RunStatus,
+  Scenario,
 } from '@cafe/protocol'
 import { and, asc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -35,9 +36,12 @@ export interface CafeStore {
   incidents: IncidentsStore
   metrics: MetricsStore
   spans: SpansStore
+  datasets: DatasetsStore
 }
 
 export type RunRow = typeof s.runs.$inferSelect
+export type DatasetRow = typeof s.datasets.$inferSelect
+export type DatasetItemRow = typeof s.datasetItems.$inferSelect
 export type SpanRow = typeof s.spans.$inferSelect
 export type SpanInsert = typeof s.spans.$inferInsert
 export type OrderRow = typeof s.orders.$inferSelect
@@ -51,7 +55,7 @@ export type InventoryRow = typeof s.inventory.$inferSelect & {
 }
 
 export interface RunsStore {
-  create(config: RunConfig, id?: string): Promise<RunRow>
+  create(config: RunConfig, opts?: { id?: string; owner?: string | null }): Promise<RunRow>
   get(id: string): Promise<RunRow | null>
   list(limit?: number): Promise<RunRow[]>
   setStatus(
@@ -194,6 +198,29 @@ export interface ReviewsStore {
   forRun(runId: string): Promise<Array<typeof s.reviews.$inferSelect>>
 }
 
+export interface DatasetsStore {
+  list(): Promise<Array<DatasetRow & { itemCount: number }>>
+  get(id: string): Promise<DatasetRow | null>
+  create(input: {
+    name: string
+    description: string
+    now: number
+    id?: string
+  }): Promise<DatasetRow>
+  update(
+    id: string,
+    patch: { name?: string | undefined; description?: string | undefined; now: number },
+  ): Promise<void>
+  delete(id: string): Promise<void>
+  items(datasetId: string): Promise<DatasetItemRow[]>
+  /** Insert or replace an item; a new item goes last unless a position is given. */
+  upsertItem(datasetId: string, scenario: Scenario, now: number, position?: number): Promise<void>
+  deleteItem(datasetId: string, itemId: string): Promise<void>
+  reorder(datasetId: string, ids: string[], now: number): Promise<void>
+  /** Scenarios for a set of item ids (any dataset), keyed by id. */
+  itemsByIds(ids: string[]): Promise<Map<string, Scenario>>
+}
+
 export interface SpansStore {
   appendMany(rows: SpanInsert[]): Promise<void>
   forRun(
@@ -244,10 +271,11 @@ export function createPgStore(db: Db): CafeStore {
   }
 
   const runs: RunsStore = {
-    async create(config, id = ulid()) {
+    async create(config, opts = {}) {
+      const id = opts.id ?? ulid()
       const [row] = await db
         .insert(s.runs)
-        .values({ id, status: 'pending', config, createdAt: Date.now() })
+        .values({ id, status: 'pending', config, createdAt: Date.now(), owner: opts.owner ?? null })
         .returning()
       return must(row ?? null, 'run', id)
     },
@@ -609,6 +637,91 @@ export function createPgStore(db: Db): CafeStore {
     forRun: (runId) => db.select().from(s.reviews).where(eq(s.reviews.runId, runId)),
   }
 
+  const datasets: DatasetsStore = {
+    async list() {
+      const rows = await db
+        .select({
+          id: s.datasets.id,
+          name: s.datasets.name,
+          description: s.datasets.description,
+          createdAt: s.datasets.createdAt,
+          updatedAt: s.datasets.updatedAt,
+          itemCount: sql<number>`(select count(*)::int from ${s.datasetItems} where ${s.datasetItems.datasetId} = ${s.datasets.id})`,
+        })
+        .from(s.datasets)
+        .orderBy(sql`${s.datasets.updatedAt} desc`)
+      return rows
+    },
+    get: async (id) => one(await db.select().from(s.datasets).where(eq(s.datasets.id, id))),
+    async create({ name, description, now, id = ulid() }) {
+      const [row] = await db
+        .insert(s.datasets)
+        .values({ id, name, description, createdAt: now, updatedAt: now })
+        .returning()
+      return must(row ?? null, 'dataset', id)
+    },
+    async update(id, { now, ...patch }) {
+      await db
+        .update(s.datasets)
+        .set({ ...patch, updatedAt: now })
+        .where(eq(s.datasets.id, id))
+    },
+    async delete(id) {
+      await db.delete(s.datasets).where(eq(s.datasets.id, id))
+    },
+    items: (datasetId) =>
+      db
+        .select()
+        .from(s.datasetItems)
+        .where(eq(s.datasetItems.datasetId, datasetId))
+        .orderBy(asc(s.datasetItems.position)),
+    async upsertItem(datasetId, scenario, now, position) {
+      const pos =
+        position ??
+        (
+          await db
+            .select({ n: sql<number>`coalesce(max(${s.datasetItems.position}), -1) + 1` })
+            .from(s.datasetItems)
+            .where(eq(s.datasetItems.datasetId, datasetId))
+        )[0]?.n ??
+        0
+      await db
+        .insert(s.datasetItems)
+        .values({
+          id: scenario.id,
+          datasetId,
+          position: pos,
+          scenario,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: s.datasetItems.id,
+          set: { scenario, updatedAt: now, ...(position !== undefined ? { position } : {}) },
+        })
+      await db.update(s.datasets).set({ updatedAt: now }).where(eq(s.datasets.id, datasetId))
+    },
+    async deleteItem(datasetId, itemId) {
+      await db
+        .delete(s.datasetItems)
+        .where(and(eq(s.datasetItems.datasetId, datasetId), eq(s.datasetItems.id, itemId)))
+      await db.update(s.datasets).set({ updatedAt: Date.now() }).where(eq(s.datasets.id, datasetId))
+    },
+    async reorder(datasetId, ids, now) {
+      for (const [i, id] of ids.entries())
+        await db
+          .update(s.datasetItems)
+          .set({ position: i, updatedAt: now })
+          .where(and(eq(s.datasetItems.datasetId, datasetId), eq(s.datasetItems.id, id)))
+      await db.update(s.datasets).set({ updatedAt: now }).where(eq(s.datasets.id, datasetId))
+    },
+    async itemsByIds(ids) {
+      if (ids.length === 0) return new Map()
+      const rows = await db.select().from(s.datasetItems).where(inArray(s.datasetItems.id, ids))
+      return new Map(rows.map((r) => [r.id, r.scenario]))
+    },
+  }
+
   const spans: SpansStore = {
     async appendMany(rows) {
       if (rows.length === 0) return
@@ -688,5 +801,6 @@ export function createPgStore(db: Db): CafeStore {
     incidents,
     metrics,
     spans,
+    datasets,
   }
 }

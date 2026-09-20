@@ -7,6 +7,7 @@ import type {
   RunConfig,
   RunMetrics,
   RunStatus,
+  Scenario,
 } from '@cafe/protocol'
 import {
   bigint,
@@ -69,6 +70,31 @@ export const customers = pgTable('customers', {
 
 // ---------- per-run state ----------
 
+/** User-defined golden datasets; the built-in one is virtual and never stored. */
+export const datasets = pgTable('datasets', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  createdAt: ms('created_at').notNull(),
+  updatedAt: ms('updated_at').notNull(),
+})
+
+export const datasetItems = pgTable(
+  'dataset_items',
+  {
+    /** The scenario id: ds:<datasetId>:<slug>. */
+    id: text('id').primaryKey(),
+    datasetId: text('dataset_id')
+      .notNull()
+      .references(() => datasets.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    scenario: jsonb('scenario').$type<Scenario>().notNull(),
+    createdAt: ms('created_at').notNull(),
+    updatedAt: ms('updated_at').notNull(),
+  },
+  (t) => [index('dataset_items_dataset').on(t.datasetId, t.position)],
+)
+
 export const runs = pgTable('runs', {
   id: text('id').primaryKey(),
   status: text('status').$type<RunStatus>().notNull(),
@@ -77,6 +103,8 @@ export const runs = pgTable('runs', {
   finishedAt: ms('finished_at'),
   error: text('error'),
   createdAt: ms('created_at').notNull(),
+  /** Boot id of the server process driving the run; null for the CLI and tests. Lets a restart reap only its predecessor's runs. */
+  owner: text('owner'),
 })
 
 export const events = pgTable(
