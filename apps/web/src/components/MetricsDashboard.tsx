@@ -3,8 +3,42 @@ import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
 import { type RunRow, useHarness } from '../harness/index.js'
 import { BEAT_COLORS, BEAT_LABELS } from './OrderWaterfall.js'
+import { TelemetryPanel } from './TelemetryPanel.js'
 
+/** Summary (the roll-up once a shift closes) or Telemetry (span-based, live). */
 export function MetricsDashboard({ runId, status }: { runId: string | null; status: string }) {
+  const [view, setView] = useState<'summary' | 'telemetry'>('summary')
+  return (
+    <div className="metrics">
+      <div className="segmented metrics-switch" role="tablist" aria-label="Metrics view">
+        {(
+          [
+            ['summary', 'Summary'],
+            ['telemetry', 'Telemetry'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            className={view === id ? 'on' : ''}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'summary' ? (
+        <MetricsSummary runId={runId} status={status} />
+      ) : (
+        <TelemetryPanel runId={runId} live={status === 'running'} />
+      )}
+    </div>
+  )
+}
+
+function MetricsSummary({ runId, status }: { runId: string | null; status: string }) {
   const [metrics, setMetrics] = useState<RunMetrics | null>(null)
   const [compare, setCompare] = useState<Array<{ run: RunRow; m: RunMetrics }>>([])
   const [err, setErr] = useState<string | null>(null)
@@ -33,7 +67,7 @@ export function MetricsDashboard({ runId, status }: { runId: string | null; stat
   }, [api, runId, status])
 
   return (
-    <div className="metrics">
+    <div>
       {!runId && <p className="muted">Start or load a shift.</p>}
       {runId && status !== 'finished' && (
         <p className="muted">

@@ -1241,6 +1241,13 @@ label.check input {
   color: var(--bad);
 }
 
+.metrics-switch {
+  margin-bottom: 10px;
+}
+.metrics-switch button {
+  font-size: 12px;
+  padding: 4px 12px;
+}
 .metrics .tiles {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
