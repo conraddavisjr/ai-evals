@@ -1015,6 +1015,21 @@ label.check input {
   color: #ffc4bd;
   border: 1px solid rgba(255, 107, 94, 0.55);
 }
+.pill.review-ok {
+  background: rgba(127, 213, 138, 0.14);
+  color: #b9f0c0;
+  border: 1px solid rgba(127, 213, 138, 0.4);
+}
+.pill.review-concern {
+  background: rgba(255, 210, 122, 0.18);
+  color: #ffe6b3;
+  border: 1px solid rgba(255, 210, 122, 0.5);
+}
+.pill.review-escalate {
+  background: rgba(255, 107, 94, 0.18);
+  color: #ffc4bd;
+  border: 1px solid rgba(255, 107, 94, 0.55);
+}
 .pill.interrupted {
   background: rgba(183, 155, 234, 0.18);
   color: #d9c9f7;

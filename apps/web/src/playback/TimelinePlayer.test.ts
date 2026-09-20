@@ -35,6 +35,7 @@ const recorded = () =>
           arrivalGapMs: 0,
           judgeEnabled: false,
           triageEnabled: false,
+          reviewEnabled: false,
           mockPacing: { llmStepMs: [0, 0], toolMs: [0, 0], hangOrders: [], hangMs: 0 },
         },
       },

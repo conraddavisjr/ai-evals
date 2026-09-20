@@ -33,6 +33,7 @@ export const VISIBLE_EVENTS: ReadonlySet<CafeEventType> = new Set<CafeEventType>
   'customer.spoke',
   'customer.left',
   'triage.decided',
+  'manager.reviewed',
   'agent.moved',
   'agent.thinking',
   'agent.spoke',
@@ -79,6 +80,7 @@ export const BEAT_EVENTS: ReadonlySet<CafeEventType> = new Set<CafeEventType>([
   'order.failed',
   'order.refused',
   'customer.left',
+  'manager.reviewed',
   'judge.verdict',
   'run.finished',
 ])

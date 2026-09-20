@@ -895,7 +895,7 @@ const ARCH = {
       y: 600,
       title: 'REST routes',
       nick: 'the front desk',
-      summary: '/api/runs, /scenarios, /models, /metrics, /orders, /judgements, /usage.',
+      summary: '/api/runs, /scenarios, /models, /metrics, /orders, /reviews, /judgements, /usage.',
       details: [
         'POST /api/runs validates the RunConfig and refuses live specs unless CAFE_ALLOW_LIVE_MODELS=true.',
         'GET /api/runs/:id/events serves the persisted stream for replay.',
@@ -997,15 +997,21 @@ const ARCH = {
       seg: 'orch',
       x: 1040,
       y: 770,
-      title: 'Door triage + judge step',
-      nick: 'the maître d’ and the inspector',
+      title: 'Triage, manager review + judge',
+      nick: 'the maître d’, the floor manager and the inspector',
       summary:
-        'Two experimental_evaluate() calls per visit: intent/escalate at the door, verdict at the end.',
+        'Three experimental_evaluate() calls per visit: intent/escalate at the door, the manager’s review of the staff’s trail, the judge’s verdict.',
       details: [
-        'Both use the manager’s / judge’s evaluation model, so Jev and LLMs are interchangeable here.',
+        'All three use an evaluation model (manager’s or judge’s), so Jev and LLMs are interchangeable here.',
+        'The review is the orchestration layer reasoning over its sub-agents: unblinded tool trail with timings, transcript, errors; emits manager.reviewed (ok / concern / escalate + issues) and is stored with the brief.',
         'Verdicts are emitted as judge.verdict and stored with the blinded transcript for audit.',
+        'Usage rows are recorded for every one of these calls, not only for staff turns.',
       ],
-      files: ['apps/server/src/orchestrator.ts (triage, judge)'],
+      files: [
+        'apps/server/src/orchestrator.ts (triage, review, judge)',
+        'packages/evals/src/review.ts',
+        'packages/evals/src/staff-trail.ts',
+      ],
     },
     // agent runtime
     {
@@ -1237,7 +1243,7 @@ const ARCH = {
       nick: 'the pantry list',
       summary: 'The only way anything touches persistence; Postgres today, others later.',
       details: [
-        'runs, events, menu, customers, inventory (per run), orders, payments, drinks, usage, judgements, incidents, metrics.',
+        'runs, events, menu, customers, inventory (per run), orders, payments, drinks, usage, judgements, reviews, incidents, metrics.',
         'claimNext() uses FOR UPDATE SKIP LOCKED so several baristas never grab the same ticket.',
       ],
       files: ['packages/db/src/store.ts'],
@@ -1359,7 +1365,7 @@ const ARCH = {
     { from: 'shift', to: 'triage', label: 'per visit' },
     { from: 'shift', to: 'runagent', label: 'cashier turn' },
     { from: 'barista-loop', to: 'runagent', label: 'barista turn' },
-    { from: 'triage', to: 'judge', label: 'judgeTransaction()' },
+    { from: 'triage', to: 'judge', label: 'reviewTransaction() / judgeTransaction()' },
     { from: 'triage', to: 'registry', label: 'evaluationModel()' },
     { from: 'runagent', to: 'registry', label: 'languageModel()' },
     { from: 'runagent', to: 'gw', label: 'tool calls' },

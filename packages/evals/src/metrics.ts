@@ -4,6 +4,7 @@ import {
   type JudgeAnswers,
   type LatencyStats,
   type Order,
+  type ReviewVerdict,
   type Role,
   type RunMetrics,
   type Scenario,
@@ -37,6 +38,7 @@ export function transactionMetrics(input: {
   outcome: Outcome | null
   judge: JudgeAnswers | null
   judgeLatencyMs: number | null
+  review?: TransactionMetrics['review']
 }): TransactionMetrics {
   const evs = input.events.filter((e) => e.txId === input.txId)
   const gt = groundTruth(input.scenario, input.order, input.outcome)
@@ -105,6 +107,7 @@ export function transactionMetrics(input: {
     costUsd,
     judge: input.judge,
     judgeLatencyMs: input.judgeLatencyMs,
+    review: input.review ?? null,
   }
 }
 
@@ -142,6 +145,9 @@ export function runMetrics(
   for (const t of per) for (const r of ROLES) stepsByRole[r].push(t.stepsByRole[r] ?? 0)
 
   const judged = per.map((t) => t.judge).filter((j): j is JudgeAnswers => j !== null)
+  const reviewed = per.map((t) => t.review).filter((r) => r !== null)
+  const reviewCounts: Record<ReviewVerdict, number> = { ok: 0, concern: 0, escalate: 0 }
+  for (const r of reviewed) reviewCounts[r.verdict] += 1
 
   return {
     runId,
@@ -173,6 +179,7 @@ export function runMetrics(
           toolUseQuality: mean(judged.map((j) => j.toolUseQuality.score)),
         }
       : null,
+    reviewCounts: reviewed.length ? reviewCounts : null,
     perTransaction: per,
   }
 }

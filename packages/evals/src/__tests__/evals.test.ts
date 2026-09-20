@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { groundTruth, toolScores } from '../ground-truth.js'
 import { buildBlindedTranscript, judgeTransaction } from '../judge.js'
 import { latencyStats, runMetrics, transactionMetrics } from '../metrics.js'
+import { buildReviewBrief, reviewTransaction } from '../review.js'
 import { SCENARIO_BY_ID, SCENARIOS, scenariosFor } from '../scenarios/index.js'
 
 const latte = SCENARIO_BY_ID.get('latte-simple')
@@ -288,5 +289,42 @@ describe('metrics', () => {
     expect(rm.latencyByRole.cashier.p50).toBe(900)
     expect(rm.beatLatency.queued?.max).toBe(1800)
     expect(rm.judgeMeans?.correct).toBeGreaterThan(0.5)
+  })
+})
+
+describe('manager review', () => {
+  const order = { items: [item('Latte', 'latte')], totalCents: 450, status: 'delivered' as const }
+  it('reads the trail unblinded, with model specs and tool timings', () => {
+    const brief = buildReviewBrief(happy, latte, order, 'served')
+    expect(brief.staff.map((a) => a.agentId)).toEqual(['cashier-1', 'barista-1'])
+    expect(brief.staff[0]?.modelSpec).toMatch(/anthropic/)
+    expect(brief.staff[0]?.toolCalls[0]).toMatchObject({ tool: 'menu.lookup', ok: true })
+    expect(brief.staff[1]?.scopeViolations).toBe(1)
+    expect(brief.matchesExpected).toBe(true)
+  })
+  it('escalates the barista scope breach through the mock manager and lands in the metrics', async () => {
+    const review = await reviewTransaction({
+      registry: new ModelRegistry(),
+      reviewerSpec: 'mock:manager',
+      events: happy,
+      scenario: latte,
+      order,
+      outcome: 'served',
+    })
+    expect(review.verdict).toBe('escalate')
+    expect(review.issues).toContain('scope_breach')
+    expect(review.summary).toMatch(/Escalate: .*scope breach/)
+    const tm = transactionMetrics({
+      txId: tx,
+      events: happy,
+      scenario: latte,
+      order,
+      outcome: 'served',
+      judge: null,
+      judgeLatencyMs: null,
+      review: { verdict: review.verdict, issues: review.issues },
+    })
+    const rm = runMetrics('r', happy, [tm], SCENARIO_BY_ID)
+    expect(rm.reviewCounts).toEqual({ ok: 0, concern: 0, escalate: 1 })
   })
 })

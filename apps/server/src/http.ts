@@ -183,6 +183,9 @@ export function createApp(deps: HttpDeps) {
   app.get('/api/runs/:id/orders', async (c) =>
     c.json(await store.orders.listByRun(c.req.param('id'))),
   )
+  app.get('/api/runs/:id/reviews', async (c) =>
+    c.json(await store.reviews.forRun(c.req.param('id'))),
+  )
   app.get('/api/runs/:id/judgements', async (c) =>
     c.json(await store.judgements.forRun(c.req.param('id'))),
   )

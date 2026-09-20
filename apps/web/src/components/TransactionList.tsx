@@ -20,6 +20,7 @@ export function TransactionList({
         const cust = tl.customerId ? state.customers[tl.customerId] : undefined
         const order = tl.orderId ? state.orders[tl.orderId] : undefined
         const verdict = state.verdicts[tl.txId]
+        const review = state.reviews[tl.txId]
         const arrived = state.applied.find(
           (e) => e.txId === tl.txId && e.type === 'customer.arrived',
         )
@@ -42,6 +43,14 @@ export function TransactionList({
               <span className={`pill ${tl.outcome ?? 'open'}`}>{tl.outcome ?? 'in progress'}</span>
               <span className="muted">{fmtMs(tl.totalMs ?? now - tl.startT)}</span>
               {order && <span className="muted">{fmtCents(order.totalCents)}</span>}
+              {review && (
+                <span
+                  className={`pill review-${review.verdict}`}
+                  title={`manager: ${review.summary}`}
+                >
+                  {review.verdict}
+                </span>
+              )}
               {verdict && (
                 <span
                   className={`pill ${verdict.answers.correct.probability >= 0.5 ? 'served' : 'failed'}`}

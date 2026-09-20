@@ -1,4 +1,13 @@
-import type { CafeEvent, JudgeAnswers, OrderItem, Role, RunConfig, Station } from '@cafe/protocol'
+import type {
+  CafeEvent,
+  JudgeAnswers,
+  OrderItem,
+  ReviewIssue,
+  ReviewVerdict,
+  Role,
+  RunConfig,
+  Station,
+} from '@cafe/protocol'
 
 /**
  * A pure reducer from the event stream to what the scene and panels need to
@@ -93,6 +102,17 @@ export interface CafeState {
     string,
     { answers: JudgeAnswers; judgeSpec: string; latencyMs: number; at: number }
   >
+  /** The manager's post-visit review per transaction. */
+  reviews: Record<
+    string,
+    {
+      verdict: ReviewVerdict
+      issues: ReviewIssue[]
+      summary: string
+      modelSpec: string
+      at: number
+    }
+  >
   costUsd: number
   applied: CafeEvent[]
   lastEvent: CafeEvent | null
@@ -110,6 +130,7 @@ export const initialState = (): CafeState => ({
   orders: {},
   queue: [],
   verdicts: {},
+  reviews: {},
   costUsd: 0,
   applied: [],
   lastEvent: null,
@@ -414,6 +435,19 @@ export function reduce(prev: CafeState, e: CafeEvent): CafeState {
       if (c) customers[e.customerId] = { ...c, outcome: 'refused' }
       break
     }
+    case 'manager.reviewed':
+      if (e.txId)
+        s.reviews = {
+          ...s.reviews,
+          [e.txId]: {
+            verdict: e.verdict,
+            issues: e.issues,
+            summary: e.summary,
+            modelSpec: e.modelSpec,
+            at: e.t,
+          },
+        }
+      break
     case 'judge.verdict':
       if (e.txId)
         s.verdicts = {

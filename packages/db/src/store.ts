@@ -3,6 +3,8 @@ import type {
   JudgeAnswers,
   OrderItem,
   OrderStatus,
+  ReviewIssue,
+  ReviewVerdict,
   Role,
   RunConfig,
   RunMetrics,
@@ -29,6 +31,7 @@ export interface CafeStore {
   drinks: DrinksStore
   usage: UsageStore
   judgements: JudgementsStore
+  reviews: ReviewsStore
   incidents: IncidentsStore
   metrics: MetricsStore
 }
@@ -170,6 +173,22 @@ export interface JudgementsStore {
     now: number
   }): Promise<void>
   forRun(runId: string): Promise<Array<typeof s.judgements.$inferSelect>>
+}
+
+export interface ReviewsStore {
+  record(input: {
+    runId: string
+    txId: string
+    orderId: string | null
+    reviewerSpec: string
+    verdict: ReviewVerdict
+    issues: ReviewIssue[]
+    summary: string
+    brief: string
+    latencyMs: number
+    now: number
+  }): Promise<void>
+  forRun(runId: string): Promise<Array<typeof s.reviews.$inferSelect>>
 }
 
 export interface IncidentsStore {
@@ -559,6 +578,25 @@ export function createPgStore(db: Db): CafeStore {
     forRun: (runId) => db.select().from(s.judgements).where(eq(s.judgements.runId, runId)),
   }
 
+  const reviews: ReviewsStore = {
+    async record(r) {
+      await db.insert(s.reviews).values({
+        id: ulid(),
+        runId: r.runId,
+        txId: r.txId,
+        orderId: r.orderId,
+        reviewerSpec: r.reviewerSpec,
+        verdict: r.verdict,
+        issues: r.issues,
+        summary: r.summary,
+        brief: r.brief,
+        latencyMs: r.latencyMs,
+        at: r.now,
+      })
+    },
+    forRun: (runId) => db.select().from(s.reviews).where(eq(s.reviews.runId, runId)),
+  }
+
   const incidents: IncidentsStore = {
     async record(i) {
       await db.insert(s.incidents).values({
@@ -602,6 +640,7 @@ export function createPgStore(db: Db): CafeStore {
     drinks,
     usage,
     judgements,
+    reviews,
     incidents,
     metrics,
   }

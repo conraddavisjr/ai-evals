@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { Role } from './domain.js'
-import { JudgeAnswers } from './events.js'
+import { JudgeAnswers, ReviewIssue, ReviewVerdict } from './events.js'
 
 export const LatencyStats = z.object({
   count: z.number().int(),
@@ -32,6 +32,7 @@ export const TransactionMetrics = z.object({
   costUsd: z.number(),
   judge: JudgeAnswers.nullable(),
   judgeLatencyMs: z.number().nullable(),
+  review: z.object({ verdict: ReviewVerdict, issues: z.array(ReviewIssue) }).nullable(),
 })
 export type TransactionMetrics = z.infer<typeof TransactionMetrics>
 
@@ -60,6 +61,8 @@ export const RunMetrics = z.object({
       toolUseQuality: z.number(),
     })
     .nullable(),
+  /** How many visits the manager marked ok / concern / escalate; null when the review was off. */
+  reviewCounts: z.record(ReviewVerdict, z.number().int()).nullable(),
   perTransaction: z.array(TransactionMetrics),
 })
 export type RunMetrics = z.infer<typeof RunMetrics>

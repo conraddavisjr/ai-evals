@@ -3,6 +3,7 @@ import type { CafeStore } from '@cafe/db'
 import {
   judgeTransaction,
   type Outcome,
+  reviewTransaction,
   runMetrics,
   scenariosFor,
   TRIAGE_QUESTIONS,
@@ -266,7 +267,8 @@ export class ShiftOrchestrator {
     emit({ type: 'customer.left', txId, customerId, outcome })
 
     order = await this.store.orders.byTx(this.runId, txId)
-    await this.judge(txId, scenario, order, outcome)
+    const review = await this.review(txId, customerId, scenario, order, outcome)
+    await this.judge(txId, scenario, order, outcome, review)
   }
 
   private async triage(txId: string, customerId: string, utterance: string): Promise<void> {
@@ -291,8 +293,7 @@ export class ShiftOrchestrator {
     })
     const inTok = res.usage.inputTokens ?? 0
     const outTok = res.usage.outputTokens ?? 0
-    this.bus.emit({
-      type: 'model.usage',
+    this.recordUsage({
       txId,
       agentId: 'manager-1',
       role: 'manager',
@@ -300,9 +301,89 @@ export class ShiftOrchestrator {
       step: 1,
       inputTokens: inTok,
       outputTokens: outTok,
-      costUsd: costUsd(modelSpec, inTok, outTok),
       latencyMs,
     })
+  }
+
+  /** Emit a model.usage event and persist the matching row (triage, review and judge share this). */
+  private recordUsage(u: {
+    txId: string
+    agentId: string
+    role: 'manager' | 'judge'
+    modelSpec: string
+    step: number
+    inputTokens: number
+    outputTokens: number
+    latencyMs: number
+  }): void {
+    const cost = costUsd(u.modelSpec, u.inputTokens, u.outputTokens)
+    this.bus.emit({ type: 'model.usage', ...u, costUsd: cost })
+    void this.store.usage
+      .record({ runId: this.runId, ...u, costUsd: cost, now: this.now() })
+      .catch((err) => console.warn('[usage] record failed:', err))
+  }
+
+  /**
+   * The orchestration layer reasoning over its sub-agents: the manager reads the
+   * visit's tool trail and transcript and files it as ok, concern or escalate.
+   */
+  private async review(
+    txId: string,
+    customerId: string,
+    scenario: Scenario,
+    order: Awaited<ReturnType<CafeStore['orders']['byTx']>>,
+    outcome: Outcome,
+  ): Promise<TransactionMetrics['review']> {
+    if (!this.config.reviewEnabled || this.overBudget()) return null
+    const modelSpec = this.config.roles.manager
+    try {
+      const res = await reviewTransaction({
+        registry: this.registry,
+        reviewerSpec: modelSpec,
+        events: this.bus.buffer.filter((e) => e.txId === txId),
+        scenario,
+        order,
+        outcome,
+        now: this.now,
+      })
+      this.bus.emit({
+        type: 'manager.reviewed',
+        txId,
+        customerId,
+        orderId: order?.id ?? null,
+        modelSpec,
+        verdict: res.verdict,
+        issues: res.issues,
+        summary: res.summary,
+        latencyMs: res.latencyMs,
+      })
+      this.recordUsage({
+        txId,
+        agentId: 'manager-1',
+        role: 'manager',
+        modelSpec,
+        step: 2,
+        inputTokens: res.inputTokens,
+        outputTokens: res.outputTokens,
+        latencyMs: res.latencyMs,
+      })
+      await this.store.reviews.record({
+        runId: this.runId,
+        txId,
+        orderId: order?.id ?? null,
+        reviewerSpec: modelSpec,
+        verdict: res.verdict,
+        issues: res.issues,
+        summary: res.summary,
+        brief: res.brief,
+        latencyMs: res.latencyMs,
+        now: this.now(),
+      })
+      return { verdict: res.verdict, issues: res.issues }
+    } catch (err) {
+      console.warn('[review] failed:', err instanceof Error ? err.message : err)
+      return null
+    }
   }
 
   private async judge(
@@ -310,6 +391,7 @@ export class ShiftOrchestrator {
     scenario: Scenario,
     order: Awaited<ReturnType<CafeStore['orders']['byTx']>>,
     outcome: Outcome,
+    review: TransactionMetrics['review'] = null,
   ): Promise<void> {
     const events = this.bus.buffer.filter((e) => e.txId === txId)
     let verdict: Awaited<ReturnType<typeof judgeTransaction>> | null = null
@@ -332,8 +414,7 @@ export class ShiftOrchestrator {
           answers: verdict.answers,
           latencyMs: verdict.latencyMs,
         })
-        this.bus.emit({
-          type: 'model.usage',
+        this.recordUsage({
           txId,
           agentId: 'judge-1',
           role: 'judge',
@@ -341,7 +422,6 @@ export class ShiftOrchestrator {
           step: 1,
           inputTokens: verdict.inputTokens,
           outputTokens: verdict.outputTokens,
-          costUsd: costUsd(this.config.roles.judge, verdict.inputTokens, verdict.outputTokens),
           latencyMs: verdict.latencyMs,
         })
         await this.store.judgements.record({
@@ -367,6 +447,7 @@ export class ShiftOrchestrator {
         outcome,
         judge: verdict?.answers ?? null,
         judgeLatencyMs: verdict?.latencyMs ?? null,
+        review,
       }),
     )
   }

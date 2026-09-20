@@ -167,6 +167,8 @@ export const RunConfig = z.object({
   judgeEnabled: z.boolean().default(true),
   /** Door triage via the manager's evaluation model (Jev or an LLM adapter). */
   triageEnabled: z.boolean().default(true),
+  /** After each visit the manager reviews the staff's tool trail and transcript before the judge. */
+  reviewEnabled: z.boolean().default(true),
   mockPacing: MockPacing.prefault({}),
 })
 export type RunConfig = z.infer<typeof RunConfig>

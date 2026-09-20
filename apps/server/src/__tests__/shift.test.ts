@@ -63,6 +63,16 @@ describe('a full mock shift', () => {
     expect(types.filter((t) => t === 'customer.arrived').length).toBe(5)
     expect(types.filter((t) => t === 'triage.decided').length).toBe(5)
     expect(types.filter((t) => t === 'judge.verdict').length).toBe(5)
+    // the manager reviews every visit before the judge sees it
+    const reviews = events.filter(
+      (e): e is Extract<CafeEvent, { type: 'manager.reviewed' }> => e.type === 'manager.reviewed',
+    )
+    expect(reviews.length).toBe(5)
+    for (const r of reviews) {
+      const idx = events.indexOf(r)
+      const judged = events.findIndex((e) => e.txId === r.txId && e.type === 'judge.verdict')
+      expect(idx).toBeLessThan(judged)
+    }
 
     const outcomes = Object.fromEntries(
       events
@@ -127,6 +137,16 @@ describe('a full mock shift', () => {
     expect(metrics?.costUsd).toBe(0)
     expect(metrics?.judgeMeans?.correct).toBeGreaterThan(0.8)
     expect((await store.judgements.forRun(run.id)).length).toBe(5)
+    expect((await store.reviews.forRun(run.id)).length).toBe(5)
+    // out-of-stock is meant to fail, so it is a concern (the ticket died on the rail), not an escalation
+    expect(metrics?.reviewCounts).toEqual({ ok: 4, concern: 1, escalate: 0 })
+    expect(
+      metrics?.perTransaction.find((t) => t.scenarioId === 'out-of-stock')?.review?.verdict,
+    ).toBe('concern')
+    // triage, review and judge calls are all persisted as usage rows now
+    const usage = await store.usage.forRun(run.id)
+    expect(usage.filter((u) => u.role === 'manager').length).toBe(10)
+    expect(usage.filter((u) => u.role === 'judge').length).toBe(5)
     expect((await store.runs.get(run.id))?.status).toBe('finished')
   })
 

@@ -9,7 +9,7 @@ const TOKENS_PER_VISIT: Record<RoleKey, { steps: number; inPerStep: number; outP
   {
     cashier: { steps: 6, inPerStep: 1100, outPerStep: 70 },
     barista: { steps: 7, inPerStep: 900, outPerStep: 60 },
-    manager: { steps: 1, inPerStep: 60, outPerStep: 5 },
+    manager: { steps: 2, inPerStep: 400, outPerStep: 8 },
     judge: { steps: 1, inPerStep: 700, outPerStep: 40 },
   }
 /** Mirror of the server price table for the estimate (USD per MTok). */
@@ -84,11 +84,16 @@ export function RunConfigPanel({
       const [pin, pout] = priceOf(spec)
       const prof = TOKENS_PER_VISIT[role]
       if (role === 'judge' && !draft.judgeEnabled) continue
-      if (role === 'manager' && !draft.triageEnabled) continue
-      usd += (n * prof.steps * (prof.inPerStep * pin + prof.outPerStep * pout)) / 1_000_000
+      let steps = prof.steps
+      // the manager's two calls per visit: door triage (tiny) and the post-visit review (reads the trail)
+      if (role === 'manager') {
+        steps = (draft.triageEnabled ? 1 : 0) + (draft.reviewEnabled ? 1 : 0)
+        if (steps === 0) continue
+      }
+      usd += (n * steps * (prof.inPerStep * pin + prof.outPerStep * pout)) / 1_000_000
     }
     return usd
-  }, [draft.roles, n, draft.judgeEnabled, draft.triageEnabled])
+  }, [draft.roles, n, draft.judgeEnabled, draft.triageEnabled, draft.reviewEnabled])
   const anyLive = ROLES.some((r) => !draft.roles[r].startsWith('mock:'))
 
   const allSpecs = useMemo(() => Object.values(models.presets).flat(), [models])
@@ -287,6 +292,14 @@ export function RunConfigPanel({
             onChange={(e) => patch({ triageEnabled: e.target.checked })}
           />{' '}
           door triage by the manager
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.reviewEnabled ?? true}
+            onChange={(e) => patch({ reviewEnabled: e.target.checked })}
+          />{' '}
+          manager reviews every visit
         </label>
         <label className="check">
           <input

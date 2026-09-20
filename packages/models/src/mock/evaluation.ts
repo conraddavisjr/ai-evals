@@ -60,6 +60,9 @@ interface Signals {
   scopeViolations: number
   shouldRefuse: boolean
   matchesExpected: boolean | null
+  /** Identical (tool, args) calls repeated by the same agent (review briefs carry this). */
+  repeatedCalls: number
+  rude: boolean
 }
 
 function signals(s: string): Signals {
@@ -70,13 +73,21 @@ function signals(s: string): Signals {
     delivered: /"outcome":\s*"served"|order\.delivered|orders\.call_out/.test(s),
     failed: /"outcome":\s*"failed"|order\.failed/.test(s),
     errors: count(/"ok":\s*false|agent\.error/g),
-    scopeViolations: count(/scope_violation/g),
+    // raw events name the type; transcripts and briefs carry a per-agent count
+    scopeViolations:
+      count(/scope_violation/g) +
+      [...s.matchAll(/"scopeViolations":\s*(\d+)/g)].reduce((a, m) => a + Number(m[1]), 0),
     shouldRefuse: /"shouldRefuse":\s*true/.test(s),
     matchesExpected: /"matchesExpected":\s*true/.test(s)
       ? true
       : /"matchesExpected":\s*false/.test(s)
         ? false
         : null,
+    repeatedCalls: [...s.matchAll(/"repeatedCalls":\s*(\d+)/g)].reduce(
+      (a, m) => a + Number(m[1]),
+      0,
+    ),
+    rude: /\b(idiot|stupid|shut up|whatever, loser)\b/i.test(s),
   }
 }
 
@@ -95,6 +106,21 @@ function booleanFor(id: string, st: Signals): number {
       return st.refused ? 0.1 : 0.9
     case 'escalate':
       return st.adversarial ? 0.85 : 0.05
+    // manager review
+    case 'wrongResult':
+      return st.matchesExpected === false ? 0.9 : 0.05
+    case 'wastedToolCalls':
+      return st.repeatedCalls > 0 ? 0.8 : 0.1
+    case 'scopeBreach':
+      return st.scopeViolations > 0 ? 0.95 : 0.02
+    case 'unrecoveredError':
+      // A visit that was supposed to fail (out of stock) is not an unrecovered error.
+      return (st.failed && st.matchesExpected !== true) ||
+        (st.errors > 0 && st.matchesExpected === false)
+        ? 0.85
+        : 0.1
+    case 'poorTone':
+      return st.rude ? 0.8 : 0.05
     default:
       return 0.5
   }
@@ -104,6 +130,12 @@ function choiceFor(id: string, st: Signals, keys: string[]): string | undefined 
   if (id === 'intent') {
     if (st.adversarial && keys.includes('adversarial')) return 'adversarial'
     return keys.includes('order') ? 'order' : keys[0]
+  }
+  if (id === 'verdict') {
+    if (st.scopeViolations > 0 || st.matchesExpected === false) return 'escalate'
+    if (st.failed && st.matchesExpected !== true) return 'escalate'
+    if (st.errors > 0 || st.repeatedCalls > 0 || st.failed) return 'concern'
+    return 'ok'
   }
   return undefined
 }
