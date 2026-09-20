@@ -1,5 +1,5 @@
 import type { CafeStore } from '@cafe/db'
-import { SCENARIOS } from '@cafe/evals'
+import { runTelemetry, SCENARIOS } from '@cafe/evals'
 import { createMcpServer, Gateway, ROLE_SCOPES } from '@cafe/mcp-gateway'
 import { PERSONAS } from '@cafe/models'
 import { type Role, RunConfig } from '@cafe/protocol'
@@ -179,6 +179,25 @@ export function createApp(deps: HttpDeps) {
     const m = await store.metrics.get(c.req.param('id'))
     if (!m) return c.json({ error: 'metrics not ready' }, 404)
     return c.json(m)
+  })
+  // OpenTelemetry spans for a run: raw for drill-down, aggregated for the charts. Both work mid-run.
+  app.get('/api/runs/:id/spans', async (c) => {
+    const q = c.req.query()
+    const rows = await store.spans.forRun(c.req.param('id'), {
+      ...(q.txId ? { txId: q.txId } : {}),
+      ...(q.kind ? { kinds: q.kind.split(',') } : {}),
+      limit: Math.min(20_000, Number(q.limit) || 5000),
+      offset: Number(q.offset) || 0,
+    })
+    return c.json(rows)
+  })
+  app.get('/api/runs/:id/telemetry', async (c) => {
+    const id = c.req.param('id')
+    const [rows, metrics] = await Promise.all([
+      store.spans.forRun(id, { limit: 20_000 }),
+      store.metrics.get(id),
+    ])
+    return c.json(runTelemetry(id, rows, metrics))
   })
   app.get('/api/runs/:id/orders', async (c) =>
     c.json(await store.orders.listByRun(c.req.param('id'))),

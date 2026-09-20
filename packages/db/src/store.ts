@@ -34,9 +34,12 @@ export interface CafeStore {
   reviews: ReviewsStore
   incidents: IncidentsStore
   metrics: MetricsStore
+  spans: SpansStore
 }
 
 export type RunRow = typeof s.runs.$inferSelect
+export type SpanRow = typeof s.spans.$inferSelect
+export type SpanInsert = typeof s.spans.$inferInsert
 export type OrderRow = typeof s.orders.$inferSelect
 export type MenuItemRow = typeof s.menuItems.$inferSelect
 export type RecipeRow = typeof s.recipes.$inferSelect
@@ -189,6 +192,15 @@ export interface ReviewsStore {
     now: number
   }): Promise<void>
   forRun(runId: string): Promise<Array<typeof s.reviews.$inferSelect>>
+}
+
+export interface SpansStore {
+  appendMany(rows: SpanInsert[]): Promise<void>
+  forRun(
+    runId: string,
+    opts?: { txId?: string; kinds?: string[]; limit?: number; offset?: number },
+  ): Promise<SpanRow[]>
+  forSuite(suiteId: string, opts?: { kinds?: string[] }): Promise<SpanRow[]>
 }
 
 export interface IncidentsStore {
@@ -597,6 +609,38 @@ export function createPgStore(db: Db): CafeStore {
     forRun: (runId) => db.select().from(s.reviews).where(eq(s.reviews.runId, runId)),
   }
 
+  const spans: SpansStore = {
+    async appendMany(rows) {
+      if (rows.length === 0) return
+      await db.insert(s.spans).values(rows).onConflictDoNothing()
+    },
+    forRun: (runId, opts = {}) =>
+      db
+        .select()
+        .from(s.spans)
+        .where(
+          and(
+            eq(s.spans.runId, runId),
+            opts.txId ? eq(s.spans.txId, opts.txId) : undefined,
+            opts.kinds?.length ? inArray(s.spans.kind, opts.kinds) : undefined,
+          ),
+        )
+        .orderBy(asc(s.spans.startT))
+        .limit(opts.limit ?? 5000)
+        .offset(opts.offset ?? 0),
+    forSuite: (suiteId, opts = {}) =>
+      db
+        .select()
+        .from(s.spans)
+        .where(
+          and(
+            eq(s.spans.suiteId, suiteId),
+            opts.kinds?.length ? inArray(s.spans.kind, opts.kinds) : undefined,
+          ),
+        )
+        .orderBy(asc(s.spans.startT)),
+  }
+
   const incidents: IncidentsStore = {
     async record(i) {
       await db.insert(s.incidents).values({
@@ -643,5 +687,6 @@ export function createPgStore(db: Db): CafeStore {
     reviews,
     incidents,
     metrics,
+    spans,
   }
 }

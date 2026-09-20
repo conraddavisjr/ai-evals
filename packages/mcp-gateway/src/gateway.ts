@@ -1,4 +1,5 @@
 import type { Role } from '@cafe/protocol'
+import { ATTR, recordError, startSpan } from '@cafe/telemetry'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 import { type ChaosEngine, createChaos, TransientToolError } from './chaos.js'
@@ -55,10 +56,26 @@ export class Gateway {
     const base = () => ({ txId: cap.txId, agentId: cap.agentId, role: cap.role }) as const
     const args = (rawArgs && typeof rawArgs === 'object' ? rawArgs : {}) as Record<string, unknown>
     this.opts.emit({ type: 'agent.tool_called', ...base(), callId, tool: toolName, args })
+    // Nested under whatever is active: the agent's step span when called from runAgent.
+    const span = startSpan('tool', `tool ${toolName}`, {
+      [ATTR.TOOL]: toolName,
+      [ATTR.CALL_ID]: callId,
+      [ATTR.AGENT_ID]: cap.agentId,
+      [ATTR.ROLE]: cap.role,
+      ...(cap.txId ? { [ATTR.TX_ID]: cap.txId } : {}),
+    })
 
     const finish = (r: ToolResult): ToolResult => {
       const latencyMs = this.now() - started
       const out = { ...r, latencyMs } as ToolResult
+      span.setAttribute(ATTR.TOOL_OK, out.ok)
+      span.setAttribute(ATTR.LATENCY_MS, latencyMs)
+      if (cap.txId) span.setAttribute(ATTR.TX_ID, cap.txId)
+      if (!out.ok) {
+        span.setAttribute(ATTR.TOOL_CODE, out.code)
+        recordError(span, new Error(out.error), out.code)
+      }
+      span.end()
       this.opts.emit(
         out.ok
           ? {
@@ -84,6 +101,7 @@ export class Gateway {
     }
 
     const tool = this.tools.get(toolName)
+    if (tool) span.setAttribute(ATTR.TOOL_SCOPE, tool.scope)
     if (!tool)
       return finish({
         ok: false,

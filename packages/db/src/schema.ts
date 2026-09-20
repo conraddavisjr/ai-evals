@@ -190,6 +190,46 @@ export const modelUsage = pgTable(
   (t) => [index('model_usage_run').on(t.runId)],
 )
 
+/**
+ * OpenTelemetry spans, one row each, written by the server's exporter. The hot
+ * attributes are promoted to columns so the telemetry aggregate is a plain query;
+ * everything else stays in `attributes`.
+ */
+export const spans = pgTable(
+  'spans',
+  {
+    traceId: text('trace_id').notNull(),
+    spanId: text('span_id').notNull(),
+    parentSpanId: text('parent_span_id'),
+    runId: text('run_id').references(() => runs.id, { onDelete: 'cascade' }),
+    suiteId: text('suite_id'),
+    txId: text('tx_id'),
+    name: text('name').notNull(),
+    /** suite | run | visit | triage | agent.turn | step | tool | review | judge */
+    kind: text('kind').notNull(),
+    role: text('role'),
+    agentId: text('agent_id'),
+    modelSpec: text('model_spec'),
+    tool: text('tool'),
+    startT: ms('start_t').notNull(),
+    endT: ms('end_t').notNull(),
+    durationMs: doublePrecision('duration_ms').notNull(),
+    /** ok | error | unset */
+    status: text('status').notNull(),
+    errorKind: text('error_kind'),
+    costUsd: doublePrecision('cost_usd'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    attributes: jsonb('attributes').$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.traceId, t.spanId] }),
+    index('spans_run_start').on(t.runId, t.startT),
+    index('spans_run_tx').on(t.runId, t.txId),
+    index('spans_suite').on(t.suiteId),
+  ],
+)
+
 /** The manager's post-visit review: the orchestration layer's own read of its sub-agents. */
 export const reviews = pgTable('reviews', {
   id: text('id').primaryKey(),

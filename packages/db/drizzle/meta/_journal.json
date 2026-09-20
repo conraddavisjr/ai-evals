@@ -15,6 +15,13 @@
       "when": 1789930055693,
       "tag": "0001_thankful_dazzler",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789931705940,
+      "tag": "0002_lush_mesmero",
+      "breakpoints": true
     }
   ]
 }

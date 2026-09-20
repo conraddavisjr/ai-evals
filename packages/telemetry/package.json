@@ -1,5 +1,5 @@
 {
-  "name": "@cafe/mcp-gateway",
+  "name": "@cafe/telemetry",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,11 +13,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cafe/db": "workspace:*",
-    "@cafe/protocol": "workspace:*",
-    "@cafe/telemetry": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "ulid": "^3.0.2",
-    "zod": "^4.6.5"
+    "@opentelemetry/api": "^1.9.1"
   }
 }

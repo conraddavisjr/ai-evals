@@ -1,8 +1,21 @@
-import type { CafeEvent, RunConfigInput, RunMetrics, Scenario } from '@cafe/protocol'
-import type { HarnessClient, ModelsInfo, RunRow, StreamHandlers } from './types.js'
+import type {
+  CafeEvent,
+  RunConfigInput,
+  RunMetrics,
+  RunTelemetry,
+  Scenario,
+  SpanSummary,
+} from '@cafe/protocol'
+import type {
+  ExperimentClient,
+  HarnessClient,
+  ModelsInfo,
+  RunRow,
+  StreamHandlers,
+} from './types.js'
 
 /** The Stardust server's REST + SSE API, mounted under `baseUrl` (default: same origin). */
-export function createHttpHarness(baseUrl = ''): HarnessClient {
+export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClient {
   const url = (path: string) => `${baseUrl}${path}`
   async function json<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url(path), {
@@ -34,6 +47,16 @@ export function createHttpHarness(baseUrl = ''): HarnessClient {
     events: (id, afterSeq = -1) => json<CafeEvent[]>(`/api/runs/${id}/events?afterSeq=${afterSeq}`),
     metrics: (id) => json<RunMetrics>(`/api/runs/${id}/metrics`),
     judgements: (id) => json(`/api/runs/${id}/judgements`),
+    telemetry: (id) => json<RunTelemetry>(`/api/runs/${id}/telemetry`),
+    spans: (id, q = {}) => {
+      const p = new URLSearchParams()
+      if (q.txId) p.set('txId', q.txId)
+      if (q.kinds?.length) p.set('kind', q.kinds.join(','))
+      if (q.limit) p.set('limit', String(q.limit))
+      if (q.offset) p.set('offset', String(q.offset))
+      const qs = p.toString()
+      return json<SpanSummary[]>(`/api/runs/${id}/spans${qs ? `?${qs}` : ''}`)
+    },
     stream(runId: string, handlers: StreamHandlers, afterSeq = -1): () => void {
       const es = new EventSource(url(`/api/runs/${runId}/stream?afterSeq=${afterSeq}`))
       es.addEventListener('cafe', (ev) =>
