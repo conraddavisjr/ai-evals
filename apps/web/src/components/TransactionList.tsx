@@ -1,4 +1,4 @@
-import { allTimelines } from '@cafe/protocol'
+import { allTimelines, shortScenarioId } from '@cafe/protocol'
 import { fmtCents, fmtMs } from '../format.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { OrderWaterfall } from './OrderWaterfall.js'
@@ -39,7 +39,9 @@ export function TransactionList({
               >
                 {tl.customerName}
               </button>
-              <span className="muted">{tl.scenarioId}</span>
+              <span className="muted" title={tl.scenarioId ?? undefined}>
+                {tl.scenarioId ? shortScenarioId(tl.scenarioId) : ''}
+              </span>
               <span className={`pill ${tl.outcome ?? 'open'}`}>{tl.outcome ?? 'in progress'}</span>
               <span className="muted">{fmtMs(tl.totalMs ?? now - tl.startT)}</span>
               {order && <span className="muted">{fmtCents(order.totalCents)}</span>}

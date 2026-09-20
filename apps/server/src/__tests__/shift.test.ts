@@ -296,17 +296,23 @@ describe('HTTP API', () => {
 describe('orphaned runs', () => {
   it('are marked failed at boot, while runs the manager still owns are left alone', async () => {
     const config = RunConfig.parse({ scenarioIds: ['latte-simple'], roles: MOCK_ROLES })
-    const orphan = await store.runs.create(config)
+    const orphan = await store.runs.create(config, { owner: 'dead-server-process' })
     createdRuns.push(orphan.id)
     await store.runs.setStatus(orphan.id, 'running', { startedAt: Date.now() })
-    const finished = await store.runs.create(config)
+    const finished = await store.runs.create(config, { owner: 'dead-server-process' })
     createdRuns.push(finished.id)
     await store.runs.setStatus(finished.id, 'finished', { finishedAt: Date.now() })
+    // a run with no owner is being driven by the CLI or a test in another process: not ours to reap
+    const foreign = await store.runs.create(config)
+    createdRuns.push(foreign.id)
+    await store.runs.setStatus(foreign.id, 'running', { startedAt: Date.now() })
 
     const runs = new RunManager(store, false)
     const reaped = await runs.reapOrphans()
     expect(reaped).toContain(orphan.id)
     expect(reaped).not.toContain(finished.id)
+    expect(reaped).not.toContain(foreign.id)
+    expect((await store.runs.get(foreign.id))?.status).toBe('running')
     const row = await store.runs.get(orphan.id)
     expect(row?.status).toBe('failed')
     expect(row?.error).toMatch(/interrupted/)

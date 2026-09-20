@@ -6,4 +6,5 @@ export type {
   ModelsInfo,
   RunRow,
   StreamHandlers,
+  ToolInfo,
 } from './types.js'

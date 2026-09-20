@@ -1,3 +1,4 @@
+import { shortScenarioId } from '@cafe/protocol'
 import { useState } from 'react'
 import { fmtCents, fmtMs, fmtUsd, shortModel } from '../format.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
@@ -86,7 +87,8 @@ export function AgentInspector({
     return (
       <div className="inspector">
         <h3>
-          {customer.name} <span className="muted">customer · {customer.scenarioId}</span>
+          {customer.name}{' '}
+          <span className="muted">customer · {shortScenarioId(customer.scenarioId)}</span>
         </h3>
         <blockquote>“{customer.utterance}”</blockquote>
         <dl>
