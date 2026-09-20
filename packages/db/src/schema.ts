@@ -8,6 +8,8 @@ import type {
   RunMetrics,
   RunStatus,
   Scenario,
+  SuiteConfig,
+  SuiteStatus,
 } from '@cafe/protocol'
 import {
   bigint,
@@ -95,17 +97,37 @@ export const datasetItems = pgTable(
   (t) => [index('dataset_items_dataset').on(t.datasetId, t.position)],
 )
 
-export const runs = pgTable('runs', {
+/** An experiment: variants x repeats runs over one golden dataset. */
+export const suites = pgTable('suites', {
   id: text('id').primaryKey(),
-  status: text('status').$type<RunStatus>().notNull(),
-  config: jsonb('config').$type<RunConfig>().notNull(),
+  name: text('name').notNull(),
+  status: text('status').$type<SuiteStatus>().notNull(),
+  config: jsonb('config').$type<SuiteConfig>().notNull(),
+  createdAt: ms('created_at').notNull(),
   startedAt: ms('started_at'),
   finishedAt: ms('finished_at'),
   error: text('error'),
-  createdAt: ms('created_at').notNull(),
-  /** Boot id of the server process driving the run; null for the CLI and tests. Lets a restart reap only its predecessor's runs. */
-  owner: text('owner'),
 })
+
+export const runs = pgTable(
+  'runs',
+  {
+    id: text('id').primaryKey(),
+    status: text('status').$type<RunStatus>().notNull(),
+    config: jsonb('config').$type<RunConfig>().notNull(),
+    startedAt: ms('started_at'),
+    finishedAt: ms('finished_at'),
+    error: text('error'),
+    createdAt: ms('created_at').notNull(),
+    /** Boot id of the server process driving the run; null for the CLI and tests. Lets a restart reap only its predecessor's runs. */
+    owner: text('owner'),
+    /** Set when the run is one variant of a suite. */
+    suiteId: text('suite_id').references(() => suites.id, { onDelete: 'cascade' }),
+    variant: text('variant'),
+    repeat: integer('repeat'),
+  },
+  (t) => [index('runs_suite').on(t.suiteId)],
+)
 
 export const events = pgTable(
   'events',

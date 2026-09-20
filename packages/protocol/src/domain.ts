@@ -156,6 +156,8 @@ export type MockPacing = z.infer<typeof MockPacing>
 
 export const RunConfig = z.object({
   name: z.string().default('shift'),
+  /** Which orchestration engine drives the shift (see apps/server/src/orchestrators). */
+  orchestrator: z.string().default('stardust'),
   scenarioIds: z.array(z.string()).min(1),
   roles: RoleModels,
   staffing: Staffing.prefault({}),

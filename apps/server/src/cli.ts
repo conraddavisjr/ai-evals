@@ -4,8 +4,11 @@ import { createDb, createPgStore, runMigrations, seedCatalog } from '@cafe/db'
 import { SCENARIOS } from '@cafe/evals'
 import { isMockSpec, RunConfig, type RunConfigInput } from '@cafe/protocol'
 import { EventBus } from './event-bus.js'
-import { ShiftOrchestrator } from './orchestrator.js'
+import { orchestratorFor } from './orchestrators/index.js'
+import { RunManager } from './run-manager.js'
 import { getDataset, resolveScenarios } from './scenarios.js'
+import { suiteMetrics } from './suite-results.js'
+import { SuiteRunner } from './suite-runner.js'
 
 /**
  * Headless eval runner. Runs one or more shift configs back to back and prints a
@@ -15,7 +18,8 @@ import { getDataset, resolveScenarios } from './scenarios.js'
  *   pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe-ai/jev
  *   pnpm eval --scenarios latte-simple,prompt-injection --instant
  *   pnpm eval --dataset <datasetId>        (a saved golden dataset; ids may be mixed in --scenarios)
- *   flags: --no-judge --no-triage --no-review --max-usd 0.5
+ *   pnpm eval --suite runs/suite.example.json   (variants x repeats over one dataset, side by side)
+ *   flags: --no-judge --no-triage --no-review --max-usd 0.5 --orchestrator stardust
  */
 function parseArgs(argv: string[]) {
   const out: Record<string, string | boolean> = {}
@@ -52,6 +56,7 @@ function configsFromArgs(
   const str = (k: string, d: string) => (typeof args[k] === 'string' ? (args[k] as string) : d)
   const cfg: RunConfigInput = {
     name: str('name', 'cli'),
+    orchestrator: str('orchestrator', 'stardust'),
     scenarioIds:
       typeof args.scenarios === 'string'
         ? args.scenarios.split(',')
@@ -83,6 +88,12 @@ async function main() {
   await runMigrations(db)
   await seedCatalog(db)
   const store = createPgStore(db)
+
+  if (typeof args.suite === 'string') {
+    await runSuite(store, resolve(process.env.INIT_CWD ?? process.cwd(), args.suite))
+    await close()
+    return
+  }
 
   let datasetIds: string[] | null = null
   if (typeof args.dataset === 'string') {
@@ -126,7 +137,7 @@ async function main() {
         process.stdout.write(`  ! ${e.agentId} ${e.kind}: ${e.message}\n`)
     })
     const started = Date.now()
-    await new ShiftOrchestrator({ store, bus, config, scenarios }).run()
+    await orchestratorFor(config.orchestrator).create({ store, bus, config, scenarios }).run()
     const m = await store.metrics.get(run.id)
     if (!m) continue
     rows.push([
@@ -174,6 +185,79 @@ async function main() {
   for (const r of rows) console.log(line(r))
   console.log('\nReplay any run in the cafe UI from the Shift tab.')
   await close()
+}
+
+/** A suite from a JSON file (SuiteConfig): every variant over the same items, then the comparison. */
+async function runSuite(store: ReturnType<typeof createPgStore>, file: string) {
+  const input = JSON.parse(readFileSync(file, 'utf8')) as Parameters<SuiteRunner['start']>[0]
+  const runs = new RunManager(store, process.env.CAFE_ALLOW_LIVE_MODELS === 'true')
+  const suites = new SuiteRunner(store, runs)
+  const { suiteId } = await suites.start(input)
+  console.log(
+    `suite ${suiteId}: ${input.variants.length} variant(s), concurrency ${input.concurrency ?? 1}`,
+  )
+  const tick = setInterval(async () => {
+    const d = await suites.detail(suiteId)
+    if (d)
+      process.stdout.write(
+        `  ${d.progress.done}/${d.progress.total} done, ${d.progress.running} running\n`,
+      )
+  }, 2000)
+  await suites.whenDone(suiteId)
+  clearInterval(tick)
+  const detail = await suites.detail(suiteId)
+  if (!detail) return
+  const view = await suiteMetrics(store, detail)
+  const header = [
+    'variant',
+    'run',
+    'status',
+    'n',
+    'pass',
+    'refuse',
+    'scope',
+    'e2e p50',
+    'judge',
+    'review ok/concern/esc',
+    'cost',
+  ]
+  const rows = view.variants.map((v) => {
+    const m = v.result
+    return [
+      v.key,
+      v.runId?.slice(-8) ?? '–',
+      v.status,
+      m ? String(m.transactions) : '–',
+      pct(m?.taskSuccessRate),
+      pct(m?.refusalAccuracy),
+      m ? String(m.scopeViolations) : '–',
+      m ? ms(m.endToEnd.p50) : '–',
+      m?.judgeMeans ? pct(m.judgeMeans.correct) : '  –  ',
+      m?.reviewCounts
+        ? `${m.reviewCounts.ok}/${m.reviewCounts.concern}/${m.reviewCounts.escalate}`
+        : '–',
+      m ? `$${m.costUsd.toFixed(4)}` : '–',
+    ]
+  })
+  printTable(header, rows)
+  // item x variant: which golden items each variant passed
+  const grid = view.matrix.map((r) => [
+    r.title.slice(0, 32),
+    ...view.variants.map((v) => {
+      const c = r.cells[v.key]
+      return c ? `${c.taskSuccess ? '✓' : '✗'} ${c.outcome ?? '?'}` : '–'
+    }),
+  ])
+  console.log('')
+  printTable(['item', ...view.variants.map((v) => v.key)], grid)
+  console.log(`\nSuite ${detail.status}. Open any run in the cafe UI from the Shift tab.`)
+}
+
+function printTable(header: string[], rows: string[][]) {
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
+  const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i] ?? 0)).join('  ')
+  console.log(`\n${line(header)}\n${widths.map((w) => '-'.repeat(w)).join('  ')}`)
+  for (const r of rows) console.log(line(r))
 }
 
 main().catch((err) => {

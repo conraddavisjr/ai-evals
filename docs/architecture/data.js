@@ -411,7 +411,6 @@ export const ARCH = {
       x: 480,
       y: 600,
       w: 195,
-      h: 290,
       title: 'OpenTelemetry tracing',
       nick: 'the stopwatch',
       summary:
@@ -428,6 +427,24 @@ export const ARCH = {
         'packages/evals/src/telemetry.ts',
         'packages/protocol/src/telemetry.ts',
       ],
+    },
+    {
+      id: 'suiterunner',
+      seg: 'server',
+      x: 480,
+      y: 770,
+      w: 195,
+      title: 'SuiteRunner',
+      nick: 'the tasting flight',
+      summary:
+        'One experiment = variants x repeats runs over one golden dataset, concurrency at a time; results side by side.',
+      details: [
+        'Plans every RunConfig up front (base + per-variant roles/engine/staffing/chaos/budget) and validates them, so a bad variant is a 400 before a row exists.',
+        'A worker pool of `concurrency` calls RunManager.start and waits for each run; cancel stops the active runs and never starts the queued ones.',
+        'GET /api/suites/:id/metrics joins each run’s metrics into an item x variant matrix; /telemetry does the same with the span aggregates; a `suite` span parents every run span.',
+        'The CLI takes --suite file.json (see runs/suite.example.json).',
+      ],
+      files: ['apps/server/src/suite-runner.ts', 'apps/server/src/suite-results.ts'],
     },
     {
       id: 'eventbus',
@@ -451,15 +468,22 @@ export const ARCH = {
       seg: 'orch',
       x: 750,
       y: 600,
-      title: 'ShiftOrchestrator',
+      title: 'Orchestrator (stardust engine)',
       nick: 'the floor manager',
-      summary: 'Deterministic glue: arrivals, registers, rail, baristas, judge, metrics.',
+      summary:
+        'The built-in engine: arrivals, registers, rail, baristas; one entry in a registry so other engines (Mastra, LangChain) can drive a shift.',
       details: [
+        'RunConfig.orchestrator names an entry in orchestrators/index.ts; the contract (run(), cancel(), which events to emit) is in docs/ORCHESTRATORS.md.',
         'Customers arrive on a schedule; each visit acquires a free cashier FIFO.',
         'Closes out half-opened orders on refusal; fails what a crashed cashier left behind.',
+        'The post-visit pipeline (manager review, judge, visit metrics) is shared in orchestrators/visit-pipeline.ts, so every engine is evaluated the same way.',
         'At close: metrics roll-up, run.finished, status persisted.',
       ],
-      files: ['apps/server/src/orchestrator.ts'],
+      files: [
+        'apps/server/src/orchestrator.ts',
+        'apps/server/src/orchestrators/*.ts',
+        'docs/ORCHESTRATORS.md',
+      ],
     },
     {
       id: 'staff',
@@ -749,7 +773,7 @@ export const ARCH = {
       nick: 'the pantry list',
       summary: 'The only way anything touches persistence; Postgres today, others later.',
       details: [
-        'runs, events, menu, customers, inventory (per run), orders, payments, drinks, usage, judgements, reviews, incidents, metrics, spans, datasets.',
+        'runs, events, menu, customers, inventory (per run), orders, payments, drinks, usage, judgements, reviews, incidents, metrics, spans, datasets, suites.',
         'claimNext() uses FOR UPDATE SKIP LOCKED so several baristas never grab the same ticket.',
       ],
       files: ['packages/db/src/store.ts'],
@@ -862,6 +886,8 @@ export const ARCH = {
     { from: 'scene3d', to: 'overlay', label: 'anchors' },
     { from: 'layout', to: 'scene3d', label: 'tiles → world' },
     { from: 'routes', to: 'runmanager', label: 'start / cancel' },
+    { from: 'routes', to: 'suiterunner', label: 'POST /api/suites' },
+    { from: 'suiterunner', to: 'runmanager', label: 'start() per variant' },
     { from: 'runmanager', to: 'eventbus', label: 'one per run' },
     { from: 'runmanager', to: 'shift', label: 'run()' },
     { from: 'eventbus', to: 'sse', label: 'subscribe' },
