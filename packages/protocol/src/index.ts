@@ -1,4 +1,5 @@
 export * from './beats.js'
+export * from './datasets.js'
 export * from './domain.js'
 export * from './events.js'
 export * from './metrics.js'

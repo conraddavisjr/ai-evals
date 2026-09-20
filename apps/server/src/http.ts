@@ -1,13 +1,25 @@
 import type { CafeStore } from '@cafe/db'
 import { runTelemetry, SCENARIOS } from '@cafe/evals'
-import { createMcpServer, Gateway, ROLE_SCOPES } from '@cafe/mcp-gateway'
+import { ALL_TOOLS, createMcpServer, Gateway, ROLE_SCOPES } from '@cafe/mcp-gateway'
 import { PERSONAS } from '@cafe/models'
-import { type Role, RunConfig } from '@cafe/protocol'
+import {
+  BUILTIN_DATASET_ID,
+  DatasetInput,
+  DatasetPatch,
+  datasetItemId,
+  type Role,
+  RunConfig,
+  type Scenario,
+  ScenarioInput,
+  slugify,
+} from '@cafe/protocol'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
+import { z } from 'zod'
 import type { RunManager } from './run-manager.js'
+import { getDataset, listDatasets } from './scenarios.js'
 
 export interface HttpDeps {
   store: CafeStore
@@ -48,7 +60,12 @@ export function createApp(deps: HttpDeps) {
 
   app.get('/api/health', (c) => c.json({ ok: true, allowLive: deps.allowLive }))
 
-  app.get('/api/scenarios', (c) => c.json(SCENARIOS))
+  app.get('/api/scenarios', async (c) => {
+    const ds = c.req.query('dataset')
+    if (!ds) return c.json(SCENARIOS)
+    const d = await getDataset(store, ds)
+    return d ? c.json(d.items) : c.json({ error: 'dataset not found' }, 404)
+  })
 
   app.get('/api/models', (c) =>
     c.json({
@@ -78,6 +95,131 @@ export function createApp(deps: HttpDeps) {
     const rows = await store.runs.list(100)
     return c.json(rows.map((r) => ({ ...r, active: runs.isActive(r.id) })))
   })
+
+  /** Parse a JSON body with a zod schema; 400 with a readable message otherwise. */
+  const parseBody = async <T>(c: { req: { json(): Promise<unknown> } }, schema: z.ZodType<T>) => {
+    let raw: unknown
+    try {
+      raw = await c.req.json()
+    } catch {
+      return { error: 'Body must be JSON' } as const
+    }
+    const r = schema.safeParse(raw)
+    return r.success ? ({ data: r.data } as const) : ({ error: z.prettifyError(r.error) } as const)
+  }
+
+  // ---------- golden datasets ----------
+
+  /** Tool catalogue for the item editor's "expected tools" pickers and the MCP node. */
+  app.get('/api/tools', (c) =>
+    c.json({
+      tools: ALL_TOOLS.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
+      roleScopes: ROLE_SCOPES,
+    }),
+  )
+  app.get('/api/datasets', async (c) => c.json(await listDatasets(store)))
+  app.get('/api/datasets/:id', async (c) => {
+    const d = await getDataset(store, c.req.param('id'))
+    return d ? c.json(d) : c.json({ error: 'dataset not found' }, 404)
+  })
+  app.post('/api/datasets', async (c) => {
+    const p = await parseBody(c, DatasetInput)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    const now = Date.now()
+    const row = await store.datasets.create({
+      name: p.data.name,
+      description: p.data.description,
+      now,
+    })
+    const seed: Scenario[] = []
+    if (p.data.cloneFrom) {
+      const src = await getDataset(store, p.data.cloneFrom)
+      if (!src) return c.json({ error: `cloneFrom dataset ${p.data.cloneFrom} not found` }, 400)
+      seed.push(...src.items)
+    }
+    const used = new Set<string>()
+    const place = (slug: string) => {
+      let s = slug
+      for (let n = 2; used.has(s); n++) s = `${slug}-${n}`
+      used.add(s)
+      return s
+    }
+    for (const item of seed) {
+      const slug = place(item.id.replace(/^ds:[^:]+:/, ''))
+      await store.datasets.upsertItem(row.id, { ...item, id: datasetItemId(row.id, slug) }, now)
+    }
+    for (const input of p.data.items) {
+      const { slug: wanted, ...rest } = input
+      const slug = place(wanted ?? slugify(rest.title))
+      await store.datasets.upsertItem(row.id, { ...rest, id: datasetItemId(row.id, slug) }, now)
+    }
+    return c.json(await getDataset(store, row.id), 201)
+  })
+  app.patch('/api/datasets/:id', async (c) => {
+    const id = c.req.param('id')
+    if (id === BUILTIN_DATASET_ID)
+      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    const p = await parseBody(c, DatasetPatch)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    if (!(await store.datasets.get(id))) return c.json({ error: 'dataset not found' }, 404)
+    await store.datasets.update(id, { ...p.data, now: Date.now() })
+    return c.json(await getDataset(store, id))
+  })
+  app.delete('/api/datasets/:id', async (c) => {
+    const id = c.req.param('id')
+    if (id === BUILTIN_DATASET_ID)
+      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    await store.datasets.delete(id)
+    return c.json({ deleted: true })
+  })
+  app.post('/api/datasets/:id/items', async (c) => {
+    const id = c.req.param('id')
+    if (id === BUILTIN_DATASET_ID)
+      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (!(await store.datasets.get(id))) return c.json({ error: 'dataset not found' }, 404)
+    const p = await parseBody(c, ScenarioInput)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    const { slug: wanted, ...rest } = p.data
+    const existing = new Set((await store.datasets.items(id)).map((i) => i.id))
+    const base = wanted ?? slugify(rest.title)
+    let slug = base
+    for (let n = 2; existing.has(datasetItemId(id, slug)); n++) slug = `${base}-${n}`
+    const scenario: Scenario = { ...rest, id: datasetItemId(id, slug) }
+    await store.datasets.upsertItem(id, scenario, Date.now())
+    return c.json(scenario, 201)
+  })
+  app.put('/api/datasets/:id/items/:itemId', async (c) => {
+    const id = c.req.param('id')
+    const itemId = c.req.param('itemId')
+    if (id === BUILTIN_DATASET_ID)
+      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    const current = (await store.datasets.items(id)).find((i) => i.id === itemId)
+    if (!current) return c.json({ error: 'item not found' }, 404)
+    const p = await parseBody(c, ScenarioInput)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    const { slug: _slug, ...rest } = p.data
+    const scenario: Scenario = { ...rest, id: itemId }
+    await store.datasets.upsertItem(id, scenario, Date.now(), current.position)
+    return c.json(scenario)
+  })
+  app.delete('/api/datasets/:id/items/:itemId', async (c) => {
+    const id = c.req.param('id')
+    if (id === BUILTIN_DATASET_ID)
+      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    await store.datasets.deleteItem(id, c.req.param('itemId'))
+    return c.json({ deleted: true })
+  })
+  app.post('/api/datasets/:id/items/reorder', async (c) => {
+    const id = c.req.param('id')
+    if (id === BUILTIN_DATASET_ID)
+      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    const p = await parseBody(c, z.object({ ids: z.array(z.string()) }))
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    await store.datasets.reorder(id, p.data.ids, Date.now())
+    return c.json(await getDataset(store, id))
+  })
+
+  // ---------- runs ----------
 
   app.post('/api/runs', async (c) => {
     let body: unknown

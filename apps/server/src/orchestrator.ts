@@ -38,6 +38,8 @@ export interface OrchestratorDeps {
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
   /** OpenTelemetry parent for the run span (a suite span, when the run is part of one). */
   parentContext?: Context | Span | null | undefined
+  /** Resolved scenarios in config order (built-ins + dataset items); defaults to built-ins only. */
+  scenarios?: Scenario[] | undefined
 }
 
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
@@ -80,9 +82,11 @@ export class ShiftOrchestrator {
   private readonly parentContext: Context | Span | null
   private runSpan: Span | null = null
   private visitIndex = 0
+  private readonly scenarios: Scenario[]
 
   constructor(deps: OrchestratorDeps) {
     this.parentContext = deps.parentContext ?? null
+    this.scenarios = deps.scenarios ?? scenariosFor(deps.config.scenarioIds)
     this.store = deps.store
     this.bus = deps.bus
     this.runId = deps.bus.runId
@@ -127,7 +131,7 @@ export class ShiftOrchestrator {
   private overBudget = () => this.spentUsd >= this.config.budget.maxUsdPerRun
 
   async run(): Promise<void> {
-    const scenarios = scenariosFor(this.config.scenarioIds)
+    const scenarios = this.scenarios
     this.runSpan = startSpan(
       'run',
       `run ${this.config.name}`,

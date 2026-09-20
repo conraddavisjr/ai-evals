@@ -1,4 +1,4 @@
-import type { RunMetrics } from '@cafe/protocol'
+import { type RunMetrics, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
 import { type RunRow, useHarness } from '../harness/index.js'
@@ -177,7 +177,9 @@ export function MetricsDashboard({ runId, status }: { runId: string | null; stat
               <tbody>
                 {metrics.perTransaction.map((t) => (
                   <tr key={t.txId} className={t.taskSuccess ? '' : 'bad'}>
-                    <td title={t.taskSuccessReasons.join('; ')}>{t.scenarioId}</td>
+                    <td title={[t.scenarioId, ...t.taskSuccessReasons].join('; ')}>
+                      {shortScenarioId(t.scenarioId)}
+                    </td>
                     <td>{t.outcome}</td>
                     <td>{t.taskSuccess ? '✓' : '✗'}</td>
                     <td>
