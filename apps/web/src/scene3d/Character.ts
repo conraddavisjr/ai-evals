@@ -41,41 +41,57 @@ export class Character {
     const L = this.look
     this.body = new THREE.Group()
 
-    const torso = block(0.5, 0.55, 0.32, L.shirt, { radius: 0.12 })
-    torso.position.y = 0.55
+    // Blocks have centered geometry. Place their centers relative to the hips,
+    // and keep a small overlap at each joint so bevels cannot expose a gap.
+    const hipY = 0.55
+    const torsoHeight = 0.55
+    const torsoY = hipY + torsoHeight / 2 - 0.025
+    const shoulderY = hipY + torsoHeight - 0.1
+    const neckY = hipY + torsoHeight
+    const torso = block(0.5, torsoHeight, 0.32, L.shirt, { radius: 0.12 })
+    torso.name = 'torso'
+    torso.position.y = torsoY
     this.body.add(torso)
+    const neck = cylinder(0.1, 0.12, 0.18, L.skin, 10)
+    neck.name = 'neck'
+    neck.position.y = neckY
+    this.body.add(neck)
     if (L.apron) {
       const apron = block(0.42, 0.5, 0.06, L.apron, { radius: 0.05 })
-      apron.position.set(0, 0.5, 0.17)
+      apron.name = 'apron'
+      apron.position.set(0, torsoY - 0.02, 0.17)
       this.body.add(apron)
     }
     this.legL = block(0.18, 0.5, 0.2, L.pants, { radius: 0.05 })
     this.legR = block(0.18, 0.5, 0.2, L.pants, { radius: 0.05 })
-    this.legL.position.set(-0.13, 0, 0)
-    this.legR.position.set(0.13, 0, 0)
+    this.legL.name = 'left-leg'
+    this.legR.name = 'right-leg'
+    this.legL.position.set(-0.13, hipY, 0)
+    this.legR.position.set(0.13, hipY, 0)
     this.legL.geometry.translate(0, -0.25, 0)
     this.legR.geometry.translate(0, -0.25, 0)
-    this.legL.position.y = 0.55
-    this.legR.position.y = 0.55
     this.body.add(this.legL, this.legR)
     this.armL = block(0.14, 0.45, 0.16, L.shirt, { radius: 0.05 })
     this.armR = block(0.14, 0.45, 0.16, L.shirt, { radius: 0.05 })
+    this.armL.name = 'left-arm'
+    this.armR.name = 'right-arm'
     this.armL.geometry.translate(0, -0.2, 0)
     this.armR.geometry.translate(0, -0.2, 0)
-    this.armL.position.set(-0.33, 1.02, 0)
-    this.armR.position.set(0.33, 1.02, 0)
+    this.armL.position.set(-0.28, shoulderY, 0)
+    this.armR.position.set(0.28, shoulderY, 0)
     this.body.add(this.armL, this.armR)
     for (const [arm, side] of [
-      [this.armL, -1],
-      [this.armR, 1],
+      [this.armL, 'left'],
+      [this.armR, 'right'],
     ] as const) {
       const hand = sphere(0.09, L.skin, { segments: 8 })
+      hand.name = `${side}-hand`
       hand.position.set(0, -0.45, 0)
       arm.add(hand)
-      void side
     }
     this.head = sphere(0.3, L.skin, { segments: 14 })
-    this.head.position.y = 1.4
+    this.head.name = 'head'
+    this.head.position.y = neckY + 0.3
     const hair = sphere(0.31, L.hair, { segments: 12 })
     hair.scale.set(1, 0.75, 1)
     hair.position.y = 0.09
@@ -116,7 +132,8 @@ export class Character {
     }
     if (L.apron) {
       const pocket = block(0.2, 0.16, 0.04, L.shirt, { radius: 0.03 })
-      pocket.position.set(0.06, 0.52, 0.22)
+      pocket.name = 'apron-pocket'
+      pocket.position.set(0.06, torsoY - 0.06, 0.21)
       this.body.add(pocket)
     }
     // eyes
@@ -126,7 +143,7 @@ export class Character {
       this.head.add(eye)
     }
     this.body.add(this.head)
-    this.headAnchor.position.y = 1.9
+    this.headAnchor.position.y = this.head.position.y + 0.5
     this.body.add(this.headAnchor)
     this.body.scale.setScalar(1.15)
     this.root.add(this.body)

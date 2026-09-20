@@ -160,79 +160,83 @@ export function MetricsDashboard({ runId, status }: { runId: string | null; stat
           </table>
 
           <h4>Per visit</h4>
-          <table className="grid small">
-            <thead>
-              <tr>
-                <th>scenario</th>
-                <th>outcome</th>
-                <th>pass</th>
-                <th>tool P/R</th>
-                <th>errors</th>
-                <th>total</th>
-                <th>judge</th>
-                <th>cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metrics.perTransaction.map((t) => (
-                <tr key={t.txId} className={t.taskSuccess ? '' : 'bad'}>
-                  <td title={t.taskSuccessReasons.join('; ')}>{t.scenarioId}</td>
-                  <td>{t.outcome}</td>
-                  <td>{t.taskSuccess ? '✓' : '✗'}</td>
-                  <td>
-                    {pct(t.toolPrecision)}/{pct(t.toolRecall)}
-                  </td>
-                  <td>
-                    {t.errors}
-                    {t.scopeViolations ? ` (+${t.scopeViolations} scope)` : ''}
-                  </td>
-                  <td>{fmtMs(t.totalMs)}</td>
-                  <td>{t.judge ? pct(t.judge.correct.probability) : '–'}</td>
-                  <td>{fmtUsd(t.costUsd)}</td>
+          <div className="table-scroll">
+            <table className="grid small">
+              <thead>
+                <tr>
+                  <th>scenario</th>
+                  <th>outcome</th>
+                  <th>pass</th>
+                  <th>tool P/R</th>
+                  <th>errors</th>
+                  <th>total</th>
+                  <th>judge</th>
+                  <th>cost</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {metrics.perTransaction.map((t) => (
+                  <tr key={t.txId} className={t.taskSuccess ? '' : 'bad'}>
+                    <td title={t.taskSuccessReasons.join('; ')}>{t.scenarioId}</td>
+                    <td>{t.outcome}</td>
+                    <td>{t.taskSuccess ? '✓' : '✗'}</td>
+                    <td>
+                      {pct(t.toolPrecision)}/{pct(t.toolRecall)}
+                    </td>
+                    <td>
+                      {t.errors}
+                      {t.scopeViolations ? ` (+${t.scopeViolations} scope)` : ''}
+                    </td>
+                    <td>{fmtMs(t.totalMs)}</td>
+                    <td>{t.judge ? pct(t.judge.correct.probability) : '–'}</td>
+                    <td>{fmtUsd(t.costUsd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
       {compare.length > 1 && (
         <>
           <h4>Compare shifts</h4>
-          <table className="grid small">
-            <thead>
-              <tr>
-                <th>when</th>
-                <th>cashier / barista / manager / judge</th>
-                <th>n</th>
-                <th>pass</th>
-                <th>refusal</th>
-                <th>scope</th>
-                <th>e2e p50</th>
-                <th>judge</th>
-                <th>cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {compare.map(({ run, m }) => (
-                <tr key={run.id} className={run.id === runId ? 'current' : ''}>
-                  <td>{new Date(run.createdAt).toLocaleTimeString()}</td>
-                  <td className="mono">
-                    {(['cashier', 'barista', 'manager', 'judge'] as const)
-                      .map((r) => shortModel(run.config.roles[r]).replace(/^mock:/, ''))
-                      .join(' / ')}
-                  </td>
-                  <td>{m.transactions}</td>
-                  <td>{pct(m.taskSuccessRate)}</td>
-                  <td>{pct(m.refusalAccuracy)}</td>
-                  <td>{m.scopeViolations}</td>
-                  <td>{fmtMs(m.endToEnd.p50)}</td>
-                  <td>{m.judgeMeans ? pct(m.judgeMeans.correct) : '–'}</td>
-                  <td>{fmtUsd(m.costUsd)}</td>
+          <div className="table-scroll">
+            <table className="grid small">
+              <thead>
+                <tr>
+                  <th>when</th>
+                  <th>cashier / barista / manager / judge</th>
+                  <th>n</th>
+                  <th>pass</th>
+                  <th>refusal</th>
+                  <th>scope</th>
+                  <th>e2e p50</th>
+                  <th>judge</th>
+                  <th>cost</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {compare.map(({ run, m }) => (
+                  <tr key={run.id} className={run.id === runId ? 'current' : ''}>
+                    <td>{new Date(run.createdAt).toLocaleTimeString()}</td>
+                    <td className="mono">
+                      {(['cashier', 'barista', 'manager', 'judge'] as const)
+                        .map((r) => shortModel(run.config.roles[r]).replace(/^mock:/, ''))
+                        .join(' / ')}
+                    </td>
+                    <td>{m.transactions}</td>
+                    <td>{pct(m.taskSuccessRate)}</td>
+                    <td>{pct(m.refusalAccuracy)}</td>
+                    <td>{m.scopeViolations}</td>
+                    <td>{fmtMs(m.endToEnd.p50)}</td>
+                    <td>{m.judgeMeans ? pct(m.judgeMeans.correct) : '–'}</td>
+                    <td>{fmtUsd(m.costUsd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>
