@@ -62,6 +62,8 @@ export class EventBus {
       const hit = this.buffer.find(pred)
       if (hit) return Promise.resolve(hit)
     }
+    // A signal aborted before we subscribe would never fire: a cancelled run must not wait forever.
+    if (opts.signal?.aborted) return Promise.reject(new Error('aborted'))
     return new Promise((resolve, reject) => {
       const off = this.subscribe((e) => {
         if (pred(e)) {

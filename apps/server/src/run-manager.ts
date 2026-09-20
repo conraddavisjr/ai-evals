@@ -8,13 +8,14 @@ import {
 } from '@cafe/protocol'
 import { ulid } from 'ulid'
 import { EventBus } from './event-bus.js'
-import { type OrchestratorDeps, ShiftOrchestrator } from './orchestrator.js'
+import type { OrchestratorDeps } from './orchestrator.js'
+import { type Orchestrator, orchestratorFor } from './orchestrators/index.js'
 import { resolveScenarios } from './scenarios.js'
 import { flushTracing } from './telemetry/tracing.js'
 
 interface ActiveRun {
   bus: EventBus
-  orchestrator: ShiftOrchestrator
+  orchestrator: Orchestrator
   done: Promise<void>
 }
 
@@ -55,6 +56,7 @@ export class RunManager {
 
   validateConfig(input: RunConfigInput): RunConfig {
     const config = RunConfigSchema.parse(input)
+    orchestratorFor(config.orchestrator)
     const live = Object.entries(config.roles).filter(([, spec]) => !isMockSpec(spec))
     if (live.length > 0 && !this.allowLive) {
       throw new Error(
@@ -66,19 +68,28 @@ export class RunManager {
 
   async start(
     input: RunConfigInput,
-    opts: Pick<OrchestratorDeps, 'parentContext' | 'scenarios'> = {},
+    opts: Pick<OrchestratorDeps, 'parentContext' | 'scenarios' | 'suite'> & {
+      variant?: string
+      repeat?: number
+    } = {},
   ): Promise<{ runId: string }> {
     const config = this.validateConfig(input)
     // Resolve before the row exists so an unknown scenario id is a clean 400, not a failed run.
     const scenarios = opts.scenarios ?? (await resolveScenarios(this.store, config.scenarioIds))
-    const run = await this.store.runs.create(config, { owner: this.ownerId })
+    const run = await this.store.runs.create(config, {
+      owner: this.ownerId,
+      suiteId: opts.suite?.suiteId ?? null,
+      variant: opts.variant ?? null,
+      repeat: opts.repeat ?? null,
+    })
     const bus = new EventBus(run.id, this.store)
-    const orchestrator = new ShiftOrchestrator({
+    const orchestrator = orchestratorFor(config.orchestrator).create({
       store: this.store,
       bus,
       config,
       scenarios,
       parentContext: opts.parentContext,
+      suite: opts.suite,
     })
     const done = orchestrator
       .run()
