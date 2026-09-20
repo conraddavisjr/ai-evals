@@ -3,6 +3,7 @@ import type { ModelRegistry } from '@cafe/models'
 import type { CafeEvent, JudgeAnswers, Order, Scenario } from '@cafe/protocol'
 import { experimental_evaluate as evaluate } from 'ai'
 import { groundTruth, type Outcome } from './ground-truth.js'
+import { roleLabels, staffActivity } from './staff-trail.js'
 
 /**
  * The judge never sees which model played which role. Agent ids become role
@@ -50,49 +51,15 @@ export function buildBlindedTranscript(
   const claimed = evs.find((e) => e.type === 'order.claimed')
 
   // Group agent activity by agent, then relabel as role (cashier, barista, cashier#2 ...)
-  const byAgent = new Map<
-    string,
-    {
-      role: string
-      steps: BlindedTranscript['staff'][number]['steps']
-      said: string[]
-      errors: string[]
-      scopeViolations: number
-      calls: Map<string, { tool: string; args: Record<string, unknown> }>
-    }
-  >()
-  for (const e of evs) {
-    if (!('agentId' in e) || typeof e.agentId !== 'string' || e.role === 'customer') continue
-    let a = byAgent.get(e.agentId)
-    if (!a) {
-      a = { role: e.role, steps: [], said: [], errors: [], scopeViolations: 0, calls: new Map() }
-      byAgent.set(e.agentId, a)
-    }
-    if (e.type === 'agent.tool_called') a.calls.set(e.callId, { tool: e.tool, args: e.args })
-    else if (e.type === 'agent.tool_returned') {
-      const c = a.calls.get(e.callId)
-      a.steps.push({
-        tool: e.tool,
-        args: c?.args ?? {},
-        ok: e.ok,
-        error: e.ok ? undefined : e.error,
-      })
-    } else if (e.type === 'agent.spoke') a.said.push(e.text)
-    else if (e.type === 'agent.error') a.errors.push(`${e.kind}: ${e.message}`)
-    else if (e.type === 'agent.scope_violation') a.scopeViolations += 1
-  }
-  const roleCounts = new Map<string, number>()
-  const staff = [...byAgent.values()].map((a) => {
-    const n = (roleCounts.get(a.role) ?? 0) + 1
-    roleCounts.set(a.role, n)
-    return {
-      role: n === 1 ? a.role : `${a.role}#${n}`,
-      steps: a.steps,
-      said: a.said,
-      errors: a.errors,
-      scopeViolations: a.scopeViolations,
-    }
-  })
+  const activity = staffActivity(evs)
+  const labels = roleLabels(activity)
+  const staff = activity.map((a, i) => ({
+    role: labels[i] ?? a.role,
+    steps: a.steps.map((st) => ({ tool: st.tool, args: st.args, ok: st.ok, error: st.error })),
+    said: a.said,
+    errors: a.errors,
+    scopeViolations: a.scopeViolations,
+  }))
 
   return {
     scenario: {

@@ -2,6 +2,8 @@ import type {
   JudgeAnswers,
   OrderItem,
   OrderStatus,
+  ReviewIssue,
+  ReviewVerdict,
   RunConfig,
   RunMetrics,
   RunStatus,
@@ -187,6 +189,24 @@ export const modelUsage = pgTable(
   },
   (t) => [index('model_usage_run').on(t.runId)],
 )
+
+/** The manager's post-visit review: the orchestration layer's own read of its sub-agents. */
+export const reviews = pgTable('reviews', {
+  id: text('id').primaryKey(),
+  runId: text('run_id')
+    .notNull()
+    .references(() => runs.id, { onDelete: 'cascade' }),
+  txId: text('tx_id').notNull(),
+  orderId: text('order_id'),
+  reviewerSpec: text('reviewer_spec').notNull(),
+  verdict: text('verdict').$type<ReviewVerdict>().notNull(),
+  issues: jsonb('issues').$type<ReviewIssue[]>().notNull(),
+  summary: text('summary').notNull(),
+  /** Exactly what the manager saw, for audit. */
+  brief: text('brief').notNull(),
+  latencyMs: integer('latency_ms').notNull(),
+  at: ms('at').notNull(),
+})
 
 export const judgements = pgTable('judgements', {
   id: text('id').primaryKey(),

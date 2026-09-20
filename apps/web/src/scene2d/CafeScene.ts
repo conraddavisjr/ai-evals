@@ -394,6 +394,18 @@ export class CafeScene extends Phaser.Scene {
         if (cashier) cashier.say(`✋ ${e.reason.slice(0, 60)}`, 'shout', this.ttl(3000))
         break
       }
+      case 'manager.reviewed': {
+        const manager = [...this.actors.values()].find((a) => a.id.startsWith('manager'))
+        if (manager)
+          manager.say(
+            e.verdict === 'ok'
+              ? '✓ reviewed: ok'
+              : `${e.verdict === 'escalate' ? '⚠' : '!'} ${e.summary}`,
+            e.verdict === 'escalate' ? 'shout' : 'thought',
+            this.ttl(2600),
+          )
+        break
+      }
       case 'judge.verdict': {
         const judge = [...this.actors.values()].find((a) => a.id.startsWith('judge'))
         const ok = e.answers.correct.probability >= 0.5

@@ -36,6 +36,18 @@ export const JudgeAnswers = z.object({
 })
 export type JudgeAnswers = z.infer<typeof JudgeAnswers>
 
+/** The manager's post-visit verdict on how the staff handled a customer. */
+export const ReviewVerdict = z.enum(['ok', 'concern', 'escalate'])
+export type ReviewVerdict = z.infer<typeof ReviewVerdict>
+export const ReviewIssue = z.enum([
+  'wrong_result',
+  'wasted_tool_calls',
+  'scope_breach',
+  'unrecovered_error',
+  'poor_tone',
+])
+export type ReviewIssue = z.infer<typeof ReviewIssue>
+
 export const CafeEvent = z.discriminatedUnion('type', [
   // run lifecycle
   Base.extend({ type: z.literal('run.started'), config: RunConfig }),
@@ -177,6 +189,17 @@ export const CafeEvent = z.discriminatedUnion('type', [
     inputTokens: z.number().int(),
     outputTokens: z.number().int(),
     costUsd: z.number(),
+    latencyMs: z.number(),
+  }),
+  /** The manager read the whole visit (tool trail, transcript, errors) and reasoned about it. */
+  Base.extend({
+    type: z.literal('manager.reviewed'),
+    customerId: z.string(),
+    orderId: z.string().nullable(),
+    modelSpec: ModelSpec,
+    verdict: ReviewVerdict,
+    issues: z.array(ReviewIssue),
+    summary: z.string(),
     latencyMs: z.number(),
   }),
   Base.extend({

@@ -25,6 +25,7 @@ export function initialDraft(models: ModelsInfo, scenarios: Scenario[]): RunDraf
     arrivalGapMs: d.arrivalGapMs,
     judgeEnabled: true,
     triageEnabled: true,
+    reviewEnabled: true,
     mockPacing: { ...d.mockPacing },
     pacing: 'realistic',
   }

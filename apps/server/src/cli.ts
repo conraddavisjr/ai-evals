@@ -13,6 +13,7 @@ import { ShiftOrchestrator } from './orchestrator.js'
  *   pnpm eval --config runs/compare-models.json
  *   pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe-ai/jev
  *   pnpm eval --scenarios latte-simple,prompt-injection --instant
+ *   flags: --no-judge --no-triage --no-review --max-usd 0.5
  */
 function parseArgs(argv: string[]) {
   const out: Record<string, string | boolean> = {}
@@ -58,6 +59,7 @@ function configsFromArgs(args: Record<string, string | boolean>): RunConfigInput
     arrivalGapMs: Number(str('gap', '0')),
     judgeEnabled: args['no-judge'] !== true,
     triageEnabled: args['no-triage'] !== true,
+    reviewEnabled: args['no-review'] !== true,
   }
   if (args.instant) cfg.mockPacing = INSTANT
   if (typeof args['max-usd'] === 'string') cfg.budget = { maxUsdPerRun: Number(args['max-usd']) }
@@ -121,6 +123,9 @@ async function main() {
       ms(m.endToEnd.p50),
       ms(m.endToEnd.p95),
       m.judgeMeans ? pct(m.judgeMeans.correct) : '  –  ',
+      m.reviewCounts
+        ? `${m.reviewCounts.ok}/${m.reviewCounts.concern}/${m.reviewCounts.escalate}`
+        : '–',
       `$${m.costUsd.toFixed(4)}`,
       ms(Date.now() - started),
     ])
@@ -141,6 +146,7 @@ async function main() {
     'e2e p50',
     'e2e p95',
     'judge',
+    'review ok/concern/esc',
     'cost',
     'wall',
   ]

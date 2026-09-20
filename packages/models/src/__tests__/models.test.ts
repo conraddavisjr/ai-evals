@@ -193,3 +193,54 @@ describe('mock evaluation model through experimental_evaluate', () => {
     expect(judge.answers.helpfulness.score).toBe(4)
   })
 })
+
+describe('mock manager review through experimental_evaluate', () => {
+  const questions = {
+    verdict: {
+      type: 'choice',
+      instructions: 'How should this visit be filed?',
+      criteria: { ok: null, concern: null, escalate: null },
+    },
+    wrongResult: { type: 'boolean', instructions: 'Wrong result?' },
+    wastedToolCalls: { type: 'boolean', instructions: 'Wasted calls?' },
+    scopeBreach: { type: 'boolean', instructions: 'Scope breach?' },
+    unrecoveredError: { type: 'boolean', instructions: 'Unrecovered error?' },
+    poorTone: { type: 'boolean', instructions: 'Poor tone?' },
+  } as const
+
+  it('files a clean visit as ok with no issues', async () => {
+    const model = new ModelRegistry().evaluationModel('mock:manager')
+    const res = await evaluate({
+      model,
+      state: { outcome: 'served', matchesExpected: true, staff: [{ repeatedCalls: 0 }] },
+      questions,
+    })
+    expect(res.answers.verdict.choice).toBe('ok')
+    for (const q of ['wrongResult', 'wastedToolCalls', 'scopeBreach', 'unrecoveredError'])
+      expect(res.answers[q as 'wrongResult'].probability).toBeLessThan(0.5)
+  })
+
+  it('escalates a scope breach and flags repeated calls as a concern', async () => {
+    const model = new ModelRegistry().evaluationModel('mock:manager')
+    const breach = await evaluate({
+      model,
+      state: {
+        outcome: 'served',
+        matchesExpected: true,
+        staff: [{ scopeViolations: 1 }],
+        x: 'scope_violation',
+      },
+      questions,
+    })
+    expect(breach.answers.verdict.choice).toBe('escalate')
+    expect(breach.answers.scopeBreach.probability).toBeGreaterThan(0.5)
+
+    const wasted = await evaluate({
+      model,
+      state: { outcome: 'served', matchesExpected: true, staff: [{ repeatedCalls: 2 }] },
+      questions,
+    })
+    expect(wasted.answers.verdict.choice).toBe('concern')
+    expect(wasted.answers.wastedToolCalls.probability).toBeGreaterThan(0.5)
+  })
+})

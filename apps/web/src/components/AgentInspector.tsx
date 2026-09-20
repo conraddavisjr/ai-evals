@@ -82,6 +82,7 @@ export function AgentInspector({
   if (customer) {
     const order = customer.orderId ? s.orders[customer.orderId] : undefined
     const verdict = s.verdicts[customer.txId]
+    const review = s.reviews[customer.txId]
     return (
       <div className="inspector">
         <h3>
@@ -116,6 +117,16 @@ export function AgentInspector({
                   ))}
                 </ul>
                 {order.failReason && <div className="bad">{order.failReason}</div>}
+              </dd>
+            </>
+          )}
+          {review && (
+            <>
+              <dt>manager review</dt>
+              <dd>
+                <span className={`pill review-${review.verdict}`}>{review.verdict}</span>{' '}
+                <code>{shortModel(review.modelSpec)}</code>
+                <div>{review.summary}</div>
               </dd>
             </>
           )}
