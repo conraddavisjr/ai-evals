@@ -84,6 +84,8 @@ pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe
 `runs/frontier-vs-jev.example.json` is the Claude vs GPT vs Gemini staff comparison with Jev as judge, plus a same-family judge as a control.
 Every CLI run is persisted and appears under **Recent shifts** in the UI for replay.
 
+The **Experiment** page (hamburger menu) is the workbench for comparisons: click a layer of the pipeline diagram to pick its model or edit the golden dataset, add variants (each loops the whole dataset with its own model assignment, engine, or chaos), run the suite, and read the results side by side: pass rates, refusals, tool precision, latency, judge and review verdicts, cost, an item × variant grid, and the telemetry charts per variant.
+
 Swapping the orchestration engine (Mastra, LangChain, ...): `docs/ORCHESTRATORS.md`. Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
 
 ## The 3D scene

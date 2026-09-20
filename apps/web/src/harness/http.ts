@@ -63,6 +63,14 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
     reorderItems: (id, ids) =>
       json(`/api/datasets/${id}/items/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
     tools: () => json('/api/tools'),
+    orchestrators: () => json('/api/orchestrators'),
+    suites: () => json('/api/suites'),
+    suite: (id) => json(`/api/suites/${id}`),
+    startSuite: (config) => json('/api/suites', { method: 'POST', body: JSON.stringify(config) }),
+    cancelSuite: (id) => json(`/api/suites/${id}/cancel`, { method: 'POST' }),
+    deleteSuite: (id) => json(`/api/suites/${id}`, { method: 'DELETE' }),
+    suiteMetrics: (id) => json(`/api/suites/${id}/metrics`),
+    suiteTelemetry: (id) => json(`/api/suites/${id}/telemetry`),
     spans: (id, q = {}) => {
       const p = new URLSearchParams()
       if (q.txId) p.set('txId', q.txId)
