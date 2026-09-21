@@ -2,6 +2,7 @@ import { type RunMetrics, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
 import { type RunRow, useHarness } from '../harness/index.js'
+import { roleLabel, roleShort } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { useDrawer } from './Drawer.js'
 import { JUDGE_EXPLAIN, JudgeDrill } from './drilldowns.js'
@@ -208,7 +209,7 @@ function MetricsSummary({
             <tbody>
               {(['cashier', 'barista', 'manager', 'judge'] as const).map((r) => (
                 <tr key={r}>
-                  <td>{r}</td>
+                  <td>{roleLabel(r)}</td>
                   <td>{metrics.latencyByRole[r].count}</td>
                   <td>{fmtMs(metrics.latencyByRole[r].p50)}</td>
                   <td>{fmtMs(metrics.latencyByRole[r].p95)}</td>
@@ -296,7 +297,11 @@ function MetricsSummary({
               <thead>
                 <tr>
                   <th>when</th>
-                  <th>cashier / barista / manager / judge</th>
+                  <th>
+                    {(['cashier', 'barista', 'manager', 'judge'] as const)
+                      .map(roleShort)
+                      .join(' / ')}
+                  </th>
                   <th>n</th>
                   <th>pass</th>
                   <th>refusal</th>

@@ -1,6 +1,7 @@
 export * from './chaos.js'
 export * from './gateway.js'
 export * from './mcp-server.js'
+export * from './remote.js'
 export * from './roles.js'
 export { BARISTA_TOOLS, resolveIngredients } from './tools/barista.js'
 export { CASHIER_TOOLS } from './tools/cashier.js'

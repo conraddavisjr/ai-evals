@@ -1,4 +1,5 @@
 import { fmtMs } from '../format.js'
+import { roleCount } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 export function QueuePanel({ player }: { player: TimelinePlayer }) {
@@ -54,8 +55,8 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
       </ul>
       {baristas.length > 0 && (
         <p className="muted small">
-          {baristas.length} barista{baristas.length > 1 ? 's' : ''} ·{' '}
-          {Object.values(s.agents).filter((a) => a.role === 'cashier').length} cashiers
+          {roleCount('barista', baristas.length)} ·{' '}
+          {roleCount('cashier', Object.values(s.agents).filter((a) => a.role === 'cashier').length)}
         </p>
       )}
     </div>

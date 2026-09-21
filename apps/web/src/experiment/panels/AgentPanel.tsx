@@ -1,17 +1,18 @@
 import type { ModelsInfo } from '../../harness/index.js'
+import { roleLabel } from '../../lib/nomenclature.js'
 import type { SuiteDraft } from '../suite-draft.js'
 import { ModelPicker } from './ModelPicker.js'
 
 const COPY = {
   cashier: {
-    title: 'Cashier',
+    title: roleLabel('cashier'),
     blurb:
       'Takes the order: menu lookup, customer lookup, create and fill the order, charge, put the ticket on the rail. Refuses what it should.',
     countKey: 'cashiers' as const,
     max: 2,
   },
   barista: {
-    title: 'Barista',
+    title: roleLabel('barista'),
     blurb:
       'Pulls the next ticket, fetches the recipe, consumes inventory, logs the drink, marks it ready and calls the customer.',
     countKey: 'baristas' as const,
@@ -35,6 +36,9 @@ export function AgentPanel({
   return (
     <div className="node-panel">
       <h3>{c.title}</h3>
+      <p className="muted small">
+        A sub-agent: its own model, its own tool slice. The cafe calls it a {role}.
+      </p>
       <p className="muted small">{c.blurb}</p>
       <ModelPicker
         label="model"

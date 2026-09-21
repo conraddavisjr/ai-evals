@@ -1,4 +1,5 @@
-import { AGENT_GLYPH_SVG, agentLabel, isAgentId } from '../lib/agent-glyph.js'
+import { AGENT_GLYPH_SVG } from '../lib/agent-glyph.js'
+import { isAgentId } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { SceneCallbacks, SceneHandle } from '../views/types.js'
 import { BAND_TITLE, BANDS, type Badge, buildTrace, fmt, type TraceModel } from './model.js'
@@ -168,8 +169,8 @@ export function createGame(
     e.type = 'button'
     e.dataset.seq = String(b.seq)
     const mark = el('span', `mark ${b.mark ?? 'none'}`, markGlyph(b.mark))
-    const head = el('span', 'head', isAgentId(b.head) ? agentLabel(b.head) : b.head)
-    if (isAgentId(b.head)) {
+    const head = el('span', 'head', b.head)
+    if (b.layer === 'agent' && isAgentId(b.agentId)) {
       const g = el('span', 'agent-glyph')
       g.innerHTML = AGENT_GLYPH_SVG
       head.prepend(g)

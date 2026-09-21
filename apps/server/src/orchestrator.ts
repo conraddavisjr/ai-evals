@@ -1,7 +1,7 @@
 import { runAgent } from '@cafe/agents'
 import type { CafeStore } from '@cafe/db'
 import { type Outcome, runMetrics, scenariosFor, TRIAGE_QUESTIONS } from '@cafe/evals'
-import { createChaos, Gateway } from '@cafe/mcp-gateway'
+import { connectRemoteTools, createChaos, Gateway, type RemoteToolSource } from '@cafe/mcp-gateway'
 import { ModelRegistry } from '@cafe/models'
 import type { RunConfig, Scenario, TransactionMetrics } from '@cafe/protocol'
 import {
@@ -13,6 +13,7 @@ import {
   startSpan,
   withSpan,
 } from '@cafe/telemetry'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { experimental_evaluate as evaluate } from 'ai'
 import { ulid } from 'ulid'
 import type { EventBus } from './event-bus.js'
@@ -66,7 +67,8 @@ export class ShiftOrchestrator {
   private readonly now: () => number
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>
   private readonly abort = new AbortController()
-  private readonly gateway: Gateway
+  private gateway: Gateway
+  private remoteTools: RemoteToolSource | null = null
   private readonly staff: StaffPool
   private readonly chaos
   private spentUsd = 0
@@ -127,8 +129,39 @@ export class ShiftOrchestrator {
 
   private overBudget = () => this.spentUsd >= this.config.budget.maxUsdPerRun
 
+  /**
+   * Swap the gateway's catalogue for a remote MCP server's before the shift
+   * starts. Each remote tool's scope is `tool:<name>`; a role holds the scopes of
+   * the tools the config lists for it.
+   */
+  private async attachToolSource(): Promise<void> {
+    const src = this.config.tools
+    if (src.kind !== 'mcp') return
+    const transport = new StreamableHTTPClientTransport(new URL(src.url), {
+      requestInit: { headers: src.headers },
+    })
+    this.remoteTools = await connectRemoteTools({
+      // the SDK's transport classes declare optional fields without `undefined`; the cast bridges exactOptionalPropertyTypes
+      transport: transport as unknown as Parameters<typeof connectRemoteTools>[0]['transport'],
+      scopeOf: (name) => `tool:${name}`,
+    })
+    const roleScopes = Object.fromEntries(
+      Object.entries(src.roleTools).map(([role, tools]) => [role, tools.map((t) => `tool:${t}`)]),
+    )
+    this.gateway = new Gateway({
+      store: this.store,
+      emit: this.bus.emit,
+      chaos: this.config.chaos,
+      now: this.now,
+      services: { staffing: this.staff },
+      tools: this.remoteTools.tools,
+      roleScopes,
+    })
+  }
+
   async run(): Promise<void> {
     const scenarios = this.scenarios
+    await this.attachToolSource()
     this.runSpan = startSpan(
       'run',
       `run ${this.config.name}`,
@@ -205,6 +238,7 @@ export class ShiftOrchestrator {
     } finally {
       this.customersDone = true
       this.runSpan.end()
+      await this.remoteTools?.close().catch(() => {})
       await this.bus.flush()
     }
   }
@@ -255,9 +289,19 @@ export class ShiftOrchestrator {
     emit({ type: 'customer.moved', txId, customerId, to: 'waiting' })
 
     if (this.config.triageEnabled)
-      await this.triage(txId, customerId, utterance).catch((err) =>
-        console.warn('[triage] skipped:', err instanceof Error ? err.message : err),
-      )
+      await this.triage(txId, customerId, utterance).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err)
+        console.warn('[triage] skipped:', message)
+        emit({
+          type: 'agent.error',
+          txId,
+          agentId: 'manager-1',
+          role: 'manager',
+          kind: 'model',
+          message: `triage: ${message}`,
+          retryable: false,
+        })
+      })
 
     const cashier = await this.staff.acquire('cashier')
     let cashierResult: Awaited<ReturnType<typeof runAgent>> | null = null

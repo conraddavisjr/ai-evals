@@ -1,4 +1,5 @@
 import type { CafeEvent } from '@cafe/protocol'
+import { agentLabel, roleShort } from '../lib/nomenclature.js'
 
 /** Which layer of the pipeline a badge belongs to; decides its colour. */
 export type Layer = 'input' | 'orch' | 'agent' | 'tool' | 'eval' | 'error'
@@ -157,7 +158,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'agent',
-          head: e.agentId,
+          head: agentLabel(e.agentId),
           text: `step ${e.step}`,
           agentId: e.agentId,
         }
@@ -179,7 +180,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'agent',
-          head: e.agentId,
+          head: agentLabel(e.agentId),
           text: `“${clip(e.text)}”`,
           agentId: e.agentId,
           indent: true,
@@ -230,7 +231,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'error',
           head: 'scope',
-          text: `${e.agentId} tried ${e.tool}`,
+          text: `${agentLabel(e.agentId)} tried ${e.tool}`,
           mark: 'bad',
           agentId: e.agentId,
           indent: true,
@@ -243,7 +244,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'error',
           head: e.kind,
-          text: `${e.agentId}: ${clip(e.message)}`,
+          text: `${agentLabel(e.agentId)}: ${clip(e.message)}`,
           detail: e.message,
           mark: 'bad',
           agentId: e.agentId,
@@ -256,7 +257,9 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'orch',
           head: 'order',
-          text: e.items.length ? itemsText(e.items, e.totalCents) : `opened by ${e.cashierId}`,
+          text: e.items.length
+            ? itemsText(e.items, e.totalCents)
+            : `opened by ${agentLabel(e.cashierId)}`,
           agentId: e.cashierId,
         })
         break
@@ -287,7 +290,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'orch',
           head: 'rail',
-          text: `claimed by ${e.baristaId} after ${fmt(e.waitedMs)}`,
+          text: `claimed by ${agentLabel(e.baristaId)} after ${fmt(e.waitedMs)}`,
           agentId: e.baristaId,
         })
         break
@@ -309,7 +312,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'orch',
           head: 'rail',
-          text: `ready (${e.baristaId})`,
+          text: `ready (${agentLabel(e.baristaId)})`,
           agentId: e.baristaId,
         })
         break
@@ -424,8 +427,8 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: 0,
           layer: 'agent',
-          head: e.agentId,
-          text: `${e.name} · ${e.role} · ${e.modelSpec}`,
+          head: agentLabel(e.agentId),
+          text: `${e.name} · ${roleShort(e.role)} · ${e.modelSpec}`,
           agentId: e.agentId,
         })
       } else if (e.type === 'run.started') {
@@ -493,7 +496,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: 0,
           layer: 'tool',
           head: e.tool,
-          text: `${agentId} (no visit)`,
+          text: `${agentLabel(agentId)} (no visit)`,
           agentId,
           indent: true,
         })

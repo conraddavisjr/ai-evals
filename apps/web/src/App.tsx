@@ -2,6 +2,7 @@ import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArchitectureView } from './architecture/ArchitectureView.js'
 import { AgentInspector } from './components/AgentInspector.js'
+import { DrawerOutlet, useDrawer } from './components/Drawer.js'
 import { EventLog } from './components/EventLog.js'
 import { MetricsDashboard } from './components/MetricsDashboard.js'
 import { PlaybackControls } from './components/PlaybackControls.js'
@@ -61,6 +62,7 @@ export function App() {
   /** Select without leaving the current tab (the Log's nested pane). */
   const onPeek = useCallback((id: string | null) => setSelectedId(id), [])
   const panel = usePanelWidth()
+  const drawer = useDrawer()
 
   useEffect(() => {
     Promise.all([api.models(), api.scenarios()])
@@ -348,7 +350,10 @@ export function App() {
         </div>
       </header>
 
-      <main style={{ '--panel-width': `${panel.width}px` } as React.CSSProperties}>
+      <main
+        className={drawer.current ? 'with-drawer' : ''}
+        style={{ '--panel-width': `${panel.width}px` } as React.CSSProperties}
+      >
         {page === 'architecture' && <ArchitectureView />}
         {page === 'experiment' && models && suiteDraft && (
           <ExperimentPage
@@ -367,30 +372,11 @@ export function App() {
         <section className="stage">
           <div className="canvas-wrap">
             <div className="scene-host" ref={mountRef} />
-            {!runId && (
-              <div className="stage-empty">
-                <div className="stage-empty-card">
-                  <h2>The cafe is closed</h2>
-                  <p className="muted">
-                    Nothing is playing yet. Start a shift with the current settings, or pick a
-                    recent one in the Shift tab to replay it.
-                  </p>
-                  <button
-                    type="button"
-                    className="primary big"
-                    disabled={!draft || draft.scenarioIds.length === 0}
-                    onClick={() => void openCafe().catch(() => {})}
-                  >
-                    Open the cafe
-                  </button>
-                  {startError && <div className="error-box">{startError}</div>}
-                </div>
-              </div>
-            )}
           </div>
           <PlaybackControls player={player} />
         </section>
 
+        <DrawerOutlet />
         <aside className="panel">
           <button
             type="button"

@@ -2,6 +2,7 @@ import type { DatasetSummary, SuiteDetail } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { shortModel } from '../format.js'
 import { type ModelsInfo, type OrchestratorInfo, useExperimentApi } from '../harness/index.js'
+import { describeSpec } from '../lib/nomenclature.js'
 import { PipelineDiagram } from './PipelineDiagram.js'
 import { AgentPanel } from './panels/AgentPanel.js'
 import { DatasetPanel } from './panels/DatasetPanel.js'
@@ -77,7 +78,7 @@ export function ExperimentPage({
       dataset: dataset
         ? `${dataset.name} · ${itemCount} item${itemCount === 1 ? '' : 's'}`
         : 'Pick a dataset',
-      orchestrator: `${orchestrators.find((o) => o.id === draft.orchestrator)?.label ?? draft.orchestrator} · manager ${shortModel(draft.roles.manager)}`,
+      orchestrator: `${orchestrators.find((o) => o.id === draft.orchestrator)?.label ?? draft.orchestrator} · ${shortModel(draft.roles.manager)} (${describeSpec(draft.roles.manager)})`,
       cashier: `${shortModel(draft.roles.cashier)} · ${draft.staffing.cashiers} on shift`,
       barista: `${shortModel(draft.roles.barista)} · ${draft.staffing.baristas} on shift`,
       mcp:

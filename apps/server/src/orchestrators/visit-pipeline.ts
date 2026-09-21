@@ -116,7 +116,17 @@ async function review_(
     })
     return { verdict: res.verdict, issues: res.issues }
   } catch (err) {
-    console.warn('[review] failed:', err instanceof Error ? err.message : err)
+    const message = err instanceof Error ? err.message : String(err)
+    console.warn('[review] failed:', message)
+    deps.bus.emit({
+      type: 'agent.error',
+      txId,
+      agentId: 'manager-1',
+      role: 'manager',
+      kind: 'model',
+      message: `review: ${message}`,
+      retryable: false,
+    })
     return null
   }
 }
@@ -169,7 +179,17 @@ async function judge_(
         now: deps.now(),
       })
     } catch (err) {
-      console.warn('[judge] failed:', err instanceof Error ? err.message : err)
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn('[judge] failed:', message)
+      deps.bus.emit({
+        type: 'agent.error',
+        txId,
+        agentId: 'judge-1',
+        role: 'judge',
+        kind: 'model',
+        message: `judge: ${message}`,
+        retryable: false,
+      })
     }
   }
   return transactionMetrics({

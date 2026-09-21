@@ -154,8 +154,28 @@ export const MockPacing = z.object({
 })
 export type MockPacing = z.infer<typeof MockPacing>
 
+/**
+ * Where the agents' tools come from. `builtin` is the cafe's own catalogue,
+ * in-process against Postgres. `mcp` points the gateway at any MCP server: its
+ * tools are listed at run start and every call is forwarded over the wire, so
+ * the same harness evaluates agents against a different system and its database.
+ */
+export const ToolSource = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('builtin') }),
+  z.object({
+    kind: z.literal('mcp'),
+    /** Streamable HTTP endpoint of the MCP server. */
+    url: z.string().url(),
+    headers: z.record(z.string(), z.string()).default({}),
+    /** Which remote tools each role may call. Tools not listed for a role are out of its scope. */
+    roleTools: z.record(z.string(), z.array(z.string())),
+  }),
+])
+export type ToolSource = z.infer<typeof ToolSource>
+
 export const RunConfig = z.object({
   name: z.string().default('shift'),
+  tools: ToolSource.default({ kind: 'builtin' }),
   /** Which orchestration engine drives the shift (see apps/server/src/orchestrators). */
   orchestrator: z.string().default('stardust'),
   scenarioIds: z.array(z.string()).min(1),

@@ -61,7 +61,7 @@ Set them per role in the UI or in a run config file.
 Every run is traced with OpenTelemetry (suite > run > visit > agent turn > step > tool call, plus triage, review and judge).
 Spans land in the `spans` table as they close, so `GET /api/runs/:id/telemetry` (tool latency, reasoning latency per step, cost trajectory, errors by layer, per-visit items) works while a run is live; set `OTEL_EXPORTER_OTLP_ENDPOINT` to also export to Jaeger, Grafana or any OTLP collector.
 
-Live models are refused until `CAFE_ALLOW_LIVE_MODELS=true` is set in `.env`, and every run has a hard USD cap (`budget.maxUsdPerRun`), a step cap, and a token cap per agent.
+The server and the CLI load `.env` themselves, so `pnpm dev` and `pnpm eval` see your keys without sourcing the file. Live models are refused until `CAFE_ALLOW_LIVE_MODELS=true` is set in `.env`, and every run has a hard USD cap (`budget.maxUsdPerRun`), a step cap, and a token cap per agent.
 
 ### Where Jev fits
 
@@ -88,7 +88,7 @@ Three ways to watch a shift, switchable in the header: **Village** (painterly 3D
 
 The **Experiment** page (hamburger menu) is the workbench for comparisons: click a layer of the pipeline diagram to pick its model or edit the golden dataset, add variants (each loops the whole dataset with its own model assignment, engine, or chaos), run the suite, and read the results side by side: pass rates, refusals, tool precision, latency, judge and review verdicts, cost, an item × variant grid, and the telemetry charts per variant.
 
-Swapping the orchestration engine (Mastra, LangChain, ...): `docs/ORCHESTRATORS.md`. Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
+Swapping the orchestration engine (Mastra, LangChain, ...): `docs/ORCHESTRATORS.md`. Pointing the agents at a different MCP server and its database: `docs/TOOL-SOURCES.md`. Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
 
 ## The 3D scene
 

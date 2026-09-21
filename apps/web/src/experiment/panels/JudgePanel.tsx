@@ -21,7 +21,7 @@ export function JudgePanel({
         Comparing judges is the point of a suite: put a different judge in each variant.
       </p>
       <ModelPicker
-        label="judge"
+        label="judge model"
         value={draft.roles.judge}
         onChange={(v) => onChange({ ...draft, roles: { ...draft.roles, judge: v } })}
         models={models}

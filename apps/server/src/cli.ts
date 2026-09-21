@@ -1,4 +1,8 @@
 import { readFileSync } from 'node:fs'
+import { loadEnv } from './env.js'
+
+loadEnv()
+
 import { resolve } from 'node:path'
 import { createDb, createPgStore, runMigrations, seedCatalog } from '@cafe/db'
 import { SCENARIOS } from '@cafe/evals'

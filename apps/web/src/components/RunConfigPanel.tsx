@@ -2,6 +2,7 @@ import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fmtMs, fmtUsd, shortModel } from '../format.js'
 import { type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
+import { describeSpec, roleCount, roleLabel } from '../lib/nomenclature.js'
 import { estimateRunUsd, ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
 
 export interface RunConfigPanelProps {
@@ -92,8 +93,8 @@ export function RunConfigPanel({
           est. {fmtUsd(estimate)} {anyLive ? '' : '(all mock)'}
         </div>
         <div className="muted small">
-          {n} customer{n === 1 ? '' : 's'} · {draft.staffing?.cashiers ?? 2} cashiers ·{' '}
-          {draft.staffing?.baristas ?? 1} barista{(draft.staffing?.baristas ?? 1) === 1 ? '' : 's'}
+          {n} customer{n === 1 ? '' : 's'} · {roleCount('cashier', draft.staffing?.cashiers ?? 2)} ·{' '}
+          {roleCount('barista', draft.staffing?.baristas ?? 1)}
         </div>
         {anyLive && !models.allowLive && (
           <div className="bad small">
@@ -113,17 +114,20 @@ export function RunConfigPanel({
       {startError && <div className="error-box">{startError}</div>}
 
       <section>
-        <h3>Staff models</h3>
+        <h3>Agent models</h3>
         {ROLES.map((role) => (
-          <label key={role} className="row">
-            <span className="cap">{role}</span>
-            <input
-              list="model-specs"
-              value={draft.roles[role]}
-              onChange={(e) => setRole(role, e.target.value)}
-              spellCheck={false}
-            />
-          </label>
+          <div key={role} className="model-row">
+            <label className="row">
+              <span className="cap">{roleLabel(role)}</span>
+              <input
+                list="model-specs"
+                value={draft.roles[role]}
+                onChange={(e) => setRole(role, e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+            <div className="muted small spec-desc">{describeSpec(draft.roles[role])}</div>
+          </div>
         ))}
         <datalist id="model-specs">
           {allSpecs.map((s) => (
@@ -139,7 +143,8 @@ export function RunConfigPanel({
             .filter(([, v]) => v)
             .map(([k]) => k)
             .join(', ') || 'none'}
-          . Judge & manager can be <code>gateway:typesafe-ai/jev</code>; staff need a chat model.
+          . The judge and the orchestrator can be <code>gateway:typesafe-ai/jev</code>; agents 1 and
+          2 need a chat model with tool use.
         </p>
       </section>
 
@@ -208,7 +213,7 @@ export function RunConfigPanel({
       <section>
         <h3>Shift</h3>
         <label className="row">
-          <span>cashiers</span>
+          <span>{roleLabel('cashier')}</span>
           <input
             type="number"
             min={1}
@@ -218,7 +223,7 @@ export function RunConfigPanel({
               patch({ staffing: { ...draft.staffing, cashiers: Number(e.target.value) } })
             }
           />
-          <span>baristas</span>
+          <span>{roleLabel('barista')}</span>
           <input
             type="number"
             min={1}
@@ -248,7 +253,7 @@ export function RunConfigPanel({
             onChange={(e) => patch({ pacing: e.target.value as RunDraft['pacing'] })}
           >
             <option value="realistic">realistic (0.8–2.5s per model step)</option>
-            <option value="hang">realistic + barista hangs on order #2</option>
+            <option value="hang">realistic + agent 2 (barista) hangs on order #2</option>
             <option value="instant">instant (tests)</option>
           </select>
         </label>
@@ -258,7 +263,7 @@ export function RunConfigPanel({
             checked={draft.triageEnabled ?? true}
             onChange={(e) => patch({ triageEnabled: e.target.checked })}
           />{' '}
-          door triage by the manager
+          door triage by the orchestrator (manager)
         </label>
         <label className="check">
           <input
@@ -266,7 +271,7 @@ export function RunConfigPanel({
             checked={draft.reviewEnabled ?? true}
             onChange={(e) => patch({ reviewEnabled: e.target.checked })}
           />{' '}
-          manager reviews every visit
+          orchestrator (manager) reviews every visit
         </label>
         <label className="check">
           <input
@@ -345,8 +350,8 @@ export function RunConfigPanel({
                 }
               >
                 <option value="cashier,barista,manager">everyone</option>
-                <option value="barista">baristas only</option>
-                <option value="cashier">cashiers only</option>
+                <option value="barista">agent 2 (baristas) only</option>
+                <option value="cashier">agent 1 (cashiers) only</option>
               </select>
             </label>
             <label className="row">

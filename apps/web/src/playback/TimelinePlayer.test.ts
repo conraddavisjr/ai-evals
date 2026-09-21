@@ -18,6 +18,7 @@ const recorded = () =>
         config: {
           name: 'x',
           orchestrator: 'stardust',
+          tools: { kind: 'builtin' },
           scenarioIds: ['a'],
           roles: {
             cashier: 'mock:cashier',

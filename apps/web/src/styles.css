@@ -854,6 +854,10 @@ body.resizing-panel {
   padding: 10px 12px;
   box-shadow: var(--edge);
 }
+.run-config .spec-desc {
+  margin: -2px 0 6px 118px;
+  font-size: 11px;
+}
 .run-config .row {
   display: flex;
   align-items: center;
@@ -1341,9 +1345,15 @@ table.grid tr.current td {
 }
 
 @media (max-width: 900px) {
-  main {
+  main,
+  main.with-drawer {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+  }
+  .drawer {
+    border-left: none;
+    border-top: 1px solid var(--line-2);
+    max-height: 50vh;
   }
   .panel-resizer {
     display: none;
@@ -1594,18 +1604,17 @@ button:focus-visible {
 }
 
 /* ---------- drill-down drawer ---------- */
+/* An extra grid column between the stage and the side panel; the panel keeps its scroll. */
+main.with-drawer {
+  grid-template-columns: minmax(0, 1fr) var(--drawer-width, min(440px, 34vw)) var(--panel-width);
+}
 .drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(520px, 92vw);
-  z-index: 20;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #14303b, #0d2029);
   border-left: 1px solid var(--line-2);
-  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
   animation: drawer-in 160ms ease-out;
 }
 @keyframes drawer-in {

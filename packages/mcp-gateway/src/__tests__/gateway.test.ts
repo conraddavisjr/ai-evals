@@ -5,6 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { Gateway } from '../gateway.js'
 import { createMcpServer } from '../mcp-server.js'
+import { connectRemoteTools } from '../remote.js'
 import { resolveIngredients } from '../tools/barista.js'
 
 const { db, close } = createDb()
@@ -254,6 +255,57 @@ describe('MCP transport', () => {
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(JSON.parse(text)[0].id).toBe('mocha')
     await client.close()
+    await server.close()
+  })
+})
+
+describe('remote MCP tool source', () => {
+  it('drives a gateway whose catalogue comes from another MCP server, with real calls over the wire', async () => {
+    // The "remote" system: this cafe's own cashier slice, served over MCP. Any MCP server would do.
+    const upstream = gw()
+    const upstreamCap = upstream.capability({ agentId: 'up', role: 'cashier', runId, txId: 'tx-r' })
+    const server = createMcpServer(upstream, upstreamCap)
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair()
+    await server.connect(serverT)
+
+    const remote = await connectRemoteTools({ transport: clientT, scopeOf: (n) => `tool:${n}` })
+    expect(remote.tools.map((t) => t.name)).toContain('menu.lookup')
+    expect(remote.tools.find((t) => t.name === 'menu.lookup')?.inputJsonSchema).toMatchObject({
+      type: 'object',
+    })
+
+    // The gateway under test knows nothing about the cafe's tools: only what the remote listed.
+    const seen: CafeEventInput[] = []
+    const g = new Gateway({
+      store,
+      emit: (e) => seen.push(e),
+      tools: remote.tools,
+      roleScopes: { cashier: ['tool:menu.lookup', 'tool:orders.create'] },
+    })
+    const cap = g.capability({ agentId: 'cashier-r', role: 'cashier', runId, txId: 'tx-r' })
+    expect(
+      g
+        .toolsFor(cap)
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual(['menu.lookup', 'orders.create'])
+
+    const ok = await g.call(cap, 'menu.lookup', { query: 'mocha' })
+    expect(ok.ok).toBe(true)
+    expect((ok as { result: Array<{ id: string }> }).result[0]?.id).toBe('mocha')
+    expect(ok.latencyMs).toBeGreaterThanOrEqual(0)
+    // scope is enforced locally before anything crosses the wire
+    const scoped = await g.call(cap, 'payments.charge', { orderId: 'x', method: 'card' })
+    expect(scoped.ok).toBe(false)
+    expect((scoped as { code: string }).code).toBe('scope')
+    expect(seen.some((e) => e.type === 'agent.scope_violation')).toBe(true)
+    // a remote failure comes back as a domain error, not a crash
+    const bad = await g.call(cap, 'orders.create', { customerId: 'nobody', customerName: '' })
+    expect(bad.ok).toBe(false)
+    expect((bad as { code: string }).code).toBe('domain')
+    expect(seen.filter((e) => e.type === 'agent.tool_called').length).toBe(3)
+
+    await remote.close()
     await server.close()
   })
 })

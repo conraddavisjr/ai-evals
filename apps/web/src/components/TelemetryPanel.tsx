@@ -12,6 +12,7 @@ import {
 } from '../charts/index.js'
 import { fmtMs, fmtUsd } from '../format.js'
 import { type ExperimentClient, useExperimentApi } from '../harness/index.js'
+import { roleLabel, roleShort } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { useDrawer } from './Drawer.js'
 import { LatencyDrill } from './drilldowns.js'
@@ -113,7 +114,7 @@ export function TelemetryCharts({
     if (!st || !api || !runId) return
     const { role, stepIndex } = st
     drawer.open({
-      title: `${role} · step ${stepIndex} · model latency`,
+      title: `${roleLabel(role)} · step ${stepIndex} · model latency`,
       subtitle: `${st.count} steps`,
       body: (
         <LatencyDrill
@@ -170,14 +171,14 @@ export function TelemetryCharts({
           <>
             <Legend
               items={ROLE_ORDER.filter((r) => data.steps.some((s) => s.role === r)).map((r) => ({
-                label: r,
+                label: roleLabel(r),
                 color: roleColor(r),
               }))}
             />
             <DotStrip
               onPick={canDrill ? (_g, i) => drillStep(i) : undefined}
               groups={data.steps.map((s) => ({
-                label: `${s.role} · step ${s.stepIndex}`,
+                label: `${roleShort(s.role)} · step ${s.stepIndex}`,
                 samples: s.samples,
                 p50: s.p50,
                 p95: s.p95,
@@ -221,13 +222,16 @@ export function TelemetryCharts({
             />
             {roles.length > 0 && anyCost && (
               <>
-                <Legend items={roles.map((r) => ({ label: r, color: roleColor(r) }))} />
+                <Legend items={roles.map((r) => ({ label: roleLabel(r), color: roleColor(r) }))} />
                 <BarChart
                   data={data.costTrajectory.map((c) => ({
                     label: `#${c.visitIndex + 1} ${shortScenarioId(c.scenarioId)}`,
                     values: roles.map((r) => c.byRole[r] ?? 0),
                   }))}
-                  series={roles.map((r) => ({ name: r, color: ROLE_COLOR[r] ?? SERIES.water }))}
+                  series={roles.map((r) => ({
+                    name: roleShort(r),
+                    color: ROLE_COLOR[r] ?? SERIES.water,
+                  }))}
                   format={fmtUsd}
                   rowHeight={18}
                 />

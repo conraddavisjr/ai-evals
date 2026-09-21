@@ -44,6 +44,12 @@ export interface ToolDef<In extends z.ZodObject<any> = z.ZodObject<any>, Out = u
   scope: string
   description: string
   input: In
+  /**
+   * The tool's own JSON Schema, when it came from a remote MCP server. Advertised
+   * to the model instead of `input` (which is then a permissive passthrough), so the
+   * model sees the real parameters and the remote server does the validation.
+   */
+  inputJsonSchema?: Record<string, unknown> | undefined
   handler: (args: z.infer<In>, ctx: ToolContext) => Promise<Out>
 }
 
@@ -61,4 +67,8 @@ export interface GatewayOptions {
   services?: GatewayServices
   /** Sleep implementation, injectable so tests can run instantly. */
   sleep?: (ms: number) => Promise<void>
+  /** The tool catalogue. Defaults to the cafe's built-in tools; a remote MCP server's tools plug in here. */
+  tools?: ToolDef[] | undefined
+  /** Which scopes each role holds. Defaults to the cafe's ROLE_SCOPES; remote catalogues bring their own. */
+  roleScopes?: Partial<Record<Role, readonly string[]>> | undefined
 }

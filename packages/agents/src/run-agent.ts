@@ -16,6 +16,7 @@ import {
 } from '@cafe/telemetry'
 import {
   generateText,
+  jsonSchema,
   type ModelMessage,
   NoSuchToolError,
   stepCountIs,
@@ -177,7 +178,8 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
   for (const def of gateway.toolsFor(cap)) {
     tools[def.name] = tool({
       description: def.description,
-      inputSchema: def.input,
+      // a remote MCP tool advertises its own JSON Schema; built-ins their zod schema
+      inputSchema: def.inputJsonSchema ? jsonSchema(def.inputJsonSchema) : def.input,
       execute: (args: unknown) => callGateway(def.name, args),
     })
   }

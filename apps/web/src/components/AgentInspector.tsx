@@ -2,6 +2,7 @@ import { shortScenarioId } from '@cafe/protocol'
 import { useState } from 'react'
 import { fmtCents, fmtMs, fmtUsd, shortModel } from '../format.js'
 import { AgentGlyph } from '../lib/AgentGlyph.js'
+import { roleLabel } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 export function AgentInspector({
@@ -26,7 +27,7 @@ export function AgentInspector({
         <h3>
           <AgentGlyph className="big" /> {agent.name}{' '}
           <span className="muted">
-            {agent.role} · sub-agent <code>{agent.agentId}</code>
+            {roleLabel(agent.role)} · <code>{agent.agentId}</code>
           </span>
         </h3>
         <dl>
@@ -128,7 +129,7 @@ export function AgentInspector({
           )}
           {review && (
             <>
-              <dt>manager review</dt>
+              <dt>orchestrator review</dt>
               <dd>
                 <span className={`pill review-${review.verdict}`}>{review.verdict}</span>{' '}
                 <code>{shortModel(review.modelSpec)}</code>

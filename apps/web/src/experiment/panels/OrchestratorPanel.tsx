@@ -2,7 +2,7 @@ import type { ModelsInfo, OrchestratorInfo } from '../../harness/index.js'
 import type { SuiteDraft } from '../suite-draft.js'
 import { ModelPicker } from './ModelPicker.js'
 
-/** The orchestration layer: which engine runs the shift, and the manager model that triages and reviews. */
+/** The orchestration layer: which engine runs the shift, and the orchestrator model (the cafe's manager) that triages and reviews. */
 export function OrchestratorPanel({
   draft,
   onChange,
@@ -19,8 +19,9 @@ export function OrchestratorPanel({
     <div className="node-panel">
       <h3>Orchestration</h3>
       <p className="muted small">
-        The engine schedules customers, hands them to staff and closes each visit. The manager model
-        triages at the door and reviews every visit before the judge.
+        The engine is code: it schedules customers, hands them to the agents and closes each visit.
+        The orchestrator model (the cafe's manager) is the LLM side of it: it triages at the door
+        and reviews every visit before the judge.
       </p>
       <label className="row">
         <span className="cap">engine</span>
@@ -37,7 +38,7 @@ export function OrchestratorPanel({
       </label>
       {current && <p className="muted small">{current.description}</p>}
       <ModelPicker
-        label="manager"
+        label="orchestrator model (manager)"
         value={draft.roles.manager}
         onChange={(v) => onChange({ ...draft, roles: { ...draft.roles, manager: v } })}
         models={models}

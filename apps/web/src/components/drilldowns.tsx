@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct } from '../format.js'
 import type { ExperimentClient } from '../harness/index.js'
 import { AgentGlyph } from '../lib/AgentGlyph.js'
+import { agentLabel, roleShort } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 /** Seek the stage to an event and hold there; every drill-down's "jump" does this. */
@@ -124,7 +125,7 @@ export function LatencyDrill({
                     </td>
                     <td>
                       {s.agentId && <AgentGlyph />}
-                      {s.agentId ?? s.role ?? '–'}
+                      {s.agentId ? agentLabel(s.agentId) : s.role ? roleShort(s.role) : '–'}
                       {kind === 'step' ? ` · step ${String(s.attributes['cafe.step'] ?? '')}` : ''}
                     </td>
                     <td
