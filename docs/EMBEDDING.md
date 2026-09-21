@@ -29,6 +29,11 @@ It is deliberately short; the code comments on the two interfaces carry the deta
 `apps/web/src/playback/TimelinePlayer.ts` and `apps/web/src/state/cafe-state.ts` are the shared core and must travel with the stage unchanged; they are what make live, replay, step and the director's cut show the same thing.
 The playback help text (`apps/web/src/playback/mode-docs.ts`) lives next to the player for the same reason: the stage documents itself wherever it lands.
 
+## The experiment client
+
+`ExperimentClient` (same file) is the optional second seam: telemetry, golden datasets, orchestrator listing and suites.
+`useExperimentApi()` returns null when the provided client does not implement it, and the Experiment page and Telemetry view say so instead of breaking; a harness that only emits events still gets the stage.
+
 ## Ways to start a shift today
 
 - The **Open the cafe** button (header, the empty stage, or the top of the Shift tab) POSTs the drafted config through the harness client.

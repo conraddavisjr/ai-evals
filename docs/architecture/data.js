@@ -140,6 +140,7 @@ export const ARCH = {
         'Playback controls carry their own help: two sentences per mode, expandable to the long form (playback/mode-docs.ts).',
         'The Log opens a nested inspector pane beside the trace instead of switching tabs; the side panel is resizable up to half the viewport (components/usePanelWidth.ts).',
         'Metrics has a Telemetry view: hand-rolled SVG charts (charts/) over the span aggregate: tool latency and reasoning latency per step as dot strips, cumulative cost, errors by layer and kind, one row per visit. Polls while the run is live.',
+        'The Experiment page (experiment/) is a clickable pipeline diagram (the architecture engine in select mode) whose nodes open that layer’s controls: dataset editor, engine + manager, staff models, chaos, judge. Variants beside it each loop the dataset; results show per-variant metrics, an item x variant grid and overlaid telemetry.',
         'Visits tab renders one waterfall per customer with beat percentages.',
         'Inspector shows an agent’s model, latency, usage, tool trail and last words; clicking a red “!” lands here.',
         'Metrics tab reads /api/runs/:id/metrics and compares recent shifts.',
@@ -151,6 +152,7 @@ export const ARCH = {
         'apps/web/src/playback/mode-docs.ts',
         'apps/web/src/components/TelemetryPanel.tsx',
         'apps/web/src/charts/*.tsx',
+        'apps/web/src/experiment/*.tsx',
       ],
     },
     {

@@ -230,6 +230,12 @@
   border-color: var(--accent);
   box-shadow: var(--card-shadow-open);
 }
+.archv .node.selected .card {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--accent-soft, rgba(255, 210, 122, 0.35)),
+    var(--card-shadow, none);
+}
 .archv .node.linked .card {
   border-color: var(--accent-soft);
 }

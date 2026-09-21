@@ -705,7 +705,8 @@ export function createPgStore(db: Db): CafeStore {
           description: s.datasets.description,
           createdAt: s.datasets.createdAt,
           updatedAt: s.datasets.updatedAt,
-          itemCount: sql<number>`(select count(*)::int from ${s.datasetItems} where ${s.datasetItems.datasetId} = ${s.datasets.id})`,
+          // fully qualified on purpose: an unqualified outer column inside the subquery would bind to dataset_items
+          itemCount: sql<number>`(select count(*)::int from dataset_items di where di.dataset_id = datasets.id)`,
         })
         .from(s.datasets)
         .orderBy(sql`${s.datasets.updatedAt} desc`)

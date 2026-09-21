@@ -10,8 +10,10 @@ import { RunConfigPanel } from './components/RunConfigPanel.js'
 import { initialDraft, type RunDraft, toRunConfig } from './components/run-draft.js'
 import { TransactionList } from './components/TransactionList.js'
 import { usePanelWidth } from './components/usePanelWidth.js'
+import { ExperimentPage } from './experiment/ExperimentPage.js'
+import { initialSuiteDraft, type SuiteDraft } from './experiment/suite-draft.js'
 import { fmtUsd } from './format.js'
-import { type ModelsInfo, type RunRow, useHarness } from './harness/index.js'
+import { type ModelsInfo, type RunRow, useExperimentApi, useHarness } from './harness/index.js'
 import { TimelinePlayer } from './playback/TimelinePlayer.js'
 import { usePlayer } from './playback/usePlayer.js'
 import { DEFAULT_VIEW_ID, findView, SCENE_VIEWS, type SceneHandle } from './views/index.js'
@@ -39,7 +41,9 @@ export function App() {
   const [isLive, setIsLive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('run')
-  const [page, setPage] = useState<'cafe' | 'architecture'>('cafe')
+  const [page, setPage] = useState<'cafe' | 'experiment' | 'architecture'>('cafe')
+  const [suiteDraft, setSuiteDraft] = useState<SuiteDraft | null>(null)
+  const experiment = useExperimentApi()
   const [sceneId, setSceneId] = useState<string>(() => {
     try {
       return localStorage.getItem(VIEW_KEY) ?? DEFAULT_VIEW_ID
@@ -64,13 +68,17 @@ export function App() {
         setModels(m)
         setScenarios(s)
         setDraft(initialDraft(m, s))
+        experiment
+          ?.datasets()
+          .then((ds) => setSuiteDraft(initialSuiteDraft(m, ds)))
+          .catch(() => setSuiteDraft(initialSuiteDraft(m, [])))
       })
       .catch((e) =>
         setBootError(
           `Cannot reach the server: ${e instanceof Error ? e.message : e}. Is \`pnpm dev\` running?`,
         ),
       )
-  }, [api])
+  }, [api, experiment])
 
   // Mount the chosen view; switching tears the old one down and the new one snaps to player.state.
   useEffect(() => {
@@ -256,6 +264,16 @@ export function App() {
               </button>
               <button
                 type="button"
+                className={page === 'experiment' ? 'on' : ''}
+                onClick={() => {
+                  setPage('experiment')
+                  setMenuOpen(false)
+                }}
+              >
+                Experiment
+              </button>
+              <button
+                type="button"
                 className={page === 'architecture' ? 'on' : ''}
                 onClick={() => {
                   setPage('architecture')
@@ -332,6 +350,20 @@ export function App() {
 
       <main style={{ '--panel-width': `${panel.width}px` } as React.CSSProperties}>
         {page === 'architecture' && <ArchitectureView />}
+        {page === 'experiment' && models && suiteDraft && (
+          <ExperimentPage
+            models={models}
+            draft={suiteDraft}
+            onDraftChange={setSuiteDraft}
+            onOpenRun={(id) => {
+              void api
+                .run(id)
+                .then((run) => loadRun(run))
+                .then(() => setPage('cafe'))
+                .catch(() => {})
+            }}
+          />
+        )}
         <section className="stage">
           <div className="canvas-wrap">
             <div className="scene-host" ref={mountRef} />

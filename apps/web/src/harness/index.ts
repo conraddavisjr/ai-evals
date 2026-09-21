@@ -4,7 +4,10 @@ export type {
   ExperimentClient,
   HarnessClient,
   ModelsInfo,
+  OrchestratorInfo,
   RunRow,
   StreamHandlers,
+  SuiteMetricsView,
+  SuiteTelemetryView,
   ToolInfo,
 } from './types.js'

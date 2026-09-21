@@ -169,5 +169,12 @@ describe('golden datasets', () => {
     createdDatasets.push(cloned.id)
     expect(cloned.items.length).toBe(list[0]?.itemCount)
     expect(cloned.items[0]?.id).toBe(`ds:${cloned.id}:latte-simple`)
+    // the list's item counts come from a correlated subquery; make sure it counts the right rows
+    const after = (await (await app.request('/api/datasets')).json()) as Array<{
+      id: string
+      itemCount: number
+    }>
+    expect(after.find((d) => d.id === cloned.id)?.itemCount).toBe(cloned.items.length)
+    expect(after.find((d) => d.id === ds.id)?.itemCount).toBe(2)
   })
 })
