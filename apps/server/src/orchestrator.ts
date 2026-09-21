@@ -1,16 +1,8 @@
 import { runAgent } from '@cafe/agents'
 import type { CafeStore } from '@cafe/db'
-import {
-  judgeTransaction,
-  type Outcome,
-  reviewTransaction,
-  runMetrics,
-  scenariosFor,
-  TRIAGE_QUESTIONS,
-  transactionMetrics,
-} from '@cafe/evals'
+import { type Outcome, runMetrics, scenariosFor, TRIAGE_QUESTIONS } from '@cafe/evals'
 import { createChaos, Gateway } from '@cafe/mcp-gateway'
-import { costUsd, ModelRegistry } from '@cafe/models'
+import { ModelRegistry } from '@cafe/models'
 import type { RunConfig, Scenario, TransactionMetrics } from '@cafe/protocol'
 import {
   ATTR,
@@ -24,6 +16,7 @@ import {
 import { experimental_evaluate as evaluate } from 'ai'
 import { ulid } from 'ulid'
 import type { EventBus } from './event-bus.js'
+import { closeVisit, recordUsage } from './orchestrators/visit-pipeline.js'
 import { type StaffMember, StaffPool } from './staff.js'
 
 const MAX_ORDER_ATTEMPTS = 3
@@ -40,6 +33,8 @@ export interface OrchestratorDeps {
   parentContext?: Context | Span | null | undefined
   /** Resolved scenarios in config order (built-ins + dataset items); defaults to built-ins only. */
   scenarios?: Scenario[] | undefined
+  /** When the run is one variant of a suite: tags the run span so spans can be grouped per variant. */
+  suite?: { suiteId: string; variant: string } | undefined
 }
 
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
@@ -83,10 +78,12 @@ export class ShiftOrchestrator {
   private runSpan: Span | null = null
   private visitIndex = 0
   private readonly scenarios: Scenario[]
+  private readonly suite: { suiteId: string; variant: string } | null
 
   constructor(deps: OrchestratorDeps) {
     this.parentContext = deps.parentContext ?? null
     this.scenarios = deps.scenarios ?? scenariosFor(deps.config.scenarioIds)
+    this.suite = deps.suite ?? null
     this.store = deps.store
     this.bus = deps.bus
     this.runId = deps.bus.runId
@@ -137,6 +134,9 @@ export class ShiftOrchestrator {
       `run ${this.config.name}`,
       {
         [ATTR.RUN_ID]: this.runId,
+        ...(this.suite
+          ? { [ATTR.SUITE_ID]: this.suite.suiteId, [ATTR.VARIANT]: this.suite.variant }
+          : {}),
         'cafe.scenarios': scenarios.length,
         'cafe.roles.cashier': this.config.roles.cashier,
         'cafe.roles.barista': this.config.roles.barista,
@@ -326,15 +326,31 @@ export class ShiftOrchestrator {
     visitSpan.setAttribute(ATTR.OUTCOME, outcome)
 
     order = await this.store.orders.byTx(this.runId, txId)
-    const review = await this.review(txId, customerId, scenario, order, outcome, visitSpan)
-    await this.judge(txId, scenario, order, outcome, review, visitSpan)
-    const mine = this.txMetrics.at(-1)
-    if (mine?.txId === txId) {
-      visitSpan.setAttributes({
-        [ATTR.COST_USD]: mine.costUsd,
-        'cafe.task_success': mine.taskSuccess,
-        'cafe.errors': mine.errors,
-      })
+    const mine = await closeVisit(this.pipeline, {
+      txId,
+      customerId,
+      scenario,
+      order,
+      outcome,
+      parent: visitSpan,
+    })
+    this.txMetrics.push(mine)
+    visitSpan.setAttributes({
+      [ATTR.COST_USD]: mine.costUsd,
+      'cafe.task_success': mine.taskSuccess,
+      'cafe.errors': mine.errors,
+    })
+  }
+
+  /** The shared post-visit pipeline (review, judge, metrics), bound to this run. */
+  private get pipeline() {
+    return {
+      store: this.store,
+      bus: this.bus,
+      config: this.config,
+      registry: this.registry,
+      now: this.now,
+      overBudget: this.overBudget,
     }
   }
 
@@ -374,7 +390,7 @@ export class ShiftOrchestrator {
     })
     const inTok = res.usage.inputTokens ?? 0
     const outTok = res.usage.outputTokens ?? 0
-    this.recordUsage({
+    recordUsage(this.pipeline, {
       txId,
       agentId: 'manager-1',
       role: 'manager',
@@ -384,157 +400,6 @@ export class ShiftOrchestrator {
       outputTokens: outTok,
       latencyMs,
     })
-  }
-
-  /** Emit a model.usage event and persist the matching row (triage, review and judge share this). */
-  private recordUsage(u: {
-    txId: string
-    agentId: string
-    role: 'manager' | 'judge'
-    modelSpec: string
-    step: number
-    inputTokens: number
-    outputTokens: number
-    latencyMs: number
-  }): void {
-    const cost = costUsd(u.modelSpec, u.inputTokens, u.outputTokens)
-    this.bus.emit({ type: 'model.usage', ...u, costUsd: cost })
-    void this.store.usage
-      .record({ runId: this.runId, ...u, costUsd: cost, now: this.now() })
-      .catch((err) => console.warn('[usage] record failed:', err))
-  }
-
-  /**
-   * The orchestration layer reasoning over its sub-agents: the manager reads the
-   * visit's tool trail and transcript and files it as ok, concern or escalate.
-   */
-  private async review(
-    txId: string,
-    customerId: string,
-    scenario: Scenario,
-    order: Awaited<ReturnType<CafeStore['orders']['byTx']>>,
-    outcome: Outcome,
-    parent: Span | null = null,
-  ): Promise<TransactionMetrics['review']> {
-    if (!this.config.reviewEnabled || this.overBudget()) return null
-    const modelSpec = this.config.roles.manager
-    try {
-      const res = await reviewTransaction({
-        registry: this.registry,
-        reviewerSpec: modelSpec,
-        events: this.bus.buffer.filter((e) => e.txId === txId),
-        scenario,
-        order,
-        outcome,
-        now: this.now,
-        parentContext: parent,
-      })
-      this.bus.emit({
-        type: 'manager.reviewed',
-        txId,
-        customerId,
-        orderId: order?.id ?? null,
-        modelSpec,
-        verdict: res.verdict,
-        issues: res.issues,
-        summary: res.summary,
-        latencyMs: res.latencyMs,
-      })
-      this.recordUsage({
-        txId,
-        agentId: 'manager-1',
-        role: 'manager',
-        modelSpec,
-        step: 2,
-        inputTokens: res.inputTokens,
-        outputTokens: res.outputTokens,
-        latencyMs: res.latencyMs,
-      })
-      await this.store.reviews.record({
-        runId: this.runId,
-        txId,
-        orderId: order?.id ?? null,
-        reviewerSpec: modelSpec,
-        verdict: res.verdict,
-        issues: res.issues,
-        summary: res.summary,
-        brief: res.brief,
-        latencyMs: res.latencyMs,
-        now: this.now(),
-      })
-      return { verdict: res.verdict, issues: res.issues }
-    } catch (err) {
-      console.warn('[review] failed:', err instanceof Error ? err.message : err)
-      return null
-    }
-  }
-
-  private async judge(
-    txId: string,
-    scenario: Scenario,
-    order: Awaited<ReturnType<CafeStore['orders']['byTx']>>,
-    outcome: Outcome,
-    review: TransactionMetrics['review'] = null,
-    parent: Span | null = null,
-  ): Promise<void> {
-    const events = this.bus.buffer.filter((e) => e.txId === txId)
-    let verdict: Awaited<ReturnType<typeof judgeTransaction>> | null = null
-    if (this.config.judgeEnabled && !this.overBudget()) {
-      try {
-        verdict = await judgeTransaction({
-          registry: this.registry,
-          judgeSpec: this.config.roles.judge,
-          events,
-          scenario,
-          order,
-          outcome,
-          now: this.now,
-          parentContext: parent,
-        })
-        this.bus.emit({
-          type: 'judge.verdict',
-          txId,
-          orderId: order?.id ?? null,
-          judgeSpec: this.config.roles.judge,
-          answers: verdict.answers,
-          latencyMs: verdict.latencyMs,
-        })
-        this.recordUsage({
-          txId,
-          agentId: 'judge-1',
-          role: 'judge',
-          modelSpec: this.config.roles.judge,
-          step: 1,
-          inputTokens: verdict.inputTokens,
-          outputTokens: verdict.outputTokens,
-          latencyMs: verdict.latencyMs,
-        })
-        await this.store.judgements.record({
-          runId: this.runId,
-          txId,
-          orderId: order?.id ?? null,
-          judgeSpec: this.config.roles.judge,
-          answers: verdict.answers,
-          blindedTranscript: verdict.blindedTranscript,
-          latencyMs: verdict.latencyMs,
-          now: this.now(),
-        })
-      } catch (err) {
-        console.warn('[judge] failed:', err instanceof Error ? err.message : err)
-      }
-    }
-    this.txMetrics.push(
-      transactionMetrics({
-        txId,
-        events: this.bus.buffer,
-        scenario,
-        order,
-        outcome,
-        judge: verdict?.answers ?? null,
-        judgeLatencyMs: verdict?.latencyMs ?? null,
-        review,
-      }),
-    )
   }
 
   // ---------- baristas ----------

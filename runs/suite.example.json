@@ -1,0 +1,21 @@
+{
+  "name": "judge shootout",
+  "datasetId": "builtin:stardust",
+  "base": {
+    "roles": {
+      "cashier": "mock:cashier",
+      "barista": "mock:barista",
+      "manager": "mock:manager",
+      "judge": "mock:judge"
+    },
+    "arrivalGapMs": 0,
+    "mockPacing": { "llmStepMs": [0, 0], "toolMs": [0, 0], "hangOrders": [], "hangMs": 0 }
+  },
+  "variants": [
+    { "name": "mock judge" },
+    { "name": "naive cashier", "roles": { "cashier": "mock:cashier-naive" } },
+    { "name": "forgetful barista", "roles": { "barista": "mock:barista-forgetful" } }
+  ],
+  "concurrency": 1,
+  "repeats": 1
+}

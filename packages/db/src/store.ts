@@ -10,6 +10,8 @@ import type {
   RunMetrics,
   RunStatus,
   Scenario,
+  SuiteConfig,
+  SuiteStatus,
 } from '@cafe/protocol'
 import { and, asc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -37,9 +39,11 @@ export interface CafeStore {
   metrics: MetricsStore
   spans: SpansStore
   datasets: DatasetsStore
+  suites: SuitesStore
 }
 
 export type RunRow = typeof s.runs.$inferSelect
+export type SuiteRow = typeof s.suites.$inferSelect
 export type DatasetRow = typeof s.datasets.$inferSelect
 export type DatasetItemRow = typeof s.datasetItems.$inferSelect
 export type SpanRow = typeof s.spans.$inferSelect
@@ -55,7 +59,17 @@ export type InventoryRow = typeof s.inventory.$inferSelect & {
 }
 
 export interface RunsStore {
-  create(config: RunConfig, opts?: { id?: string; owner?: string | null }): Promise<RunRow>
+  create(
+    config: RunConfig,
+    opts?: {
+      id?: string
+      owner?: string | null
+      suiteId?: string | null
+      variant?: string | null
+      repeat?: number | null
+    },
+  ): Promise<RunRow>
+  forSuite(suiteId: string): Promise<RunRow[]>
   get(id: string): Promise<RunRow | null>
   list(limit?: number): Promise<RunRow[]>
   setStatus(
@@ -198,6 +212,18 @@ export interface ReviewsStore {
   forRun(runId: string): Promise<Array<typeof s.reviews.$inferSelect>>
 }
 
+export interface SuitesStore {
+  create(input: { name: string; config: SuiteConfig; now: number; id?: string }): Promise<SuiteRow>
+  get(id: string): Promise<SuiteRow | null>
+  list(limit?: number): Promise<SuiteRow[]>
+  setStatus(
+    id: string,
+    status: SuiteStatus,
+    patch?: { startedAt?: number; finishedAt?: number; error?: string },
+  ): Promise<void>
+  delete(id: string): Promise<void>
+}
+
 export interface DatasetsStore {
   list(): Promise<Array<DatasetRow & { itemCount: number }>>
   get(id: string): Promise<DatasetRow | null>
@@ -275,10 +301,21 @@ export function createPgStore(db: Db): CafeStore {
       const id = opts.id ?? ulid()
       const [row] = await db
         .insert(s.runs)
-        .values({ id, status: 'pending', config, createdAt: Date.now(), owner: opts.owner ?? null })
+        .values({
+          id,
+          status: 'pending',
+          config,
+          createdAt: Date.now(),
+          owner: opts.owner ?? null,
+          suiteId: opts.suiteId ?? null,
+          variant: opts.variant ?? null,
+          repeat: opts.repeat ?? null,
+        })
         .returning()
       return must(row ?? null, 'run', id)
     },
+    forSuite: (suiteId) =>
+      db.select().from(s.runs).where(eq(s.runs.suiteId, suiteId)).orderBy(asc(s.runs.createdAt)),
     get: async (id) => one(await db.select().from(s.runs).where(eq(s.runs.id, id))),
     list: async (limit = 50) =>
       db.select().from(s.runs).orderBy(sql`${s.runs.createdAt} desc`).limit(limit),
@@ -637,6 +674,28 @@ export function createPgStore(db: Db): CafeStore {
     forRun: (runId) => db.select().from(s.reviews).where(eq(s.reviews.runId, runId)),
   }
 
+  const suites: SuitesStore = {
+    async create({ name, config, now, id = ulid() }) {
+      const [row] = await db
+        .insert(s.suites)
+        .values({ id, name, status: 'pending', config, createdAt: now })
+        .returning()
+      return must(row ?? null, 'suite', id)
+    },
+    get: async (id) => one(await db.select().from(s.suites).where(eq(s.suites.id, id))),
+    list: async (limit = 50) =>
+      db.select().from(s.suites).orderBy(sql`${s.suites.createdAt} desc`).limit(limit),
+    async setStatus(id, status, patch = {}) {
+      await db
+        .update(s.suites)
+        .set({ status, ...patch })
+        .where(eq(s.suites.id, id))
+    },
+    async delete(id) {
+      await db.delete(s.suites).where(eq(s.suites.id, id))
+    },
+  }
+
   const datasets: DatasetsStore = {
     async list() {
       const rows = await db
@@ -802,5 +861,6 @@ export function createPgStore(db: Db): CafeStore {
     metrics,
     spans,
     datasets,
+    suites,
   }
 }

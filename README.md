@@ -76,13 +76,15 @@ That means the judge question set is identical whether the judge is Jev, Claude,
 ```sh
 pnpm eval --instant                                  # all scenarios, mock staff
 pnpm eval --config runs/compare-models.json          # several configs back to back
+pnpm eval --suite runs/suite.example.json            # a suite: variants x repeats over one golden dataset, compared side by side
+pnpm eval --dataset <id>                             # a saved golden dataset (built-in ids and ds:<dataset>:<slug> can be mixed)
 pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe-ai/jev --max-usd 0.25
 ```
 
 `runs/frontier-vs-jev.example.json` is the Claude vs GPT vs Gemini staff comparison with Jev as judge, plus a same-family judge as a control.
 Every CLI run is persisted and appears under **Recent shifts** in the UI for replay.
 
-Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
+Swapping the orchestration engine (Mastra, LangChain, ...): `docs/ORCHESTRATORS.md`. Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
 
 ## The 3D scene
 

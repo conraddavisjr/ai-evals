@@ -17,6 +17,7 @@ const recorded = () =>
         type: 'run.started',
         config: {
           name: 'x',
+          orchestrator: 'stardust',
           scenarioIds: ['a'],
           roles: {
             cashier: 'mock:cashier',
