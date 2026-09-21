@@ -23,6 +23,8 @@ It is deliberately short; the code comments on the two interfaces carry the deta
    Every view is a pure consumer of the `TimelinePlayer`: it subscribes to `onApply` and `onSnap`, ticks the player once per frame, and reads `player.state` and `player.clockEpoch()` for anything time based.
    Two views are registered in `apps/web/src/views/index.ts` (the painterly village and the pixel cafe) and the header switches between them at any time, including mid-run, because the new view snaps to `player.state` on mount.
    To add a view, add an entry to `SCENE_VIEWS`; nothing else changes.
+   The Trace view (`apps/web/src/scene-trace/`) is the smallest example: plain DOM, no renderer, a pure `buildTrace(events)` model under it.
+   Because views only see events, `customer.arrived` carries the golden item's `expected` block (outcome, tools per role, tags), which is what lets a view mark each step right or wrong without asking the harness.
 
 ## What stays put
 

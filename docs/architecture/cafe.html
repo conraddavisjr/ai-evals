@@ -761,14 +761,16 @@ const ARCH = {
       seg: 'client',
       x: 360,
       y: 290,
-      title: 'Scene: pixel art',
-      nick: 'the old shop',
-      summary: 'Phaser 3 scene with procedural pixel sprites; the “Pixel” view.',
+      title: 'Scene: pixel art + Trace board',
+      nick: 'the old shop and the whiteboard',
+      summary:
+        'Two more views on the same contract: the Phaser pixel cafe (“Pixel”) and the character-free Trace board.',
       details: [
-        'Same SceneView contract as the 3D scene (mount(parent, player, callbacks) returning step/destroy), so the two are switchable mid-run.',
-        'Sprites and tiles defined as text grids compiled to canvas textures at boot; drawn at an integer scale and letterboxed by Phaser’s FIT scaler.',
+        'Same SceneView contract as the 3D scene (mount(parent, player, callbacks) returning step/destroy), so all three are switchable mid-run.',
+        'Pixel: sprites and tiles defined as text grids compiled to canvas textures at boot; drawn at an integer scale and letterboxed by Phaser’s FIT scaler.',
+        'Trace: plain DOM. buildTrace(events) folds the applied events into one column per golden item and four bands (item, orchestration, agents + tools, evaluation); tool badges are marked against the expected tools carried on customer.arrived. Drag to pan, wheel to zoom at the cursor, click a badge to seek.',
       ],
-      files: ['apps/web/src/scene2d/*.ts'],
+      files: ['apps/web/src/scene2d/*.ts', 'apps/web/src/scene-trace/*.ts'],
     },
     {
       id: 'overlay',

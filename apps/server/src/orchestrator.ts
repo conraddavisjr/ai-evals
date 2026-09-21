@@ -243,6 +243,14 @@ export class ShiftOrchestrator {
       scenarioId: scenario.id,
       sprite: scenario.customer.sprite,
       utterance,
+      expected: {
+        outcome:
+          scenario.expected.expectedOutcome ??
+          (scenario.expected.shouldRefuse ? 'refused' : 'served'),
+        cashierTools: scenario.expected.cashierTools,
+        baristaTools: scenario.expected.baristaTools,
+        tags: scenario.tags,
+      },
     })
     emit({ type: 'customer.moved', txId, customerId, to: 'waiting' })
 

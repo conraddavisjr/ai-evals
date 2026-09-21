@@ -70,6 +70,15 @@ export const CafeEvent = z.discriminatedUnion('type', [
     scenarioId: z.string(),
     sprite: z.string(),
     utterance: z.string(),
+    /** The golden item's expectations, so a consumer of the stream alone can mark each step right or wrong. */
+    expected: z
+      .object({
+        outcome: z.enum(['served', 'refused', 'failed']),
+        cashierTools: z.array(z.string()),
+        baristaTools: z.array(z.string()),
+        tags: z.array(z.string()),
+      })
+      .optional(),
   }),
   Base.extend({ type: z.literal('customer.moved'), customerId: z.string(), to: Station }),
   Base.extend({ type: z.literal('customer.spoke'), customerId: z.string(), text: z.string() }),

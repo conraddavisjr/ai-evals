@@ -13,10 +13,11 @@ Everything that happens is an event in a typed stream (`packages/protocol/src/ev
 The visual job of the scene is not decoration: it must make the pipeline legible.
 A viewer should be able to tell at a glance who is working, what tool they are calling, how long they have been at it, which tickets are waiting, and where something went wrong.
 
-Two styles exist, both on `main` and switchable from the header:
+Three views exist, all switchable from the header:
 
 - Pixel: Stardew-style pixel art in Phaser 3 (`apps/web/src/scene2d/`).
 - Village: stylized top-down 3D in Three.js (`apps/web/src/scene3d/`). This is the direction to push further.
+- Trace: no characters at all (`apps/web/src/scene-trace/`). One column per golden item, four bands top to bottom (item, orchestration, agents + tools, evaluation), every event a badge with a ✓ / ! / ✗ against the item's expectations. Built for the engineering meeting: plain type, high contrast, drag to pan, wheel to zoom at the cursor, click a badge to seek. Not part of the style brief; keep it plain.
 
 Side by side: `docs/screenshots/style-comparison.png`.
 
