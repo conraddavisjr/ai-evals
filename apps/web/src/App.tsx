@@ -443,7 +443,9 @@ export function App() {
             {tab === 'visits' && <TransactionList player={player} onSelect={onSelect} />}
             {tab === 'queue' && <QueuePanel player={player} />}
             {tab === 'inspector' && <AgentInspector player={player} selectedId={selectedId} />}
-            {tab === 'metrics' && <MetricsDashboard runId={runId} status={runStatus} />}
+            {tab === 'metrics' && (
+              <MetricsDashboard runId={runId} status={runStatus} player={player} />
+            )}
             {tab === 'log' && <EventLog player={player} onPeek={onPeek} />}
           </div>
         </aside>

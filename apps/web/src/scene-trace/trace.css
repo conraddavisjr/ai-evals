@@ -298,6 +298,14 @@
   font-weight: 700;
   color: var(--layer);
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.trace-badge .agent-glyph {
+  display: inline-flex;
+  font-size: 12px;
+  line-height: 1;
 }
 .trace-badge .text {
   overflow: hidden;

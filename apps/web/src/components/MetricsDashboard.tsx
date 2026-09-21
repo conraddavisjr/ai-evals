@@ -2,11 +2,23 @@ import { type RunMetrics, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
 import { type RunRow, useHarness } from '../harness/index.js'
+import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
+import { useDrawer } from './Drawer.js'
+import { JUDGE_EXPLAIN, JudgeDrill } from './drilldowns.js'
 import { BEAT_COLORS, BEAT_LABELS } from './OrderWaterfall.js'
 import { TelemetryPanel } from './TelemetryPanel.js'
 
 /** Summary (the roll-up once a shift closes) or Telemetry (span-based, live). */
-export function MetricsDashboard({ runId, status }: { runId: string | null; status: string }) {
+export function MetricsDashboard({
+  runId,
+  status,
+  player = null,
+}: {
+  runId: string | null
+  status: string
+  /** For "jump" links in drill-downs; optional so the dashboard works without a stage. */
+  player?: TimelinePlayer | null
+}) {
   const [view, setView] = useState<'summary' | 'telemetry'>('summary')
   return (
     <div className="metrics">
@@ -30,15 +42,24 @@ export function MetricsDashboard({ runId, status }: { runId: string | null; stat
         ))}
       </div>
       {view === 'summary' ? (
-        <MetricsSummary runId={runId} status={status} />
+        <MetricsSummary runId={runId} status={status} player={player} />
       ) : (
-        <TelemetryPanel runId={runId} live={status === 'running'} />
+        <TelemetryPanel runId={runId} live={status === 'running'} player={player} />
       )}
     </div>
   )
 }
 
-function MetricsSummary({ runId, status }: { runId: string | null; status: string }) {
+function MetricsSummary({
+  runId,
+  status,
+  player,
+}: {
+  runId: string | null
+  status: string
+  player: TimelinePlayer | null
+}) {
+  const drawer = useDrawer()
   const [metrics, setMetrics] = useState<RunMetrics | null>(null)
   const [compare, setCompare] = useState<Array<{ run: RunRow; m: RunMetrics }>>([])
   const [err, setErr] = useState<string | null>(null)
@@ -65,6 +86,26 @@ function MetricsSummary({ runId, status }: { runId: string | null; status: strin
       })
       .catch(() => {})
   }, [api, runId, status])
+
+  const judgeCell = (metric: keyof typeof JUDGE_EXPLAIN, text: string) =>
+    metrics ? (
+      <button
+        type="button"
+        className="link metric-link"
+        title="See the visits behind this figure"
+        onClick={() =>
+          drawer.open({
+            title: JUDGE_EXPLAIN[metric]?.title ?? metric,
+            subtitle: 'where the gaps are, visit by visit',
+            body: <JudgeDrill metrics={metrics} metric={metric} player={player} />,
+          })
+        }
+      >
+        {text}
+      </button>
+    ) : (
+      text
+    )
 
   return (
     <div>
@@ -114,23 +155,36 @@ function MetricsSummary({ runId, status }: { runId: string | null; status: strin
           {metrics.judgeMeans && (
             <>
               <h4>Judge (blinded)</h4>
+              <p className="muted small">
+                Means over the visits. The probabilities are the judge's confidence, not a share:
+                click a figure to see which visits it doubted and why.
+              </p>
               <table className="grid">
                 <tbody>
                   <tr>
                     <th>P(correct)</th>
-                    <td>{pct(metrics.judgeMeans.correct)}</td>
+                    <td>{judgeCell('correct', pct(metrics.judgeMeans.correct))}</td>
                     <th>refusal appropriate</th>
-                    <td>{pct(metrics.judgeMeans.refusalAppropriate)}</td>
+                    <td>
+                      {judgeCell('refusalAppropriate', pct(metrics.judgeMeans.refusalAppropriate))}
+                    </td>
                   </tr>
                   <tr>
                     <th>helpfulness</th>
-                    <td>{metrics.judgeMeans.helpfulness.toFixed(2)}/5</td>
+                    <td>
+                      {judgeCell('helpfulness', `${metrics.judgeMeans.helpfulness.toFixed(2)}/5`)}
+                    </td>
                     <th>tone</th>
-                    <td>{metrics.judgeMeans.tone.toFixed(2)}/5</td>
+                    <td>{judgeCell('tone', `${metrics.judgeMeans.tone.toFixed(2)}/5`)}</td>
                   </tr>
                   <tr>
                     <th>tool use</th>
-                    <td>{metrics.judgeMeans.toolUseQuality.toFixed(2)}/5</td>
+                    <td>
+                      {judgeCell(
+                        'toolUseQuality',
+                        `${metrics.judgeMeans.toolUseQuality.toFixed(2)}/5`,
+                      )}
+                    </td>
                     <th />
                     <td />
                   </tr>

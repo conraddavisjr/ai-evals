@@ -5,11 +5,14 @@ const MAX_SAMPLES = 300
 
 function distribution(values: number[]) {
   const stats = latencyStats(values)
+  const sorted = [...values].sort((a, b) => a - b)
+  const p99 =
+    sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(0.99 * sorted.length) - 1))] ?? 0
   const samples =
     values.length <= MAX_SAMPLES
       ? values
       : values.filter((_, i) => i % Math.ceil(values.length / MAX_SAMPLES) === 0)
-  return { ...stats, samples }
+  return { ...stats, p99, samples }
 }
 
 const layerOf = (kind: string): ErrorLayer =>

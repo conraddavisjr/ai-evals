@@ -86,6 +86,10 @@ describe('OpenTelemetry spans', () => {
     ])
     expect(tel.items.every((i) => i.taskSuccess === true)).toBe(true)
     expect(tel.tools.map((t) => t.tool)).toContain('orders.create')
+    for (const t of tel.tools) {
+      expect(t.p99).toBeGreaterThanOrEqual(t.p95)
+      expect(t.max).toBeGreaterThanOrEqual(t.p99)
+    }
     expect(tel.steps.some((s) => s.role === 'cashier' && s.stepIndex === 1)).toBe(true)
     expect(tel.costTrajectory.length).toBe(3)
     expect(tel.costTrajectory[2]?.cumulativeUsd).toBe(0)

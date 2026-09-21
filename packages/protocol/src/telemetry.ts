@@ -32,6 +32,7 @@ const Distribution = z.object({
   count: z.number().int(),
   p50: z.number(),
   p95: z.number(),
+  p99: z.number(),
   max: z.number(),
   mean: z.number(),
   /** Raw samples for dot strips, capped. */

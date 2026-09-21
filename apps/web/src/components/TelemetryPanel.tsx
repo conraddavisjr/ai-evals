@@ -11,7 +11,10 @@ import {
   STATUS_BAD,
 } from '../charts/index.js'
 import { fmtMs, fmtUsd } from '../format.js'
-import { useExperimentApi } from '../harness/index.js'
+import { type ExperimentClient, useExperimentApi } from '../harness/index.js'
+import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
+import { useDrawer } from './Drawer.js'
+import { LatencyDrill } from './drilldowns.js'
 
 const ROLE_ORDER = ['cashier', 'barista', 'manager', 'judge']
 const LAYER_ORDER = ['tool', 'agent', 'triage', 'review', 'judge', 'run'] as const
@@ -21,7 +24,15 @@ const LAYER_ORDER = ['tool', 'agent', 'triage', 'review', 'judge', 'run'] as con
  * per reasoning step, how cost accumulates visit by visit, and where errors
  * happened. Polls while the run is live.
  */
-export function TelemetryPanel({ runId, live }: { runId: string | null; live: boolean }) {
+export function TelemetryPanel({
+  runId,
+  live,
+  player = null,
+}: {
+  runId: string | null
+  live: boolean
+  player?: TimelinePlayer | null
+}) {
   const api = useExperimentApi()
   const [data, setData] = useState<RunTelemetry | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -56,35 +67,87 @@ export function TelemetryPanel({ runId, live }: { runId: string | null; live: bo
     return (
       <p className="muted">No spans yet. Spans land as each tool call, step and visit finishes.</p>
     )
-  return <TelemetryCharts data={data} />
+  return <TelemetryCharts data={data} api={api} runId={runId} player={player} />
 }
 
 /** The charts themselves, reusable for a suite variant. */
 export function TelemetryCharts({
   data,
   compact = false,
+  api = null,
+  runId = null,
+  player = null,
 }: {
   data: RunTelemetry
   compact?: boolean
+  /** With an api and run id, latency rows open a drill-down of the slowest spans. */
+  api?: ExperimentClient | null
+  runId?: string | null
+  player?: TimelinePlayer | null
 }) {
+  const drawer = useDrawer()
   const roles = ROLE_ORDER.filter((r) => data.costByRole[r] !== undefined)
+  const canDrill = api !== null && runId !== null
+  const drillTool = (i: number) => {
+    const t = data.tools[i]
+    if (!t || !api || !runId) return
+    const tool = t.tool
+    drawer.open({
+      title: `${tool} · latency`,
+      subtitle: `${t.count} calls · ${t.errors} error${t.errors === 1 ? '' : 's'}`,
+      body: (
+        <LatencyDrill
+          api={api}
+          runId={runId}
+          player={player}
+          kind="tool"
+          stats={t}
+          filter={(s) => s.tool === tool}
+          items={data.items}
+        />
+      ),
+    })
+  }
+  const drillStep = (i: number) => {
+    const st = data.steps[i]
+    if (!st || !api || !runId) return
+    const { role, stepIndex } = st
+    drawer.open({
+      title: `${role} · step ${stepIndex} · model latency`,
+      subtitle: `${st.count} steps`,
+      body: (
+        <LatencyDrill
+          api={api}
+          runId={runId}
+          player={player}
+          kind="step"
+          stats={st}
+          filter={(s) => s.role === role && Number(s.attributes['cafe.step']) === stepIndex}
+          items={data.items}
+        />
+      ),
+    })
+  }
   const anyCost = Object.values(data.costByRole).some((v) => v > 0)
   return (
     <div className="telemetry">
       <section className="chart-block">
         <h4>Tool call latency</h4>
         <p className="sub">
-          Each dot is one call; the thick tick is p50, the dashed tick p95. Log scale.
+          Each dot is one call; the thick tick is p50, the dashed tick p95, the faint tick p99. Log
+          scale.{canDrill ? ' Click a row for the slowest calls.' : ''}
         </p>
         {data.tools.length === 0 ? (
           <div className="chart-empty">No tool calls yet.</div>
         ) : (
           <DotStrip
+            onPick={canDrill ? (_g, i) => drillTool(i) : undefined}
             groups={data.tools.map((t) => ({
               label: t.tool,
               samples: t.samples,
               p50: t.p50,
               p95: t.p95,
+              p99: t.p99,
               color: SERIES.water,
               note: t.errors
                 ? `${t.errors} ${Object.keys(t.byCode).join('/')} err${t.errors === 1 ? '' : 's'}`
@@ -112,11 +175,13 @@ export function TelemetryCharts({
               }))}
             />
             <DotStrip
+              onPick={canDrill ? (_g, i) => drillStep(i) : undefined}
               groups={data.steps.map((s) => ({
                 label: `${s.role} · step ${s.stepIndex}`,
                 samples: s.samples,
                 p50: s.p50,
                 p95: s.p95,
+                p99: s.p99,
                 color: roleColor(s.role),
               }))}
               rowHeight={20}
