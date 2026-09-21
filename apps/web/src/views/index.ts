@@ -18,6 +18,14 @@ export const SCENE_VIEWS: readonly SceneView[] = [
     mount: async (parent, player, callbacks) =>
       (await import('../scene2d/game.js')).createGame(parent, player, callbacks),
   },
+  {
+    id: 'trace',
+    label: 'Trace',
+    blurb:
+      'The shift as a board: one column per golden item, every step a badge, no characters. For the engineering meeting.',
+    mount: async (parent, player, callbacks) =>
+      (await import('../scene-trace/TraceView.js')).createGame(parent, player, callbacks),
+  },
 ]
 
 export const DEFAULT_VIEW_ID = SCENE_VIEWS[0]?.id ?? 'painterly'
