@@ -34,7 +34,8 @@ export type OrderStatus = z.infer<typeof OrderStatus>
 export const OrderItem = z.object({
   menuItemId: z.string(),
   name: z.string(),
-  size: z.enum(['small', 'medium', 'large']).default('medium'),
+  /** Cafe drinks come in sizes; an action line in another domain (a refund) has none. */
+  size: z.enum(['small', 'medium', 'large']).optional(),
   modifiers: z.array(z.string()).default([]),
   quantity: z.number().int().positive().default(1),
   unitPriceCents: z.number().int().nonnegative(),
@@ -175,6 +176,11 @@ export type ToolSource = z.infer<typeof ToolSource>
 
 export const RunConfig = z.object({
   name: z.string().default('shift'),
+  /**
+   * Which business domain pack plays the cases: its tools, prompts, golden dataset,
+   * triage and judge wording (see packages/domains). The harness is the same for all.
+   */
+  domain: z.string().default('cafe'),
   tools: ToolSource.default({ kind: 'builtin' }),
   /** Which orchestration engine drives the shift (see apps/server/src/orchestrators). */
   orchestrator: z.string().default('stardust'),

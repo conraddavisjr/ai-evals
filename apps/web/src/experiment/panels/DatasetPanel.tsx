@@ -1,5 +1,5 @@
 import {
-  BUILTIN_DATASET_ID,
+  isBuiltinDatasetId,
   type DatasetDetail,
   type DatasetSummary,
   type Scenario,
@@ -56,7 +56,7 @@ export function DatasetPanel({
       .catch(() => {})
   }, [api])
 
-  const builtin = draft.datasetId === BUILTIN_DATASET_ID
+  const builtin = isBuiltinDatasetId(draft.datasetId)
   const selected = draft.itemIds
   const isOn = (id: string) => selected === null || selected.includes(id)
   const toggleItem = (id: string) => {

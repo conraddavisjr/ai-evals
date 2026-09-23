@@ -17,6 +17,7 @@ const recorded = () =>
         type: 'run.started',
         config: {
           name: 'x',
+          domain: 'cafe',
           orchestrator: 'stardust',
           tools: { kind: 'builtin' },
           scenarioIds: ['a'],

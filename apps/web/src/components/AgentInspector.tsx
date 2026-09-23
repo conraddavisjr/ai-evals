@@ -2,7 +2,7 @@ import { shortScenarioId } from '@cafe/protocol'
 import { useState } from 'react'
 import { fmtCents, fmtMs, fmtUsd, shortModel } from '../format.js'
 import { AgentGlyph } from '../lib/AgentGlyph.js'
-import { roleLabel } from '../lib/nomenclature.js'
+import { lineText, roleLabel } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 export function AgentInspector({
@@ -117,7 +117,7 @@ export function AgentInspector({
                     <li
                       key={`${i.menuItemId}-${i.size}-${i.modifiers.join('+')}-${i.unitPriceCents}`}
                     >
-                      {i.quantity}× {i.size} {i.name}
+                      {lineText(i)}
                       {i.modifiers.length ? ` (${i.modifiers.join(', ')})` : ''} ·{' '}
                       {fmtCents(i.unitPriceCents)}
                     </li>

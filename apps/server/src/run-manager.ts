@@ -1,4 +1,5 @@
 import type { CafeStore } from '@cafe/db'
+import { domainPack } from '@cafe/domains'
 import {
   type CafeEvent,
   isMockSpec,
@@ -57,6 +58,7 @@ export class RunManager {
   validateConfig(input: RunConfigInput): RunConfig {
     const config = RunConfigSchema.parse(input)
     orchestratorFor(config.orchestrator)
+    domainPack(config.domain)
     const live = Object.entries(config.roles).filter(([, spec]) => !isMockSpec(spec))
     if (live.length > 0 && !this.allowLive) {
       throw new Error(

@@ -1,12 +1,13 @@
 import type { CafeStore } from '@cafe/db'
-import { runTelemetry, SCENARIOS } from '@cafe/evals'
+import { DOMAIN_PACKS, domainPack } from '@cafe/domains'
+import { runTelemetry } from '@cafe/evals'
 import { ALL_TOOLS, createMcpServer, Gateway, ROLE_SCOPES } from '@cafe/mcp-gateway'
 import { PERSONAS } from '@cafe/models'
 import {
-  BUILTIN_DATASET_ID,
   DatasetInput,
   DatasetPatch,
   datasetItemId,
+  isBuiltinDatasetId,
   type Role,
   RunConfig,
   type Scenario,
@@ -40,6 +41,11 @@ export const MODEL_PRESETS = {
     'mock:barista',
     'mock:barista-forgetful',
     'mock:manager',
+    'mock:support-rep',
+    'mock:support-rep-naive',
+    'mock:support-fulfil',
+    'mock:support-fulfil-forgetful',
+    'mock:support-lead',
     'mock:judge',
   ],
   anthropic: [
@@ -66,9 +72,31 @@ export function createApp(deps: HttpDeps) {
 
   app.get('/api/health', (c) => c.json({ ok: true, allowLive: deps.allowLive }))
 
+  /** The business domains a run can play, with the words, dataset and default models of each. */
+  app.get('/api/domains', (c) =>
+    c.json(
+      DOMAIN_PACKS.map((d) => ({
+        id: d.id,
+        label: d.label,
+        blurb: d.blurb,
+        vocabulary: d.vocabulary,
+        datasetId: d.dataset.id,
+        defaultRoles: d.defaultRoles,
+        tools: d.tools.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
+        roleScopes: d.roleScopes,
+      })),
+    ),
+  )
+
   app.get('/api/scenarios', async (c) => {
     const ds = c.req.query('dataset')
-    if (!ds) return c.json(SCENARIOS)
+    if (!ds) {
+      try {
+        return c.json(domainPack(c.req.query('domain')).dataset.scenarios)
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : String(err) }, 404)
+      }
+    }
     const d = await getDataset(store, ds)
     return d ? c.json(d.items) : c.json({ error: 'dataset not found' }, 404)
   })
@@ -86,7 +114,7 @@ export function createApp(deps: HttpDeps) {
         ollama: Boolean(process.env.OPENAI_COMPATIBLE_BASE_URL),
       },
       defaults: RunConfig.parse({
-        scenarioIds: SCENARIOS.map((s) => s.id),
+        scenarioIds: domainPack('cafe').dataset.scenarios.map((s) => s.id),
         roles: {
           cashier: 'mock:cashier',
           barista: 'mock:barista',
@@ -165,8 +193,7 @@ export function createApp(deps: HttpDeps) {
   })
   app.patch('/api/datasets/:id', async (c) => {
     const id = c.req.param('id')
-    if (id === BUILTIN_DATASET_ID)
-      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
     const p = await parseBody(c, DatasetPatch)
     if ('error' in p) return c.json({ error: p.error }, 400)
     if (!(await store.datasets.get(id))) return c.json({ error: 'dataset not found' }, 404)
@@ -175,15 +202,13 @@ export function createApp(deps: HttpDeps) {
   })
   app.delete('/api/datasets/:id', async (c) => {
     const id = c.req.param('id')
-    if (id === BUILTIN_DATASET_ID)
-      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
     await store.datasets.delete(id)
     return c.json({ deleted: true })
   })
   app.post('/api/datasets/:id/items', async (c) => {
     const id = c.req.param('id')
-    if (id === BUILTIN_DATASET_ID)
-      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
     if (!(await store.datasets.get(id))) return c.json({ error: 'dataset not found' }, 404)
     const p = await parseBody(c, ScenarioInput)
     if ('error' in p) return c.json({ error: p.error }, 400)
@@ -199,8 +224,7 @@ export function createApp(deps: HttpDeps) {
   app.put('/api/datasets/:id/items/:itemId', async (c) => {
     const id = c.req.param('id')
     const itemId = c.req.param('itemId')
-    if (id === BUILTIN_DATASET_ID)
-      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
     const current = (await store.datasets.items(id)).find((i) => i.id === itemId)
     if (!current) return c.json({ error: 'item not found' }, 404)
     const p = await parseBody(c, ScenarioInput)
@@ -212,15 +236,13 @@ export function createApp(deps: HttpDeps) {
   })
   app.delete('/api/datasets/:id/items/:itemId', async (c) => {
     const id = c.req.param('id')
-    if (id === BUILTIN_DATASET_ID)
-      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
     await store.datasets.deleteItem(id, c.req.param('itemId'))
     return c.json({ deleted: true })
   })
   app.post('/api/datasets/:id/items/reorder', async (c) => {
     const id = c.req.param('id')
-    if (id === BUILTIN_DATASET_ID)
-      return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
     const p = await parseBody(c, z.object({ ids: z.array(z.string()) }))
     if ('error' in p) return c.json({ error: p.error }, 400)
     await store.datasets.reorder(id, p.data.ids, Date.now())

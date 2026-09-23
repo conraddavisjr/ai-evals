@@ -13,6 +13,7 @@
   "dependencies": {
     "@cafe/agents": "workspace:*",
     "@cafe/db": "workspace:*",
+    "@cafe/domains": "workspace:*",
     "@cafe/evals": "workspace:*",
     "@cafe/mcp-gateway": "workspace:*",
     "@cafe/models": "workspace:*",

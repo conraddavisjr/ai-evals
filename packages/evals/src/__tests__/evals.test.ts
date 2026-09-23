@@ -239,7 +239,7 @@ describe('blinded transcript', () => {
     expect(t.staff[0]?.steps[0]).toMatchObject({ tool: 'menu.lookup', ok: true })
     expect(t.staff[1]?.scopeViolations).toBe(1)
     expect(t.matchesExpected).toBe(true)
-    expect(t.waitedForBaristaMs).toBe(1800)
+    expect(t.queueWaitMs).toBe(1800)
     expect(t.totalMs).toBe(9000)
   })
 })
@@ -289,6 +289,48 @@ describe('metrics', () => {
     expect(rm.latencyByRole.cashier.p50).toBe(900)
     expect(rm.beatLatency.queued?.max).toBe(1800)
     expect(rm.judgeMeans?.correct).toBeGreaterThan(0.5)
+  })
+
+  it('credits a claim call (no txId until it binds) to the case it claimed', () => {
+    const claimed = stream([
+      ...happy.map((e) => [e.t, e] as [number, CafeEventInput]),
+      [
+        5000,
+        {
+          type: 'agent.tool_called',
+          agentId: 'barista-1',
+          role: 'barista',
+          callId: 'claim1',
+          tool: 'orders.claim_next',
+          args: {},
+        },
+      ],
+      [
+        5010,
+        {
+          type: 'agent.tool_returned',
+          txId: tx,
+          agentId: 'barista-1',
+          role: 'barista',
+          callId: 'claim1',
+          tool: 'orders.claim_next',
+          ok: true,
+          latencyMs: 10,
+          result: null,
+        },
+      ],
+    ])
+    const order = { items: [item('Latte', 'latte')], totalCents: 450, status: 'delivered' as const }
+    const tm = transactionMetrics({
+      txId: tx,
+      events: claimed,
+      scenario: latte,
+      order,
+      outcome: 'served',
+      judge: null,
+      judgeLatencyMs: null,
+    })
+    expect(tm.toolRecall).toBeCloseTo(2 / 11, 5) // menu.lookup and now orders.claim_next
   })
 })
 

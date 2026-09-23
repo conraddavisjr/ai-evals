@@ -24,7 +24,11 @@ const AgentRef = z.object({ agentId: z.string(), role: Role })
 export const AgentErrorKind = z.enum(['crash', 'budget', 'model', 'tool', 'timeout', 'scope'])
 export type AgentErrorKind = z.infer<typeof AgentErrorKind>
 
-export const TriageIntent = z.enum(['order', 'question', 'complaint', 'adversarial'])
+/**
+ * The intent a triage decided. Each domain pack defines its own options (the cafe's
+ * are order, question, complaint, adversarial); `adversarial` is shared by convention.
+ */
+export const TriageIntent = z.string().min(1)
 export type TriageIntent = z.infer<typeof TriageIntent>
 
 export const JudgeAnswers = z.object({

@@ -42,8 +42,18 @@ export function transactionMetrics(input: {
 }): TransactionMetrics {
   const evs = input.events.filter((e) => e.txId === input.txId)
   const gt = groundTruth(input.scenario, input.order, input.outcome)
+  // A claim tool is called before it binds agent 2 to a case, so its tool_called
+  // carries no txId; its tool_returned does. Credit such calls to the case they joined.
+  const joinedHere = new Set(
+    evs.flatMap((e) => (e.type === 'agent.tool_returned' ? [e.callId] : [])),
+  )
+  const calls = input.events.filter(
+    (e) =>
+      e.type === 'agent.tool_called' &&
+      (e.txId === input.txId || (!e.txId && joinedHere.has(e.callId))),
+  )
   const actualByRole: Record<string, string[]> = {}
-  for (const e of evs) {
+  for (const e of calls) {
     if (e.type !== 'agent.tool_called') continue
     const list = actualByRole[e.role] ?? []
     list.push(e.tool)

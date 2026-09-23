@@ -1,6 +1,7 @@
 import { runAgent } from '@cafe/agents'
 import type { CafeStore } from '@cafe/db'
-import { type Outcome, runMetrics, scenariosFor, TRIAGE_QUESTIONS } from '@cafe/evals'
+import { BUILTIN_SCENARIOS, type DomainPack, domainPack } from '@cafe/domains'
+import { type Outcome, runMetrics } from '@cafe/evals'
 import { connectRemoteTools, createChaos, Gateway, type RemoteToolSource } from '@cafe/mcp-gateway'
 import { ModelRegistry } from '@cafe/models'
 import type { RunConfig, Scenario, TransactionMetrics } from '@cafe/protocol'
@@ -53,10 +54,12 @@ const defaultSleep = (ms: number, signal?: AbortSignal) =>
   })
 
 /**
- * Runs one shift: customers arrive on a schedule, cashiers take them in FIFO order,
- * tickets land on the rail, baristas pull them FIFO, the judge scores each visit,
- * and metrics are rolled up at close. Deterministic glue; the models only live
- * inside runAgent and the triage/judge evaluate() calls.
+ * Runs one shift: cases arrive on a schedule, agent 1 (intake) takes them in FIFO
+ * order, work items land on the queue, agent 2 (fulfilment) pulls them FIFO, the
+ * orchestrator reviews and the judge scores each case, and metrics are rolled up at
+ * close. The run's domain pack supplies the tools, prompts, triage and judge
+ * wording; this engine is the same for every business. Deterministic glue; the
+ * models only live inside runAgent and the triage/review/judge evaluate() calls.
  */
 export class ShiftOrchestrator {
   readonly runId: string
@@ -81,10 +84,18 @@ export class ShiftOrchestrator {
   private visitIndex = 0
   private readonly scenarios: Scenario[]
   private readonly suite: { suiteId: string; variant: string } | null
+  private readonly pack: DomainPack
 
   constructor(deps: OrchestratorDeps) {
     this.parentContext = deps.parentContext ?? null
-    this.scenarios = deps.scenarios ?? scenariosFor(deps.config.scenarioIds)
+    this.pack = domainPack(deps.config.domain)
+    this.scenarios =
+      deps.scenarios ??
+      deps.config.scenarioIds.map((id) => {
+        const s = BUILTIN_SCENARIOS.get(id)
+        if (!s) throw new Error(`Unknown scenario id: ${id}`)
+        return s
+      })
     this.suite = deps.suite ?? null
     this.store = deps.store
     this.bus = deps.bus
@@ -98,9 +109,9 @@ export class ShiftOrchestrator {
         mockPacing: deps.config.mockPacing,
         mockSeed: deps.config.chaos.seed,
         mockBeforeStep: async ({ persona, step }) => {
-          // Make the Nth barista pickup hang right after it claims the ticket.
+          // Make the Nth fulfilment pickup hang right after it claims the work item.
           if (
-            persona.startsWith('barista') &&
+            this.config.roles.barista === `mock:${persona}` &&
             step === 2 &&
             this.config.mockPacing.hangOrders.includes(this.claimedOrders - 1)
           ) {
@@ -109,13 +120,15 @@ export class ShiftOrchestrator {
         },
       })
     this.chaos = createChaos(deps.config.chaos)
-    this.staff = new StaffPool(this.bus, deps.config.roles)
+    this.staff = new StaffPool(this.bus, deps.config.roles, this.pack.staff)
     this.gateway = new Gateway({
       store: this.store,
       emit: this.bus.emit,
       chaos: deps.config.chaos,
       now: this.now,
       services: { staffing: this.staff },
+      tools: this.pack.tools,
+      roleScopes: this.pack.roleScopes,
     })
     this.bus.subscribe((e) => {
       if (e.type === 'model.usage') this.spentUsd += e.costUsd
@@ -171,6 +184,7 @@ export class ShiftOrchestrator {
           ? { [ATTR.SUITE_ID]: this.suite.suiteId, [ATTR.VARIANT]: this.suite.variant }
           : {}),
         'cafe.scenarios': scenarios.length,
+        'cafe.domain': this.pack.id,
         'cafe.roles.cashier': this.config.roles.cashier,
         'cafe.roles.barista': this.config.roles.barista,
         'cafe.roles.manager': this.config.roles.manager,
@@ -179,7 +193,7 @@ export class ShiftOrchestrator {
       this.parentContext,
     )
     await this.store.runs.setStatus(this.runId, 'running', { startedAt: this.now() })
-    await this.store.inventory.initForRun(this.runId)
+    await this.pack.initForRun?.(this.store, this.runId)
     this.bus.emit({ type: 'run.started', config: this.config })
     this.staff.hire(this.config.staffing)
     this.staff.whenSpawned((m) => {
@@ -312,12 +326,7 @@ export class ShiftOrchestrator {
       cashierResult = await runAgent({
         agent: cashier.spec,
         task: utterance,
-        context: {
-          customerId,
-          customerName: scenario.customer.name,
-          ...(scenario.customer.loyaltyId ? { loyaltyId: scenario.customer.loyaltyId } : {}),
-          txId,
-        },
+        context: { ...this.pack.intakeContext(scenario, customerId), txId },
         runId: this.runId,
         txId,
         gateway: this.gateway,
@@ -367,7 +376,9 @@ export class ShiftOrchestrator {
     } else {
       // Cashier never got the ticket onto the rail: crash, timeout, budget, or gave up.
       if (order && order.status !== 'failed' && order.status !== 'refused') {
-        const reason = cashierResult?.error ?? `cashier stopped with order ${order.status}`
+        const reason =
+          cashierResult?.error ??
+          `${this.pack.vocabulary.roles.cashier} stopped with the ${this.pack.vocabulary.workItem} ${order.status}`
         await this.store.orders.fail(order.id, reason)
         emit({ type: 'order.failed', txId, orderId: order.id, reason })
         outcome = 'failed'
@@ -404,6 +415,7 @@ export class ShiftOrchestrator {
       registry: this.registry,
       now: this.now,
       overBudget: this.overBudget,
+      questions: { judge: this.pack.judgeQuestions, review: this.pack.reviewQuestions },
     }
   }
 
@@ -418,8 +430,8 @@ export class ShiftOrchestrator {
       async (span) => {
         const r = await evaluate({
           model,
-          state: `Customer at the door said: ${JSON.stringify(utterance)}`,
-          questions: TRIAGE_QUESTIONS,
+          state: this.pack.triage.state(utterance),
+          questions: this.pack.triage.questions,
         })
         span.setAttributes({
           [ATTR.INPUT_TOKENS]: r.usage.inputTokens ?? 0,
@@ -490,7 +502,7 @@ export class ShiftOrchestrator {
       this.staff.moveTo(barista, home)
       const result = await runAgent({
         agent: barista.spec,
-        task: 'There is a ticket on the rail. Make it and call it out.',
+        task: this.pack.fulfilTask,
         context: { station: home },
         runId: this.runId,
         gateway: this.gateway,
@@ -532,7 +544,7 @@ export class ShiftOrchestrator {
         }
       }
       // call_out already walked them to the counter; bring them back to the machine.
-      if (result.toolCalls.some((t) => t.tool === 'orders.call_out' && t.ok))
+      if (result.toolCalls.some((t) => t.tool === this.pack.handoffTool && t.ok))
         barista.station = 'pickup'
       this.staff.moveTo(barista, home)
       barista.busy = false

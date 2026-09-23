@@ -1,5 +1,12 @@
 import type { CafeStore } from '@cafe/db'
-import { judgeTransaction, type Outcome, reviewTransaction, transactionMetrics } from '@cafe/evals'
+import {
+  type JudgeQuestions,
+  judgeTransaction,
+  type Outcome,
+  type ReviewQuestions,
+  reviewTransaction,
+  transactionMetrics,
+} from '@cafe/evals'
 import { costUsd, type ModelRegistry } from '@cafe/models'
 import type { RunConfig, Scenario, TransactionMetrics } from '@cafe/protocol'
 import type { Span } from '@cafe/telemetry'
@@ -13,6 +20,8 @@ export interface VisitPipelineDeps {
   now: () => number
   /** True once the run has spent its USD budget; review and judge are skipped past it. */
   overBudget: () => boolean
+  /** The domain pack's wording for review and judge; the cafe's when omitted. */
+  questions?: { judge: JudgeQuestions; review: ReviewQuestions } | undefined
 }
 
 export interface ClosedVisit {
@@ -80,6 +89,7 @@ async function review_(
       outcome,
       now: deps.now,
       parentContext: parent,
+      questions: deps.questions?.review,
     })
     deps.bus.emit({
       type: 'manager.reviewed',
@@ -149,6 +159,7 @@ async function judge_(
         outcome,
         now: deps.now,
         parentContext: parent,
+        questions: deps.questions?.judge,
       })
       deps.bus.emit({
         type: 'judge.verdict',

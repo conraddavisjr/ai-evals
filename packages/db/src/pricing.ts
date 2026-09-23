@@ -20,7 +20,7 @@ export function priceLine(
   },
 ): OrderItem {
   if (!item.available) throw new PricingError(`${item.name} is not available today`, 'unavailable')
-  const size = (opts.size ?? 'medium') as OrderItem['size']
+  const size = (opts.size ?? 'medium') as NonNullable<OrderItem['size']>
   const sizeDelta = item.sizeDeltaCents[size]
   if (sizeDelta === undefined)
     throw new PricingError(`${item.name} does not come in size "${size}"`, 'unknown_size')

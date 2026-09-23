@@ -78,3 +78,13 @@ export const CASE_NOUN = { one: 'case', many: 'cases' } as const
 export function caseLabel(index: number): string {
   return `Case ${index + 1}`
 }
+
+/** "1× medium Latte (oat milk)", "1× Refund (A1001)": a work-item line in any domain. */
+export function lineText(i: {
+  quantity: number
+  name: string
+  size?: string | undefined
+  modifiers?: string[] | undefined
+}): string {
+  return `${i.quantity}× ${i.size ? `${i.size} ` : ''}${i.name}${i.modifiers?.length ? ` (${i.modifiers.join(', ')})` : ''}`
+}

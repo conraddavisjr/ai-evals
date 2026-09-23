@@ -1,4 +1,5 @@
-import { type AgentSpec, STAFF_NAMES, STAFF_SPRITES, SYSTEM_PROMPTS } from '@cafe/agents'
+import type { AgentSpec } from '@cafe/agents'
+import type { AgentSlot, StaffSlot } from '@cafe/domains'
 import type { StaffingService } from '@cafe/mcp-gateway'
 import {
   ESPRESSO_MACHINES,
@@ -25,6 +26,8 @@ export class StaffPool implements StaffingService {
   constructor(
     private readonly bus: EventBus,
     private readonly models: RoleModels,
+    /** Names, sprites and prompts per slot, from the run's domain pack. */
+    private readonly slots: Record<AgentSlot, StaffSlot>,
   ) {}
 
   hire(staffing: Staffing): void {
@@ -35,8 +38,9 @@ export class StaffPool implements StaffingService {
 
   spawn(role: AgentSpec['role']): StaffMember {
     const n = this.counters[role]++
-    const name = STAFF_NAMES[role][n % STAFF_NAMES[role].length] ?? role
-    const sprite = STAFF_SPRITES[role][n % STAFF_SPRITES[role].length] ?? role
+    const slot = this.slots[role]
+    const name = slot.names[n % slot.names.length] ?? role
+    const sprite = slot.sprites[n % slot.sprites.length] ?? role
     const station: Station =
       role === 'cashier'
         ? (REGISTERS[n % REGISTERS.length] ?? 'register_1')
@@ -46,11 +50,11 @@ export class StaffPool implements StaffingService {
     const spec: AgentSpec = {
       agentId: `${role}-${n + 1}`,
       role,
-      name: n > 0 && STAFF_NAMES[role].length <= n ? `${name} ${n + 1}` : name,
+      name: n > 0 && slot.names.length <= n ? `${name} ${n + 1}` : name,
       modelSpec: this.models[role],
       sprite,
       station,
-      systemPrompt: SYSTEM_PROMPTS[role](name),
+      systemPrompt: slot.prompt(name),
     }
     const member: StaffMember = { spec, busy: false, station }
     this.members.set(spec.agentId, member)

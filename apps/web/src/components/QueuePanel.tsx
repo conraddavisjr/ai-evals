@@ -1,5 +1,5 @@
 import { fmtMs } from '../format.js'
-import { roleCount } from '../lib/nomenclature.js'
+import { lineText, roleCount } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 export function QueuePanel({ player }: { player: TimelinePlayer }) {
@@ -23,7 +23,7 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
             return (
               <li key={id} className={waited > 30_000 ? 'hot' : waited > 10_000 ? 'warm' : ''}>
                 <strong>{o.customerName}</strong> ·{' '}
-                {o.items.map((i) => `${i.size} ${i.name}`).join(', ')} · waiting {fmtMs(waited)}
+                {o.items.map(lineText).join(', ')} · waiting {fmtMs(waited)}
                 {o.requeues > 0 && <span className="pill failed"> requeued ×{o.requeues}</span>}
               </li>
             )

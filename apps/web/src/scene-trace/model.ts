@@ -1,5 +1,5 @@
 import type { CafeEvent } from '@cafe/protocol'
-import { agentLabel, roleShort } from '../lib/nomenclature.js'
+import { agentLabel, lineText, roleShort } from '../lib/nomenclature.js'
 
 /** Which layer of the pipeline a badge belongs to; decides its colour. */
 export type Layer = 'input' | 'orch' | 'agent' | 'tool' | 'eval' | 'error'
@@ -509,11 +509,8 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
 }
 
 const short = (tool: string) => tool.replace(/^[a-z]+\./, '')
-const itemsText = (
-  items: Array<{ quantity: number; size: string; name: string }>,
-  totalCents: number,
-) =>
-  `${items.map((i) => `${i.quantity}× ${i.size} ${i.name}`).join(', ')} · $${(totalCents / 100).toFixed(2)}`
+const itemsText = (items: Parameters<typeof lineText>[0][], totalCents: number) =>
+  `${items.map(lineText).join(', ')} · $${(totalCents / 100).toFixed(2)}`
 export const fmt = (ms: number) =>
   ms < 1000
     ? `${Math.round(ms)}ms`

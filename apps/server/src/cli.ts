@@ -5,8 +5,8 @@ loadEnv()
 
 import { resolve } from 'node:path'
 import { createDb, createPgStore, runMigrations, seedCatalog } from '@cafe/db'
-import { SCENARIOS } from '@cafe/evals'
-import { isMockSpec, RunConfig, type RunConfigInput } from '@cafe/protocol'
+import { domainPack } from '@cafe/domains'
+import { isMockSpec, RunConfig, type RunConfigInput, vocabularyFor } from '@cafe/protocol'
 import { EventBus } from './event-bus.js'
 import { orchestratorFor } from './orchestrators/index.js'
 import { RunManager } from './run-manager.js'
@@ -17,11 +17,12 @@ import { initTracing } from './telemetry/tracing.js'
 
 /**
  * Headless eval runner. Runs one or more shift configs back to back and prints a
- * comparison table; every run is persisted and can be replayed in the cafe UI.
+ * comparison table; every run is persisted and can be replayed in the web UI.
  *
  *   pnpm eval --config runs/compare-models.json
  *   pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe-ai/jev
  *   pnpm eval --scenarios latte-simple,prompt-injection --instant
+ *   pnpm eval --domain support --instant   (another business: its golden dataset and mock agents)
  *   pnpm eval --dataset <datasetId>        (a saved golden dataset; ids may be mixed in --scenarios)
  *   pnpm eval --suite runs/suite.example.json   (variants x repeats over one dataset, side by side)
  *   flags: --no-judge --no-triage --no-review --max-usd 0.5 --orchestrator stardust
@@ -59,18 +60,20 @@ function configsFromArgs(
     return Array.isArray(raw) ? raw : [raw]
   }
   const str = (k: string, d: string) => (typeof args[k] === 'string' ? (args[k] as string) : d)
+  const pack = domainPack(str('domain', 'cafe'))
   const cfg: RunConfigInput = {
     name: str('name', 'cli'),
+    domain: pack.id,
     orchestrator: str('orchestrator', 'stardust'),
     scenarioIds:
       typeof args.scenarios === 'string'
         ? args.scenarios.split(',')
-        : (datasetIds ?? SCENARIOS.map((s) => s.id)),
+        : (datasetIds ?? pack.dataset.scenarios.map((s) => s.id)),
     roles: {
-      cashier: str('cashier', 'mock:cashier'),
-      barista: str('barista', 'mock:barista'),
-      manager: str('manager', 'mock:manager'),
-      judge: str('judge', 'mock:judge'),
+      cashier: str('cashier', pack.defaultRoles.cashier),
+      barista: str('barista', pack.defaultRoles.barista),
+      manager: str('manager', pack.defaultRoles.manager),
+      judge: str('judge', pack.defaultRoles.judge),
     },
     staffing: { cashiers: Number(str('cashiers', '2')), baristas: Number(str('baristas', '1')) },
     arrivalGapMs: Number(str('gap', '0')),
@@ -133,16 +136,20 @@ async function main() {
     const run = await store.runs.create(config)
     const bus = new EventBus(run.id, store)
     const label = `${config.roles.cashier} / ${config.roles.barista} / ${config.roles.manager} / ${config.roles.judge}`
+    const words = vocabularyFor(config.domain)
     console.log(
-      `\n[${i + 1}/${configs.length}] run ${run.id}\n  ${label}\n  ${config.scenarioIds.length} customers, ${config.staffing.cashiers} cashiers, ${config.staffing.baristas} baristas`,
+      `\n[${i + 1}/${configs.length}] run ${run.id} · ${words.business}\n  ${label}\n  ${config.scenarioIds.length} cases, ${config.staffing.cashiers} × agent 1 (${words.roles.cashier}), ${config.staffing.baristas} × agent 2 (${words.roles.barista})`,
     )
     let served = 0
+    let caseNo = 0
     bus.subscribe((e) => {
       if (e.type === 'customer.left') {
         served += e.outcome === 'served' ? 1 : 0
-        process.stdout.write(
-          `  ${e.outcome.padEnd(9)} ${bus.buffer.find((a) => a.txId === e.txId && a.type === 'customer.arrived')?.type === 'customer.arrived' ? (bus.buffer.find((a) => a.txId === e.txId && a.type === 'customer.arrived') as { name: string }).name : ''}\n`,
-        )
+        caseNo += 1
+        const arrived = bus.buffer.find((a) => a.txId === e.txId && a.type === 'customer.arrived')
+        const title =
+          arrived?.type === 'customer.arrived' ? (arrived.title ?? arrived.scenarioId) : ''
+        process.stdout.write(`  ${words.outcomes[e.outcome].padEnd(9)} case ${caseNo}: ${title}\n`)
       }
       if (e.type === 'agent.error')
         process.stdout.write(`  ! ${e.agentId} ${e.kind}: ${e.message}\n`)
@@ -170,7 +177,7 @@ async function main() {
       ms(Date.now() - started),
     ])
     console.log(
-      `  done: ${served}/${m.transactions} served, task success ${pct(m.taskSuccessRate)}, cost $${m.costUsd.toFixed(4)}`,
+      `  done: ${served}/${m.transactions} ${words.outcomes.served}, task success ${pct(m.taskSuccessRate)}, cost $${m.costUsd.toFixed(4)}`,
     )
   }
 
@@ -194,7 +201,7 @@ async function main() {
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i] ?? 0)).join('  ')
   console.log(`\n${line(header)}\n${widths.map((w) => '-'.repeat(w)).join('  ')}`)
   for (const r of rows) console.log(line(r))
-  console.log('\nReplay any run in the cafe UI from the Shift tab.')
+  console.log('\nReplay any run in the web UI from the Shift tab.')
   await tracing?.shutdown()
   await close()
 }
@@ -262,7 +269,7 @@ async function runSuite(store: ReturnType<typeof createPgStore>, file: string) {
   ])
   console.log('')
   printTable(['item', ...view.variants.map((v) => v.key)], grid)
-  console.log(`\nSuite ${detail.status}. Open any run in the cafe UI from the Shift tab.`)
+  console.log(`\nSuite ${detail.status}. Open any run in the web UI from the Shift tab.`)
 }
 
 function printTable(header: string[], rows: string[][]) {
