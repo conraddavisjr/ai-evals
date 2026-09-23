@@ -67,3 +67,14 @@ export function describeSpec(spec: string): string {
     return `${spec.slice('ollama/'.length)} on a local OpenAI-compatible server (Ollama)`
   return spec
 }
+
+/**
+ * One entry of a golden dataset, and one run of it, is a "case" everywhere in the
+ * UI; the persona inside it (a customer name, a ticket author) is data, not the label.
+ */
+export const CASE_NOUN = { one: 'case', many: 'cases' } as const
+
+/** "Case 3" for the third case to arrive (index is zero-based). */
+export function caseLabel(index: number): string {
+  return `Case ${index + 1}`
+}

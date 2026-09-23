@@ -7,7 +7,7 @@ export type Layer = 'input' | 'orch' | 'agent' | 'tool' | 'eval' | 'error'
 export type Band = 'input' | 'orch' | 'work' | 'eval'
 export const BANDS: Band[] = ['input', 'orch', 'work', 'eval']
 export const BAND_TITLE: Record<Band, string> = {
-  input: 'Golden item',
+  input: 'Case input',
   orch: 'Orchestration',
   work: 'Sub-agents + MCP tools',
   eval: 'Evaluation',
@@ -39,6 +39,9 @@ export interface Column {
   txId: string
   index: number
   scenarioId: string
+  /** The golden case's title when the stream carries it (older runs do not). */
+  title: string
+  /** The persona inside the case (a customer name); data, not the label. */
   name: string
   expectedOutcome: string | null
   outcome: string | null
@@ -83,6 +86,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
     switch (e.type) {
       case 'customer.arrived': {
         c.name = e.name
+        c.title = e.title ?? ''
         c.scenarioId = e.scenarioId
         c.expectedOutcome = e.expected?.outcome ?? null
         expected.set(
@@ -468,6 +472,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         txId: e.txId,
         index: columns.length,
         scenarioId: '',
+        title: '',
         name: '',
         expectedOutcome: null,
         outcome: null,

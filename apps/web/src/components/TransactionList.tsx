@@ -1,5 +1,6 @@
 import { allTimelines, shortScenarioId } from '@cafe/protocol'
 import { fmtCents, fmtMs } from '../format.js'
+import { CASE_NOUN, caseLabel } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { OrderWaterfall } from './OrderWaterfall.js'
 
@@ -13,10 +14,15 @@ export function TransactionList({
   const state = player.state
   const timelines = allTimelines(state.applied)
   const now = player.clockEpoch()
-  if (timelines.length === 0) return <p className="muted">No customers yet.</p>
+  if (timelines.length === 0)
+    return (
+      <p className="muted">
+        No {CASE_NOUN.many} yet. Start a run and each golden case appears here as it arrives.
+      </p>
+    )
   return (
     <div className="tx-list">
-      {timelines.map((tl) => {
+      {timelines.map((tl, index) => {
         const cust = tl.customerId ? state.customers[tl.customerId] : undefined
         const order = tl.orderId ? state.orders[tl.orderId] : undefined
         const verdict = state.verdicts[tl.txId]
@@ -35,12 +41,13 @@ export function TransactionList({
                   player.pause()
                   if (tl.customerId) onSelect(tl.customerId)
                 }}
-                title="Jump to this visit"
+                title={`Jump to this ${CASE_NOUN.one}${tl.customerName ? ` (persona: ${tl.customerName})` : ''}`}
               >
-                {tl.customerName}
+                {caseLabel(index)}
               </button>
-              <span className="muted" title={tl.scenarioId ?? undefined}>
-                {tl.scenarioId ? shortScenarioId(tl.scenarioId) : ''}
+              <span className="tx-title" title={tl.scenarioId ?? undefined}>
+                {(arrived?.type === 'customer.arrived' && arrived.title) ||
+                  (tl.scenarioId ? shortScenarioId(tl.scenarioId) : '')}
               </span>
               <span className={`pill ${tl.outcome ?? 'open'}`}>{tl.outcome ?? 'in progress'}</span>
               <span className="muted">{fmtMs(tl.totalMs ?? now - tl.startT)}</span>
@@ -48,7 +55,7 @@ export function TransactionList({
               {review && (
                 <span
                   className={`pill review-${review.verdict}`}
-                  title={`manager: ${review.summary}`}
+                  title={`orchestrator review: ${review.summary}`}
                 >
                   {review.verdict}
                 </span>

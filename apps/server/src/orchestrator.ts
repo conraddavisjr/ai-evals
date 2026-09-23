@@ -275,6 +275,7 @@ export class ShiftOrchestrator {
       customerId,
       name: scenario.customer.name,
       scenarioId: scenario.id,
+      title: scenario.title,
       sprite: scenario.customer.sprite,
       utterance,
       expected: {

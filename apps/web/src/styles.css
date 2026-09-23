@@ -1074,6 +1074,13 @@ label.check input {
   gap: 8px;
   flex-wrap: wrap;
 }
+.tx-head .tx-title {
+  flex: 1 1 140px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .waterfall {
   margin-top: 6px;
 }

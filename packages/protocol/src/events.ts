@@ -68,6 +68,8 @@ export const CafeEvent = z.discriminatedUnion('type', [
     customerId: z.string(),
     name: z.string(),
     scenarioId: z.string(),
+    /** The golden case's title, so views can label a case by what it tests rather than by its persona. */
+    title: z.string().optional(),
     sprite: z.string(),
     utterance: z.string(),
     /** The golden item's expectations, so a consumer of the stream alone can mark each step right or wrong. */

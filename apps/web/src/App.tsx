@@ -19,7 +19,7 @@ import { TimelinePlayer } from './playback/TimelinePlayer.js'
 import { usePlayer } from './playback/usePlayer.js'
 import { DEFAULT_VIEW_ID, findView, SCENE_VIEWS, type SceneHandle } from './views/index.js'
 
-type Tab = 'run' | 'inspector' | 'queue' | 'visits' | 'metrics' | 'log'
+type Tab = 'run' | 'inspector' | 'queue' | 'cases' | 'metrics' | 'log'
 const VIEW_KEY = 'cafe.sceneView'
 
 // One player per page, surviving Vite HMR so a live stream is never orphaned mid-run.
@@ -149,7 +149,7 @@ export function App() {
       player.setMode('live-buffered')
       player.play()
       attach(id, true)
-      setTab('visits')
+      setTab('cases')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setStartError(msg)
@@ -177,7 +177,7 @@ export function App() {
         attach(run.id, false)
         setRunStatus(run.status)
       }
-      setTab('visits')
+      setTab('cases')
     },
     [api, attach],
   )
@@ -394,7 +394,7 @@ export function App() {
             {(
               [
                 ['run', 'Shift'],
-                ['visits', 'Visits'],
+                ['cases', 'Cases'],
                 ['queue', 'Queue'],
                 ['inspector', 'Inspector'],
                 ['metrics', 'Metrics'],
@@ -426,7 +426,7 @@ export function App() {
                 startError={startError}
               />
             )}
-            {tab === 'visits' && <TransactionList player={player} onSelect={onSelect} />}
+            {tab === 'cases' && <TransactionList player={player} onSelect={onSelect} />}
             {tab === 'queue' && <QueuePanel player={player} />}
             {tab === 'inspector' && <AgentInspector player={player} selectedId={selectedId} />}
             {tab === 'metrics' && (
