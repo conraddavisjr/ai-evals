@@ -47,6 +47,10 @@ export const TRACE_LAYOUTS: ReadonlyArray<{ id: TraceLayout; label: string; titl
 ]
 const LAYOUT_KEY = 'cafe.traceLayout'
 const TILE_KEY = 'cafe.traceTile'
+const GRID_ZOOM_KEY = 'cafe.traceGridZoom'
+/** Grid zoom is CSS zoom, so zooming out reflows into more columns instead of shrinking a fixed page. */
+const GRID_MIN = 0.4
+const GRID_MAX = 1.6
 type TileSize = 's' | 'm' | 'l'
 const TILE_SIZES: Record<TileSize, { w: number; h: number; label: string }> = {
   s: { w: 270, h: 190, label: 'S' },
@@ -54,7 +58,7 @@ const TILE_SIZES: Record<TileSize, { w: number; h: number; label: string }> = {
   l: { w: 400, h: 460, label: 'L' },
 }
 const HINT: Record<TraceLayout, string> = {
-  grid: 'scroll inside a tile to read it · expand a tile to widen it · click a badge to jump there',
+  grid: 'scroll inside a tile to read it · ctrl/⌘ + scroll to zoom · expand a tile to widen it · click a badge to jump there',
   columns: 'drag to pan · scroll to zoom at the cursor · click a badge to jump there',
   rows: 'drag to pan · scroll to zoom at the cursor · click a badge to jump there',
 }
@@ -93,14 +97,33 @@ export function createGame(
   parent.appendChild(root)
 
   // ---- camera (columns, rows): one transform on the world, zoom anchored at the cursor.
-  // The grid uses native scrolling instead so each tile can scroll on its own.
+  // The grid keeps native scrolling (each tile scrolls on its own) and zooms with CSS zoom,
+  // which reflows the tiles: zoom out and more of them fit on a row.
   const cam = { x: 24, y: 16, k: 1 }
+  let gridZoom = clampGrid(Number(readPref(GRID_ZOOM_KEY, [], '1') || 1))
   const panning = () => layout !== 'grid'
   const apply = () => {
-    world.style.transform = panning() ? `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})` : ''
-    bar.zoom.textContent = `${Math.round(cam.k * 100)}%`
+    if (panning()) {
+      world.style.zoom = ''
+      world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})`
+    } else {
+      world.style.transform = ''
+      world.style.zoom = String(gridZoom)
+    }
+    bar.zoom.textContent = `${Math.round((panning() ? cam.k : gridZoom) * 100)}%`
+  }
+  /** Grid zoom that keeps the row under the cursor roughly in place while the tiles reflow. */
+  const zoomGrid = (z: number, cy = canvas.clientHeight / 2) => {
+    const next = clampGrid(z)
+    const ratio = next / gridZoom
+    const anchor = canvas.scrollTop + cy
+    gridZoom = next
+    writePref(GRID_ZOOM_KEY, next.toFixed(2))
+    apply()
+    canvas.scrollTop = Math.max(0, anchor * ratio - cy)
   }
   const zoomAt = (factor: number, cx: number, cy: number) => {
+    if (!panning()) return zoomGrid(gridZoom * factor, cy)
     const k = Math.min(MAX_SCALE, Math.max(MIN_SCALE, cam.k * factor))
     const r = k / cam.k
     cam.x = cx - (cx - cam.x) * r
@@ -109,11 +132,18 @@ export function createGame(
     apply()
   }
   const onWheel = (ev: WheelEvent) => {
-    if (!panning()) return
-    ev.preventDefault()
     const rect = canvas.getBoundingClientRect()
     const cx = ev.clientX - rect.left
     const cy = ev.clientY - rect.top
+    if (!panning()) {
+      // plain scrolling stays native (the page and each tile); ctrl/⌘ or a pinch zooms the grid
+      if (!(ev.ctrlKey || ev.metaKey)) return
+      ev.preventDefault()
+      const d = Math.max(-80, Math.min(80, ev.deltaY))
+      zoomGrid(gridZoom * Math.exp(-d * 0.0045), cy)
+      return
+    }
+    ev.preventDefault()
     if (
       ev.ctrlKey ||
       ev.metaKey ||
@@ -173,7 +203,7 @@ export function createGame(
   canvas.addEventListener('pointercancel', onUp)
   /** Fit the whole board; `floor` keeps it legible (the rest is a pan away). */
   const fit = (floor = MIN_SCALE) => {
-    if (!panning()) return
+    if (!panning()) return fitGrid()
     const w = world.scrollWidth || 1
     const h = world.scrollHeight || 1
     const cw = canvas.clientWidth - 48
@@ -183,8 +213,20 @@ export function createGame(
     cam.y = 16
     apply()
   }
+  /** The largest grid zoom (up to 100%) at which every tile is on screen at once. */
+  const fitGrid = () => {
+    let z = 1
+    for (; z > GRID_MIN; z = Math.round((z - 0.05) * 100) / 100) {
+      world.style.zoom = String(z)
+      if (world.getBoundingClientRect().height <= canvas.clientHeight) break
+    }
+    gridZoom = z
+    zoomGrid(z)
+    canvas.scrollTo(0, 0)
+  }
   bar.fit.addEventListener('click', () => fit())
   bar.reset.addEventListener('click', () => {
+    if (!panning()) return zoomGrid(1)
     cam.k = 1
     cam.x = 24
     cam.y = 16
@@ -211,7 +253,8 @@ export function createGame(
     applyLayoutClass()
     canvas.scrollTo(0, 0)
     render()
-    fit(READABLE_SCALE)
+    if (panning()) fit(READABLE_SCALE)
+    else apply()
   }
   const setTile = (t: TileSize) => {
     tile = t
@@ -268,7 +311,7 @@ export function createGame(
         body.scrollTop = !mem || mem.pinned ? body.scrollHeight : mem.top
       }
     bar.status.textContent = summary(model)
-    if (lastCount < 0) fit(READABLE_SCALE)
+    if (lastCount < 0 && panning()) fit(READABLE_SCALE)
     lastCount = player.state.applied.length
     lastRender = performance.now()
   }
@@ -543,15 +586,21 @@ function buildBar(
       b.setAttribute('aria-pressed', String(id === getTile()))
     }
     tiles.hidden = l !== 'grid'
-    camera.hidden = l === 'grid'
   }
   return { el: bar, status, hint, zoom, zoomIn, zoomOut, fit, reset, sync }
+}
+
+function clampGrid(z: number): number {
+  return Math.min(GRID_MAX, Math.max(GRID_MIN, Number.isFinite(z) ? z : 1))
 }
 
 function readPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
     const v = localStorage.getItem(key)
-    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback
+    // an empty allow-list accepts any stored value (numbers such as a zoom level)
+    return v && (allowed.length === 0 || (allowed as readonly string[]).includes(v))
+      ? (v as T)
+      : fallback
   } catch {
     return fallback
   }
