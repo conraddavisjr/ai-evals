@@ -22,8 +22,8 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
             const waited = o.queuedAt ? now - o.queuedAt : 0
             return (
               <li key={id} className={waited > 30_000 ? 'hot' : waited > 10_000 ? 'warm' : ''}>
-                <strong>{o.customerName}</strong> ·{' '}
-                {o.items.map(lineText).join(', ')} · waiting {fmtMs(waited)}
+                <strong>{o.customerName}</strong> · {o.items.map(lineText).join(', ')} · waiting{' '}
+                {fmtMs(waited)}
                 {o.requeues > 0 && <span className="pill failed"> requeued ×{o.requeues}</span>}
               </li>
             )
