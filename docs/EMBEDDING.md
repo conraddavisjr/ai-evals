@@ -23,11 +23,18 @@ It is deliberately short; the code comments on the two interfaces carry the deta
    Every view is a pure consumer of the `TimelinePlayer`: it subscribes to `onApply` and `onSnap`, ticks the player once per frame, and reads `player.state` and `player.clockEpoch()` for anything time based.
    Two views are registered in `apps/web/src/views/index.ts` (the painterly village and the pixel cafe) and the header switches between them at any time, including mid-run, because the new view snaps to `player.state` on mount.
    To add a view, add an entry to `SCENE_VIEWS`; nothing else changes.
+   The Trace view (`apps/web/src/scene-trace/`) is the smallest example: plain DOM, no renderer, a pure `buildTrace(events)` model under it.
+   Because views only see events, `customer.arrived` carries the golden item's `expected` block (outcome, tools per role, tags), which is what lets a view mark each step right or wrong without asking the harness.
 
 ## What stays put
 
 `apps/web/src/playback/TimelinePlayer.ts` and `apps/web/src/state/cafe-state.ts` are the shared core and must travel with the stage unchanged; they are what make live, replay, step and the director's cut show the same thing.
 The playback help text (`apps/web/src/playback/mode-docs.ts`) lives next to the player for the same reason: the stage documents itself wherever it lands.
+
+## The experiment client
+
+`ExperimentClient` (same file) is the optional second seam: telemetry, golden datasets, orchestrator listing and suites.
+`useExperimentApi()` returns null when the provided client does not implement it, and the Experiment page and Telemetry view say so instead of breaking; a harness that only emits events still gets the stage.
 
 ## Ways to start a shift today
 

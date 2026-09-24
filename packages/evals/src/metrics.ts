@@ -4,6 +4,7 @@ import {
   type JudgeAnswers,
   type LatencyStats,
   type Order,
+  type ReviewVerdict,
   type Role,
   type RunMetrics,
   type Scenario,
@@ -37,11 +38,22 @@ export function transactionMetrics(input: {
   outcome: Outcome | null
   judge: JudgeAnswers | null
   judgeLatencyMs: number | null
+  review?: TransactionMetrics['review']
 }): TransactionMetrics {
   const evs = input.events.filter((e) => e.txId === input.txId)
   const gt = groundTruth(input.scenario, input.order, input.outcome)
+  // A claim tool is called before it binds agent 2 to a case, so its tool_called
+  // carries no txId; its tool_returned does. Credit such calls to the case they joined.
+  const joinedHere = new Set(
+    evs.flatMap((e) => (e.type === 'agent.tool_returned' ? [e.callId] : [])),
+  )
+  const calls = input.events.filter(
+    (e) =>
+      e.type === 'agent.tool_called' &&
+      (e.txId === input.txId || (!e.txId && joinedHere.has(e.callId))),
+  )
   const actualByRole: Record<string, string[]> = {}
-  for (const e of evs) {
+  for (const e of calls) {
     if (e.type !== 'agent.tool_called') continue
     const list = actualByRole[e.role] ?? []
     list.push(e.tool)
@@ -105,6 +117,7 @@ export function transactionMetrics(input: {
     costUsd,
     judge: input.judge,
     judgeLatencyMs: input.judgeLatencyMs,
+    review: input.review ?? null,
   }
 }
 
@@ -142,6 +155,9 @@ export function runMetrics(
   for (const t of per) for (const r of ROLES) stepsByRole[r].push(t.stepsByRole[r] ?? 0)
 
   const judged = per.map((t) => t.judge).filter((j): j is JudgeAnswers => j !== null)
+  const reviewed = per.map((t) => t.review).filter((r) => r !== null)
+  const reviewCounts: Record<ReviewVerdict, number> = { ok: 0, concern: 0, escalate: 0 }
+  for (const r of reviewed) reviewCounts[r.verdict] += 1
 
   return {
     runId,
@@ -173,6 +189,7 @@ export function runMetrics(
           toolUseQuality: mean(judged.map((j) => j.toolUseQuality.score)),
         }
       : null,
+    reviewCounts: reviewed.length ? reviewCounts : null,
     perTransaction: per,
   }
 }

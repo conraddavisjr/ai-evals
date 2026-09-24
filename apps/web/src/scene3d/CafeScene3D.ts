@@ -462,6 +462,16 @@ export class CafeScene3D {
       case 'order.refused':
         this.say(e.cashierId, `✋ ${e.reason.slice(0, 70)}`, 'shout', this.ttl(3000))
         break
+      case 'manager.reviewed':
+        this.say(
+          'manager-1',
+          e.verdict === 'ok'
+            ? '✓ reviewed: ok'
+            : `${e.verdict === 'escalate' ? '⚠' : '!'} ${e.summary}`,
+          e.verdict === 'escalate' ? 'shout' : 'thought',
+          this.ttl(2600),
+        )
+        break
       case 'judge.verdict': {
         const ok = e.answers.correct.probability >= 0.5
         this.say(

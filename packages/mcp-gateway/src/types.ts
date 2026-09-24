@@ -44,6 +44,12 @@ export interface ToolDef<In extends z.ZodObject<any> = z.ZodObject<any>, Out = u
   scope: string
   description: string
   input: In
+  /**
+   * The tool's own JSON Schema, when it came from a remote MCP server. Advertised
+   * to the model instead of `input` (which is then a permissive passthrough), so the
+   * model sees the real parameters and the remote server does the validation.
+   */
+  inputJsonSchema?: Record<string, unknown> | undefined
   handler: (args: z.infer<In>, ctx: ToolContext) => Promise<Out>
 }
 
@@ -51,7 +57,23 @@ export type ToolResult =
   | { ok: true; result: unknown; latencyMs: number }
   | { ok: false; error: string; code: ToolErrorCode; latencyMs: number }
 
-export type ToolErrorCode = 'scope' | 'unknown_tool' | 'invalid_args' | 'transient' | 'domain'
+export type ToolErrorCode =
+  | 'scope'
+  | 'unknown_tool'
+  | 'invalid_args'
+  | 'transient'
+  | 'domain'
+  | 'blocked'
+
+/**
+ * A pre-execution check on a tool call that already passed scope and validation.
+ * Returns null when the tool is not guarded; a block fails the call with the reason.
+ */
+export type ActionGuard = (input: {
+  cap: Capability
+  tool: string
+  args: Record<string, unknown>
+}) => Promise<{ allow: boolean; reason: string } | null>
 
 export interface GatewayOptions {
   store: CafeStore
@@ -61,4 +83,10 @@ export interface GatewayOptions {
   services?: GatewayServices
   /** Sleep implementation, injectable so tests can run instantly. */
   sleep?: (ms: number) => Promise<void>
+  /** The tool catalogue. Defaults to the cafe's built-in tools; a remote MCP server's tools plug in here. */
+  tools?: ToolDef[] | undefined
+  /** Which scopes each role holds. Defaults to the cafe's ROLE_SCOPES; remote catalogues bring their own. */
+  roleScopes?: Partial<Record<Role, readonly string[]>> | undefined
+  /** The action gate, when the run has one. */
+  guard?: ActionGuard | undefined
 }

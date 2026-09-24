@@ -111,7 +111,12 @@ export class ModelRegistry {
   }
 
   private anthropic() {
-    this.providers.anthropic ??= createAnthropic({ apiKey: need('ANTHROPIC_API_KEY') })
+    // An org-level key must name a workspace; a workspace-scoped key does not need the header.
+    const workspace = process.env.ANTHROPIC_WORKSPACE_ID
+    this.providers.anthropic ??= createAnthropic({
+      apiKey: need('ANTHROPIC_API_KEY'),
+      ...(workspace ? { headers: { 'anthropic-workspace-id': workspace } } : {}),
+    })
     return this.providers.anthropic
   }
   private openai() {

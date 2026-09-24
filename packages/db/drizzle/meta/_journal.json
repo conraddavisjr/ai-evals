@@ -8,6 +8,48 @@
       "when": 1789659887855,
       "tag": "0000_luxuriant_secret_warriors",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789930055693,
+      "tag": "0001_thankful_dazzler",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789931705940,
+      "tag": "0002_lush_mesmero",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789932232258,
+      "tag": "0003_calm_jamie_braddock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789932587330,
+      "tag": "0004_nifty_microchip",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789932871491,
+      "tag": "0005_melted_lord_hawal",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790208653431,
+      "tag": "0006_aromatic_the_stranger",
+      "breakpoints": true
     }
   ]
 }

@@ -1,36 +1,22 @@
 import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fmtMs, fmtUsd, shortModel } from '../format.js'
-import { type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
-import { ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
-
-/** Rough per-visit token profile for the pre-run estimate. */
-const TOKENS_PER_VISIT: Record<RoleKey, { steps: number; inPerStep: number; outPerStep: number }> =
-  {
-    cashier: { steps: 6, inPerStep: 1100, outPerStep: 70 },
-    barista: { steps: 7, inPerStep: 900, outPerStep: 60 },
-    manager: { steps: 1, inPerStep: 60, outPerStep: 5 },
-    judge: { steps: 1, inPerStep: 700, outPerStep: 40 },
-  }
-/** Mirror of the server price table for the estimate (USD per MTok). */
-const PRICE: Array<[RegExp, number, number]> = [
-  [/^mock:/, 0, 0],
-  [/claude-haiku/, 1, 5],
-  [/claude-sonnet/, 3, 15],
-  [/claude-opus|claude-fable/, 15, 75],
-  [/gpt-5-nano/, 0.05, 0.4],
-  [/gpt-5-mini/, 0.25, 2],
-  [/gpt-5/, 1.25, 10],
-  [/flash-lite/, 0.1, 0.4],
-  [/flash/, 0.3, 2.5],
-  [/jev/, 0.042, 0],
-  [/^ollama/, 0, 0],
-]
-const priceOf = (spec: string): [number, number] =>
-  (PRICE.find(([re]) => re.test(spec))?.slice(1) as [number, number] | undefined) ?? [3, 15]
+import { type DomainInfo, type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
+import {
+  CASE_NOUN,
+  describeSpec,
+  roleCount,
+  roleLabel,
+  sentence,
+  words,
+} from '../lib/nomenclature.js'
+import { estimateRunUsd, ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
 
 export interface RunConfigPanelProps {
   models: ModelsInfo
+  /** The business domains on offer; the picker hides when there is only one. */
+  domains: DomainInfo[]
+  onDomainChange: (id: string) => void
   scenarios: Scenario[]
   draft: RunDraft
   onDraftChange: (next: RunDraft) => void
@@ -39,12 +25,14 @@ export interface RunConfigPanelProps {
   onLoadRun: (run: RunRow) => void
   currentRunId: string | null
   busy: boolean
-  /** The last failure to start a shift, wherever it was attempted from. */
+  /** The last failure to start a run, wherever it was attempted from. */
   startError: string | null
 }
 
 export function RunConfigPanel({
   models,
+  domains,
+  onDomainChange,
   scenarios,
   draft,
   onDraftChange,
@@ -77,18 +65,15 @@ export function RunConfigPanel({
     onDraftChange({ ...draft, roles: { ...draft.roles, [role]: spec } })
 
   const n = draft.scenarioIds.length
-  const estimate = useMemo(() => {
-    let usd = 0
-    for (const role of ROLES) {
-      const spec = draft.roles[role]
-      const [pin, pout] = priceOf(spec)
-      const prof = TOKENS_PER_VISIT[role]
-      if (role === 'judge' && !draft.judgeEnabled) continue
-      if (role === 'manager' && !draft.triageEnabled) continue
-      usd += (n * prof.steps * (prof.inPerStep * pin + prof.outPerStep * pout)) / 1_000_000
-    }
-    return usd
-  }, [draft.roles, n, draft.judgeEnabled, draft.triageEnabled])
+  const estimate = useMemo(
+    () =>
+      estimateRunUsd(n, draft.roles, {
+        judgeEnabled: draft.judgeEnabled ?? true,
+        triageEnabled: draft.triageEnabled ?? false,
+        reviewEnabled: draft.reviewEnabled ?? true,
+      }),
+    [draft.roles, n, draft.judgeEnabled, draft.triageEnabled, draft.reviewEnabled],
+  )
   const anyLive = ROLES.some((r) => !draft.roles[r].startsWith('mock:'))
 
   const allSpecs = useMemo(() => Object.values(models.presets).flat(), [models])
@@ -120,8 +105,9 @@ export function RunConfigPanel({
           est. {fmtUsd(estimate)} {anyLive ? '' : '(all mock)'}
         </div>
         <div className="muted small">
-          {n} customer{n === 1 ? '' : 's'} · {draft.staffing?.cashiers ?? 2} cashiers ·{' '}
-          {draft.staffing?.baristas ?? 1} barista{(draft.staffing?.baristas ?? 1) === 1 ? '' : 's'}
+          {n} {n === 1 ? CASE_NOUN.one : CASE_NOUN.many} ·{' '}
+          {roleCount('cashier', draft.staffing?.cashiers ?? 2)} ·{' '}
+          {roleCount('barista', draft.staffing?.baristas ?? 1)}
         </div>
         {anyLive && !models.allowLive && (
           <div className="bad small">
@@ -130,7 +116,7 @@ export function RunConfigPanel({
         )}
       </div>
       <button type="button" className="primary big" disabled={busy || n === 0} onClick={submit}>
-        {busy ? 'Running…' : 'Open the cafe'}
+        {busy ? 'Running…' : 'Start run'}
       </button>
     </div>
   )
@@ -140,18 +126,45 @@ export function RunConfigPanel({
       {startRow}
       {startError && <div className="error-box">{startError}</div>}
 
-      <section>
-        <h3>Staff models</h3>
-        {ROLES.map((role) => (
-          <label key={role} className="row">
-            <span className="cap">{role}</span>
-            <input
-              list="model-specs"
-              value={draft.roles[role]}
-              onChange={(e) => setRole(role, e.target.value)}
-              spellCheck={false}
-            />
+      {domains.length > 1 && (
+        <section>
+          <h3>Business domain</h3>
+          <label className="row">
+            <span>plays</span>
+            <select
+              value={draft.domain ?? 'cafe'}
+              disabled={busy}
+              onChange={(e) => onDomainChange(e.target.value)}
+            >
+              {domains.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
           </label>
+          <p className="muted small">
+            {domains.find((d) => d.id === (draft.domain ?? 'cafe'))?.blurb} The harness is the same
+            for every domain; the pack brings the tools, prompts, golden cases and judge wording.
+          </p>
+        </section>
+      )}
+
+      <section>
+        <h3>Agent models</h3>
+        {ROLES.map((role) => (
+          <div key={role} className="model-row">
+            <label className="row">
+              <span className="cap">{roleLabel(role)}</span>
+              <input
+                list="model-specs"
+                value={draft.roles[role]}
+                onChange={(e) => setRole(role, e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+            <div className="muted small spec-desc">{describeSpec(draft.roles[role])}</div>
+          </div>
         ))}
         <datalist id="model-specs">
           {allSpecs.map((s) => (
@@ -167,13 +180,14 @@ export function RunConfigPanel({
             .filter(([, v]) => v)
             .map(([k]) => k)
             .join(', ') || 'none'}
-          . Judge & manager can be <code>gateway:typesafe-ai/jev</code>; staff need a chat model.
+          . The judge and the orchestrator can be <code>gateway:typesafe-ai/jev</code>; agents 1 and
+          2 need a chat model with tool use.
         </p>
       </section>
 
       <section>
         <h3>
-          Customers <span className="muted">({n})</span>
+          Golden cases <span className="muted">({n})</span>
           <button
             type="button"
             className="link"
@@ -193,9 +207,7 @@ export function RunConfigPanel({
                 type="button"
                 className={`tag ${tag} ${picked === 0 ? 'off' : ''}`}
                 title={
-                  picked === list.length
-                    ? `Deselect all ${tag} customers`
-                    : `Select all ${tag} customers`
+                  picked === list.length ? `Deselect all ${tag} cases` : `Select all ${tag} cases`
                 }
                 aria-pressed={picked === list.length}
                 onClick={() =>
@@ -234,9 +246,12 @@ export function RunConfigPanel({
       </section>
 
       <section>
-        <h3>Shift</h3>
+        <h3>Agents</h3>
+        <p className="muted small">
+          Instances: how many copies of each agent work cases in parallel.
+        </p>
         <label className="row">
-          <span>cashiers</span>
+          <span>{roleLabel('cashier')}</span>
           <input
             type="number"
             min={1}
@@ -246,7 +261,7 @@ export function RunConfigPanel({
               patch({ staffing: { ...draft.staffing, cashiers: Number(e.target.value) } })
             }
           />
-          <span>baristas</span>
+          <span>{roleLabel('barista')}</span>
           <input
             type="number"
             min={1}
@@ -257,36 +272,17 @@ export function RunConfigPanel({
             }
           />
         </label>
-        <label className="row">
-          <span>arrival gap</span>
-          <input
-            type="range"
-            min={0}
-            max={8000}
-            step={500}
-            value={draft.arrivalGapMs ?? 1500}
-            onChange={(e) => patch({ arrivalGapMs: Number(e.target.value) })}
-          />
-          <span className="muted">{fmtMs(draft.arrivalGapMs ?? 1500)}</span>
-        </label>
-        <label className="row">
-          <span>mock pacing</span>
-          <select
-            value={draft.pacing}
-            onChange={(e) => patch({ pacing: e.target.value as RunDraft['pacing'] })}
-          >
-            <option value="realistic">realistic (0.8–2.5s per model step)</option>
-            <option value="hang">realistic + barista hangs on order #2</option>
-            <option value="instant">instant (tests)</option>
-          </select>
-        </label>
+      </section>
+
+      <section>
+        <h3>Evaluation</h3>
         <label className="check">
           <input
             type="checkbox"
-            checked={draft.triageEnabled ?? true}
-            onChange={(e) => patch({ triageEnabled: e.target.checked })}
+            checked={draft.reviewEnabled ?? true}
+            onChange={(e) => patch({ reviewEnabled: e.target.checked })}
           />{' '}
-          door triage by the manager
+          {roleLabel('manager')} reviews every {CASE_NOUN.one}
         </label>
         <label className="check">
           <input
@@ -294,19 +290,51 @@ export function RunConfigPanel({
             checked={draft.judgeEnabled ?? true}
             onChange={(e) => patch({ judgeEnabled: e.target.checked })}
           />{' '}
-          judge every visit
+          judge every {CASE_NOUN.one}
         </label>
       </section>
 
+      <DecisionPoints
+        draft={draft}
+        patch={patch}
+        gateTools={domains.find((d) => d.id === (draft.domain ?? 'cafe'))?.gateTools ?? []}
+      />
+
       <section>
         <h3>
-          Chaos{' '}
+          Advanced{' '}
           <button type="button" className="link" onClick={() => setShowAdvanced((v) => !v)}>
             {showAdvanced ? 'hide' : 'show'}
           </button>
         </h3>
         {showAdvanced && (
           <>
+            <label className="row">
+              <span>delay between cases</span>
+              <input
+                type="range"
+                min={0}
+                max={8000}
+                step={500}
+                value={draft.arrivalGapMs ?? 1500}
+                onChange={(e) => patch({ arrivalGapMs: Number(e.target.value) })}
+              />
+              <span className="muted">{fmtMs(draft.arrivalGapMs ?? 1500)}</span>
+            </label>
+            <label className="row">
+              <span>mock pacing</span>
+              <select
+                value={draft.pacing}
+                onChange={(e) => patch({ pacing: e.target.value as RunDraft['pacing'] })}
+              >
+                <option value="realistic">realistic (0.8–2.5s per model step)</option>
+                <option value="hang">
+                  realistic + agent 2 ({words().roles.barista}) hangs on the second{' '}
+                  {words().workItem}
+                </option>
+                <option value="instant">instant (tests)</option>
+              </select>
+            </label>
             <label className="row">
               <span>tool error rate</span>
               <input
@@ -365,8 +393,8 @@ export function RunConfigPanel({
                 }
               >
                 <option value="cashier,barista,manager">everyone</option>
-                <option value="barista">baristas only</option>
-                <option value="cashier">cashiers only</option>
+                <option value="barista">{roleLabel('barista')} only</option>
+                <option value="cashier">{roleLabel('cashier')} only</option>
               </select>
             </label>
             <label className="row">
@@ -405,11 +433,11 @@ export function RunConfigPanel({
       </section>
 
       <section>
-        <h3>Recent shifts</h3>
+        <h3>Recent runs</h3>
         <p className="muted small">
-          Every shift is persisted. Click one to load it: a finished shift replays from the start, a
-          shift that is still running attaches live. Shifts the server lost track of (a restart
-          mid-run) are shown as interrupted.
+          Every run is persisted. Click one to load it: a finished run replays from the start, a run
+          that is still going attaches live. Runs the server lost track of (a restart mid-run) are
+          shown as interrupted.
         </p>
         {runs.length === 0 ? (
           <p className="muted">None yet.</p>
@@ -426,10 +454,11 @@ export function RunConfigPanel({
                 <li key={r.id} className={r.id === currentRunId ? 'current' : ''}>
                   <button type="button" className="link" onClick={() => onLoadRun(r)}>
                     {new Date(r.createdAt).toLocaleTimeString()} · {r.config.name} ·{' '}
-                    {r.config.scenarioIds.length} customers
+                    {r.config.scenarioIds.length} {CASE_NOUN.many}
+                    {r.config.domain && r.config.domain !== 'cafe' ? ` · ${r.config.domain}` : ''}
                   </button>
                   <span className={`pill ${status}`} title={r.error ?? undefined}>
-                    {status}
+                    {sentence(status)}
                   </span>
                   <span className="muted small">
                     {ROLES.map((role) =>
@@ -443,5 +472,103 @@ export function RunConfigPanel({
         )}
       </section>
     </div>
+  )
+}
+
+/**
+ * Where a decision model (Jev, or any LLM through the evaluation adapter) acts in
+ * the run beyond judging: the router classifies (and can turn away) each case, and the action
+ * gate approves or blocks the domain's riskiest tool calls before they execute.
+ */
+function DecisionPoints({
+  draft,
+  patch,
+  gateTools,
+}: {
+  draft: RunDraft
+  patch: (p: Partial<RunDraft>) => void
+  gateTools: string[]
+}) {
+  const gate = { enabled: false, ...draft.gate }
+  const threshold = gate.threshold ?? 0.5
+  const setGate = (p: Partial<typeof gate>) => patch({ gate: { ...gate, ...p } })
+  const triageOn = draft.triageEnabled ?? false
+  return (
+    <section>
+      <h3>Decision points</h3>
+      <p className="muted small">
+        Typed, fast, calibrated decisions: where a decision model such as{' '}
+        <code>gateway:typesafe-ai/jev</code> is strongest. Each uses the {roleLabel('manager')}
+        {"'"}s model unless you pick another.
+      </p>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={triageOn}
+          onChange={(e) =>
+            patch({
+              triageEnabled: e.target.checked,
+              ...(e.target.checked ? {} : { triageRoutes: false }),
+            })
+          }
+        />{' '}
+        router: classify each {CASE_NOUN.one} (intent, escalate) before agent 1 sees it
+      </label>
+      <label className="check sub" title={triageOn ? undefined : 'Turn the router on first'}>
+        <input
+          type="checkbox"
+          disabled={!triageOn}
+          checked={triageOn && (draft.triageRoutes ?? false)}
+          onChange={(e) => patch({ triageRoutes: e.target.checked })}
+        />{' '}
+        and turn away what it classes as manipulation
+      </label>
+      <label
+        className="check"
+        title={gateTools.length ? undefined : 'This domain has no gated tools'}
+      >
+        <input
+          type="checkbox"
+          disabled={gateTools.length === 0}
+          checked={gate.enabled && gateTools.length > 0}
+          onChange={(e) => setGate({ enabled: e.target.checked })}
+        />{' '}
+        action gate on{' '}
+        {gateTools.length ? gateTools.map((t) => <code key={t}>{t}</code>) : 'nothing'}
+      </label>
+      {gate.enabled && gateTools.length > 0 && (
+        <>
+          <label className="row">
+            <span>gate model</span>
+            <input
+              list="model-specs"
+              placeholder={`${draft.roles.manager} (orchestrator)`}
+              value={gate.modelSpec ?? ''}
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                const { modelSpec: _drop, ...rest } = gate
+                patch({ gate: v ? { ...rest, modelSpec: v } : rest })
+              }}
+              spellCheck={false}
+            />
+          </label>
+          <div className="muted small spec-desc">
+            {describeSpec(gate.modelSpec ?? draft.roles.manager)}
+          </div>
+          <label className="row">
+            <span>approve at</span>
+            <input
+              type="range"
+              min={0.05}
+              max={0.95}
+              step={0.05}
+              value={threshold}
+              onChange={(e) => setGate({ threshold: Number(e.target.value) })}
+            />
+            <span className="muted">P ≥ {Math.round(threshold * 100)}%</span>
+          </label>
+        </>
+      )}
+    </section>
   )
 }

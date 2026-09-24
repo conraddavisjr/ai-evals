@@ -3,7 +3,20 @@ import type { Capability, ChaosEngine, Emit, Gateway } from '@cafe/mcp-gateway'
 import { costUsd, type ModelRegistry } from '@cafe/models'
 import type { Budget, Role, Station } from '@cafe/protocol'
 import {
+  ATTR,
+  type Context,
+  contextFor,
+  inSpan,
+  markOk,
+  context as otelContext,
+  recordError,
+  type Span,
+  startSpan,
+  trace,
+} from '@cafe/telemetry'
+import {
   generateText,
+  jsonSchema,
   type ModelMessage,
   NoSuchToolError,
   stepCountIs,
@@ -66,6 +79,8 @@ export interface RunAgentInput {
   now?: () => number
   /** Extra scopes beyond the role default (used by tests and future experiments). */
   extraScopes?: string[] | undefined
+  /** OpenTelemetry parent for this turn's span (the visit, or the run for a barista loop). */
+  parentContext?: Context | Span | null | undefined
 }
 
 class AgentCrashError extends Error {}
@@ -99,6 +114,27 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
       : {}),
   })
 
+  // One span per turn, one per model step under it; tool spans nest under the live step.
+  const turn = startSpan(
+    'agent.turn',
+    `${agent.role} turn`,
+    {
+      [ATTR.AGENT_ID]: agent.agentId,
+      [ATTR.ROLE]: agent.role,
+      [ATTR.MODEL_SPEC]: agent.modelSpec,
+      ...(cap.txId ? { [ATTR.TX_ID]: cap.txId } : {}),
+    },
+    input.parentContext,
+  )
+  const turnContext = trace.setSpan(contextFor(input.parentContext), turn)
+  let stepSpan: Span | null = null
+  const bindTx = () => {
+    // A barista's claim binds the turn to a visit mid-way; reflect it on the open spans.
+    if (!cap.txId) return
+    turn.setAttribute(ATTR.TX_ID, cap.txId)
+    stepSpan?.setAttribute(ATTR.TX_ID, cap.txId)
+  }
+
   const toolCalls: AgentToolCall[] = []
   /** DB writes we do not want to block the model loop on, but must finish before we return. */
   const pending: Promise<unknown>[] = []
@@ -123,7 +159,10 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
       bail('crashed')
       throw new AgentCrashError(crashMessage)
     }
-    const r = await gateway.call(cap, name, args)
+    const r = stepSpan
+      ? await inSpan(stepSpan, () => gateway.call(cap, name, args))
+      : await otelContext.with(turnContext, () => gateway.call(cap, name, args))
+    bindTx()
     toolCalls.push({
       tool: name,
       ok: r.ok,
@@ -139,7 +178,8 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
   for (const def of gateway.toolsFor(cap)) {
     tools[def.name] = tool({
       description: def.description,
-      inputSchema: def.input,
+      // a remote MCP tool advertises its own JSON Schema; built-ins their zod schema
+      inputSchema: def.inputJsonSchema ? jsonSchema(def.inputJsonSchema) : def.input,
       execute: (args: unknown) => callGateway(def.name, args),
     })
   }
@@ -154,71 +194,98 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
   let stepStartedAt = now()
 
   try {
-    const result = await generateText({
-      model,
-      system,
-      prompt: input.task,
-      tools,
-      stopWhen: stepCountIs(budget.maxStepsPerAgent),
-      abortSignal: abort.signal,
-      maxRetries: 1,
-      onStepStart: () => {
-        steps += 1
-        stepStartedAt = now()
-        emit({ type: 'agent.thinking', ...base(), step: steps })
-      },
-      onLanguageModelCallEnd: (e) => {
-        modelLatenciesMs.push(Math.max(0, now() - stepStartedAt))
-        const u = e.usage
-        inputTokens += u?.inputTokens ?? 0
-        outputTokens += u?.outputTokens ?? 0
-      },
-      onStepFinish: (step) => {
-        const stepIn = step.usage.inputTokens ?? 0
-        const stepOut = step.usage.outputTokens ?? 0
-        const latencyMs = modelLatenciesMs[modelLatenciesMs.length - 1] ?? 0
-        emit({
-          type: 'model.usage',
-          ...base(),
-          modelSpec: agent.modelSpec,
-          step: steps,
-          inputTokens: stepIn,
-          outputTokens: stepOut,
-          costUsd: costUsd(agent.modelSpec, stepIn, stepOut),
-          latencyMs,
-        })
-        pending.push(
-          input.store.usage.record({
-            runId: input.runId,
-            txId: cap.txId,
-            agentId: agent.agentId,
-            role: agent.role,
+    const result = await otelContext.with(turnContext, () =>
+      generateText({
+        model,
+        system,
+        prompt: input.task,
+        tools,
+        stopWhen: stepCountIs(budget.maxStepsPerAgent),
+        abortSignal: abort.signal,
+        maxRetries: 1,
+        onStepStart: () => {
+          steps += 1
+          stepStartedAt = now()
+          stepSpan = startSpan(
+            'step',
+            `${agent.role} step ${steps}`,
+            {
+              [ATTR.AGENT_ID]: agent.agentId,
+              [ATTR.ROLE]: agent.role,
+              [ATTR.MODEL_SPEC]: agent.modelSpec,
+              [ATTR.STEP]: steps,
+              ...(cap.txId ? { [ATTR.TX_ID]: cap.txId } : {}),
+            },
+            turn,
+          )
+          emit({ type: 'agent.thinking', ...base(), step: steps })
+        },
+        onLanguageModelCallEnd: (e) => {
+          modelLatenciesMs.push(Math.max(0, now() - stepStartedAt))
+          const u = e.usage
+          inputTokens += u?.inputTokens ?? 0
+          outputTokens += u?.outputTokens ?? 0
+        },
+        onStepFinish: (step) => {
+          const stepIn = step.usage.inputTokens ?? 0
+          const stepOut = step.usage.outputTokens ?? 0
+          const latencyMs = modelLatenciesMs[modelLatenciesMs.length - 1] ?? 0
+          emit({
+            type: 'model.usage',
+            ...base(),
             modelSpec: agent.modelSpec,
             step: steps,
             inputTokens: stepIn,
             outputTokens: stepOut,
             costUsd: costUsd(agent.modelSpec, stepIn, stepOut),
             latencyMs,
-            now: now(),
-          }),
-        )
-        // A call to a tool the model was never given is flagged on the tool-call part as invalid.
-        // Route it through the gateway anyway so it is recorded as a scope violation / unknown tool
-        // (the model already received the SDK's "unavailable tool" message as the tool result).
-        for (const part of step.content) {
-          if (part.type === 'tool-call' && part.invalid && NoSuchToolError.isInstance(part.error)) {
-            const args = (part.input && typeof part.input === 'object' ? part.input : {}) as Record<
-              string,
-              unknown
-            >
-            pending.push(callGateway(part.toolName, args).catch(() => undefined))
+          })
+          pending.push(
+            input.store.usage.record({
+              runId: input.runId,
+              txId: cap.txId,
+              agentId: agent.agentId,
+              role: agent.role,
+              modelSpec: agent.modelSpec,
+              step: steps,
+              inputTokens: stepIn,
+              outputTokens: stepOut,
+              costUsd: costUsd(agent.modelSpec, stepIn, stepOut),
+              latencyMs,
+              now: now(),
+            }),
+          )
+          // A call to a tool the model was never given is flagged on the tool-call part as invalid.
+          // Route it through the gateway anyway so it is recorded as a scope violation / unknown tool
+          // (the model already received the SDK's "unavailable tool" message as the tool result).
+          for (const part of step.content) {
+            if (
+              part.type === 'tool-call' &&
+              part.invalid &&
+              NoSuchToolError.isInstance(part.error)
+            ) {
+              const args = (
+                part.input && typeof part.input === 'object' ? part.input : {}
+              ) as Record<string, unknown>
+              pending.push(callGateway(part.toolName, args).catch(() => undefined))
+            }
           }
-        }
-        if (step.text.trim()) emit({ type: 'agent.spoke', ...base(), text: step.text.trim() })
-        if (inputTokens + outputTokens > budget.maxTokensPerAgent || input.overBudget())
-          bail('budget_exceeded')
-      },
-    })
+          if (step.text.trim()) emit({ type: 'agent.spoke', ...base(), text: step.text.trim() })
+          if (stepSpan) {
+            stepSpan.setAttributes({
+              [ATTR.INPUT_TOKENS]: stepIn,
+              [ATTR.OUTPUT_TOKENS]: stepOut,
+              [ATTR.COST_USD]: costUsd(agent.modelSpec, stepIn, stepOut),
+              [ATTR.LATENCY_MS]: latencyMs,
+            })
+            stepSpan.end()
+            stepSpan = null
+          }
+          if (inputTokens + outputTokens > budget.maxTokensPerAgent || input.overBudget())
+            bail('budget_exceeded')
+        },
+      }),
+    )
     text = result.text
     messages = [
       { role: 'system', content: system },
@@ -249,6 +316,13 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
     }
   } finally {
     clearTimeout(timer)
+    // A bail mid-step leaves the step span open; close it under the turn's verdict.
+    if (stepSpan) {
+      const open: Span = stepSpan
+      if (outcome !== 'completed') recordError(open, new Error(error ?? outcome), outcome)
+      open.end()
+      stepSpan = null
+    }
   }
 
   if (outcome !== 'completed') {
@@ -279,6 +353,17 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
     )
   }
   await Promise.allSettled(pending)
+
+  turn.setAttributes({
+    [ATTR.OUTCOME]: outcome,
+    [ATTR.STEP]: steps,
+    [ATTR.INPUT_TOKENS]: inputTokens,
+    [ATTR.OUTPUT_TOKENS]: outputTokens,
+    [ATTR.COST_USD]: costUsd(agent.modelSpec, inputTokens, outputTokens),
+  })
+  if (outcome === 'completed') markOk(turn)
+  else recordError(turn, new Error(error ?? outcome), outcome)
+  turn.end()
 
   return {
     outcome,

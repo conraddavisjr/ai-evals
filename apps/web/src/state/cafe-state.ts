@@ -1,4 +1,13 @@
-import type { CafeEvent, JudgeAnswers, OrderItem, Role, RunConfig, Station } from '@cafe/protocol'
+import type {
+  CafeEvent,
+  JudgeAnswers,
+  OrderItem,
+  ReviewIssue,
+  ReviewVerdict,
+  Role,
+  RunConfig,
+  Station,
+} from '@cafe/protocol'
 
 /**
  * A pure reducer from the event stream to what the scene and panels need to
@@ -40,7 +49,14 @@ export interface AgentView {
   /** Durations of completed work items, for the ring's expected time. */
   workDurations: number[]
   currentTxId: string | null
+  /** The agent's system prompt, when the run recorded it. */
+  persona: string | null
 }
+
+/** A golden case's expectation as the stream carries it (older runs have the first four fields only). */
+export type CaseExpectation = NonNullable<
+  Extract<CafeEvent, { type: 'customer.arrived' }>['expected']
+>
 
 export interface CustomerView {
   customerId: string
@@ -48,6 +64,9 @@ export interface CustomerView {
   name: string
   sprite: string
   scenarioId: string
+  /** The golden case's title, when the stream carries it. */
+  title: string | null
+  expected: CaseExpectation | null
   station: Station
   utterance: string
   lastSpoke: { text: string; at: number } | null
@@ -93,6 +112,17 @@ export interface CafeState {
     string,
     { answers: JudgeAnswers; judgeSpec: string; latencyMs: number; at: number }
   >
+  /** The manager's post-visit review per transaction. */
+  reviews: Record<
+    string,
+    {
+      verdict: ReviewVerdict
+      issues: ReviewIssue[]
+      summary: string
+      modelSpec: string
+      at: number
+    }
+  >
   costUsd: number
   applied: CafeEvent[]
   lastEvent: CafeEvent | null
@@ -110,6 +140,7 @@ export const initialState = (): CafeState => ({
   orders: {},
   queue: [],
   verdicts: {},
+  reviews: {},
   costUsd: 0,
   applied: [],
   lastEvent: null,
@@ -181,6 +212,7 @@ export function reduce(prev: CafeState, e: CafeEvent): CafeState {
         workStartedAt: null,
         workDurations: [],
         currentTxId: null,
+        persona: e.persona ?? null,
       }
       break
     case 'agent.moved': {
@@ -280,6 +312,8 @@ export function reduce(prev: CafeState, e: CafeEvent): CafeState {
         name: e.name,
         sprite: e.sprite,
         scenarioId: e.scenarioId,
+        title: e.title ?? null,
+        expected: e.expected ?? null,
         station: 'door',
         utterance: e.utterance,
         lastSpoke: null,
@@ -414,6 +448,19 @@ export function reduce(prev: CafeState, e: CafeEvent): CafeState {
       if (c) customers[e.customerId] = { ...c, outcome: 'refused' }
       break
     }
+    case 'manager.reviewed':
+      if (e.txId)
+        s.reviews = {
+          ...s.reviews,
+          [e.txId]: {
+            verdict: e.verdict,
+            issues: e.issues,
+            summary: e.summary,
+            modelSpec: e.modelSpec,
+            at: e.t,
+          },
+        }
+      break
     case 'judge.verdict':
       if (e.txId)
         s.verdicts = {

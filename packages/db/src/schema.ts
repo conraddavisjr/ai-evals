@@ -2,9 +2,14 @@ import type {
   JudgeAnswers,
   OrderItem,
   OrderStatus,
+  ReviewIssue,
+  ReviewVerdict,
   RunConfig,
   RunMetrics,
   RunStatus,
+  Scenario,
+  SuiteConfig,
+  SuiteStatus,
 } from '@cafe/protocol'
 import {
   bigint,
@@ -67,15 +72,76 @@ export const customers = pgTable('customers', {
 
 // ---------- per-run state ----------
 
-export const runs = pgTable('runs', {
+/** User-defined golden datasets; the built-in one is virtual and never stored. */
+export const datasets = pgTable('datasets', {
   id: text('id').primaryKey(),
-  status: text('status').$type<RunStatus>().notNull(),
-  config: jsonb('config').$type<RunConfig>().notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  createdAt: ms('created_at').notNull(),
+  updatedAt: ms('updated_at').notNull(),
+})
+
+export const datasetItems = pgTable(
+  'dataset_items',
+  {
+    /** The scenario id: ds:<datasetId>:<slug>. */
+    id: text('id').primaryKey(),
+    datasetId: text('dataset_id')
+      .notNull()
+      .references(() => datasets.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    scenario: jsonb('scenario').$type<Scenario>().notNull(),
+    createdAt: ms('created_at').notNull(),
+    updatedAt: ms('updated_at').notNull(),
+  },
+  (t) => [index('dataset_items_dataset').on(t.datasetId, t.position)],
+)
+
+/** An experiment: variants x repeats runs over one golden dataset. */
+export const suites = pgTable('suites', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  status: text('status').$type<SuiteStatus>().notNull(),
+  config: jsonb('config').$type<SuiteConfig>().notNull(),
+  createdAt: ms('created_at').notNull(),
   startedAt: ms('started_at'),
   finishedAt: ms('finished_at'),
   error: text('error'),
-  createdAt: ms('created_at').notNull(),
 })
+
+/**
+ * A decision-bench run: the same labelled decisions asked of several evaluation
+ * models. Config and report are the evals package's shapes, stored as JSON.
+ */
+export const benches = pgTable('benches', {
+  id: text('id').primaryKey(),
+  status: text('status').$type<'running' | 'finished' | 'failed'>().notNull(),
+  config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+  report: jsonb('report').$type<unknown>(),
+  error: text('error'),
+  createdAt: ms('created_at').notNull(),
+  finishedAt: ms('finished_at'),
+})
+
+export const runs = pgTable(
+  'runs',
+  {
+    id: text('id').primaryKey(),
+    status: text('status').$type<RunStatus>().notNull(),
+    config: jsonb('config').$type<RunConfig>().notNull(),
+    startedAt: ms('started_at'),
+    finishedAt: ms('finished_at'),
+    error: text('error'),
+    createdAt: ms('created_at').notNull(),
+    /** Boot id of the server process driving the run; null for the CLI and tests. Lets a restart reap only its predecessor's runs. */
+    owner: text('owner'),
+    /** Set when the run is one variant of a suite. */
+    suiteId: text('suite_id').references(() => suites.id, { onDelete: 'cascade' }),
+    variant: text('variant'),
+    repeat: integer('repeat'),
+  },
+  (t) => [index('runs_suite').on(t.suiteId)],
+)
 
 export const events = pgTable(
   'events',
@@ -187,6 +253,64 @@ export const modelUsage = pgTable(
   },
   (t) => [index('model_usage_run').on(t.runId)],
 )
+
+/**
+ * OpenTelemetry spans, one row each, written by the server's exporter. The hot
+ * attributes are promoted to columns so the telemetry aggregate is a plain query;
+ * everything else stays in `attributes`.
+ */
+export const spans = pgTable(
+  'spans',
+  {
+    traceId: text('trace_id').notNull(),
+    spanId: text('span_id').notNull(),
+    parentSpanId: text('parent_span_id'),
+    runId: text('run_id').references(() => runs.id, { onDelete: 'cascade' }),
+    suiteId: text('suite_id'),
+    txId: text('tx_id'),
+    name: text('name').notNull(),
+    /** suite | run | visit | triage | agent.turn | step | tool | review | judge */
+    kind: text('kind').notNull(),
+    role: text('role'),
+    agentId: text('agent_id'),
+    modelSpec: text('model_spec'),
+    tool: text('tool'),
+    startT: ms('start_t').notNull(),
+    endT: ms('end_t').notNull(),
+    durationMs: doublePrecision('duration_ms').notNull(),
+    /** ok | error | unset */
+    status: text('status').notNull(),
+    errorKind: text('error_kind'),
+    costUsd: doublePrecision('cost_usd'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    attributes: jsonb('attributes').$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.traceId, t.spanId] }),
+    index('spans_run_start').on(t.runId, t.startT),
+    index('spans_run_tx').on(t.runId, t.txId),
+    index('spans_suite').on(t.suiteId),
+  ],
+)
+
+/** The manager's post-visit review: the orchestration layer's own read of its sub-agents. */
+export const reviews = pgTable('reviews', {
+  id: text('id').primaryKey(),
+  runId: text('run_id')
+    .notNull()
+    .references(() => runs.id, { onDelete: 'cascade' }),
+  txId: text('tx_id').notNull(),
+  orderId: text('order_id'),
+  reviewerSpec: text('reviewer_spec').notNull(),
+  verdict: text('verdict').$type<ReviewVerdict>().notNull(),
+  issues: jsonb('issues').$type<ReviewIssue[]>().notNull(),
+  summary: text('summary').notNull(),
+  /** Exactly what the manager saw, for audit. */
+  brief: text('brief').notNull(),
+  latencyMs: integer('latency_ms').notNull(),
+  at: ms('at').notNull(),
+})
 
 export const judgements = pgTable('judgements', {
   id: text('id').primaryKey(),

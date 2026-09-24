@@ -1,8 +1,22 @@
-import type { CafeEvent, RunConfigInput, RunMetrics, Scenario } from '@cafe/protocol'
-import type { HarnessClient, ModelsInfo, RunRow, StreamHandlers } from './types.js'
+import type {
+  CafeEvent,
+  RunConfigInput,
+  RunMetrics,
+  RunTelemetry,
+  Scenario,
+  SpanSummary,
+} from '@cafe/protocol'
+import type {
+  DomainInfo,
+  ExperimentClient,
+  HarnessClient,
+  ModelsInfo,
+  RunRow,
+  StreamHandlers,
+} from './types.js'
 
 /** The Stardust server's REST + SSE API, mounted under `baseUrl` (default: same origin). */
-export function createHttpHarness(baseUrl = ''): HarnessClient {
+export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClient {
   const url = (path: string) => `${baseUrl}${path}`
   async function json<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url(path), {
@@ -23,7 +37,9 @@ export function createHttpHarness(baseUrl = ''): HarnessClient {
   }
 
   return {
-    scenarios: () => json<Scenario[]>('/api/scenarios'),
+    scenarios: (domain) =>
+      json<Scenario[]>(`/api/scenarios${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`),
+    domains: () => json<DomainInfo[]>('/api/domains'),
     models: () => json<ModelsInfo>('/api/models'),
     runs: () => json<RunRow[]>('/api/runs'),
     run: (id) => json<RunRow>(`/api/runs/${id}`),
@@ -34,6 +50,44 @@ export function createHttpHarness(baseUrl = ''): HarnessClient {
     events: (id, afterSeq = -1) => json<CafeEvent[]>(`/api/runs/${id}/events?afterSeq=${afterSeq}`),
     metrics: (id) => json<RunMetrics>(`/api/runs/${id}/metrics`),
     judgements: (id) => json(`/api/runs/${id}/judgements`),
+    reviews: (id) => json(`/api/runs/${id}/reviews`),
+    telemetry: (id) => json<RunTelemetry>(`/api/runs/${id}/telemetry`),
+    datasets: () => json('/api/datasets'),
+    dataset: (id) => json(`/api/datasets/${id}`),
+    createDataset: (input) =>
+      json('/api/datasets', { method: 'POST', body: JSON.stringify(input) }),
+    updateDataset: (id, patch) =>
+      json(`/api/datasets/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+    deleteDataset: (id) => json(`/api/datasets/${id}`, { method: 'DELETE' }),
+    addItem: (id, item) =>
+      json(`/api/datasets/${id}/items`, { method: 'POST', body: JSON.stringify(item) }),
+    updateItem: (id, itemId, item) =>
+      json(`/api/datasets/${id}/items/${itemId}`, { method: 'PUT', body: JSON.stringify(item) }),
+    deleteItem: (id, itemId) => json(`/api/datasets/${id}/items/${itemId}`, { method: 'DELETE' }),
+    reorderItems: (id, ids) =>
+      json(`/api/datasets/${id}/items/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
+    tools: (domain) => json(`/api/tools${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`),
+    orchestrators: () => json('/api/orchestrators'),
+    startBench: (config) => json('/api/bench', { method: 'POST', body: JSON.stringify(config) }),
+    bench: (id) => json(`/api/bench/${id}`),
+    benches: () => json('/api/bench'),
+    deleteBench: (id) => json(`/api/bench/${id}`, { method: 'DELETE' }),
+    suites: () => json('/api/suites'),
+    suite: (id) => json(`/api/suites/${id}`),
+    startSuite: (config) => json('/api/suites', { method: 'POST', body: JSON.stringify(config) }),
+    cancelSuite: (id) => json(`/api/suites/${id}/cancel`, { method: 'POST' }),
+    deleteSuite: (id) => json(`/api/suites/${id}`, { method: 'DELETE' }),
+    suiteMetrics: (id) => json(`/api/suites/${id}/metrics`),
+    suiteTelemetry: (id) => json(`/api/suites/${id}/telemetry`),
+    spans: (id, q = {}) => {
+      const p = new URLSearchParams()
+      if (q.txId) p.set('txId', q.txId)
+      if (q.kinds?.length) p.set('kind', q.kinds.join(','))
+      if (q.limit) p.set('limit', String(q.limit))
+      if (q.offset) p.set('offset', String(q.offset))
+      const qs = p.toString()
+      return json<SpanSummary[]>(`/api/runs/${id}/spans${qs ? `?${qs}` : ''}`)
+    },
     stream(runId: string, handlers: StreamHandlers, afterSeq = -1): () => void {
       const es = new EventSource(url(`/api/runs/${runId}/stream?afterSeq=${afterSeq}`))
       es.addEventListener('cafe', (ev) =>

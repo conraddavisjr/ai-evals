@@ -1,0 +1,621 @@
+/* ---------- Trace view: the shift as a board, no characters ----------
+   Cool dark surface and saturated layer colours so the pipeline reads at a glance;
+   plain sans for text, mono for ids and tools. Scoped under .trace. */
+.trace {
+  --tr-bg: #12121c;
+  --tr-grid: rgba(255, 255, 255, 0.045);
+  --tr-card: rgba(31, 33, 46, 0.96);
+  --tr-line: rgba(148, 160, 214, 0.28);
+  --tr-text: #e6e9f4;
+  --tr-muted: #8f97b8;
+  --tr-input: #ff7aa2;
+  --tr-orch: #5ad48f;
+  --tr-agent: #ffcf5a;
+  --tr-tool: #ff9a5a;
+  --tr-eval: #b48cff;
+  --tr-error: #ff5966;
+  --tr-ok: #33ccb3;
+  --tr-warn: #f2a640;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--tr-bg);
+  color: var(--tr-text);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  user-select: none;
+}
+.trace-mount {
+  background: #12121c;
+}
+.trace-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--tr-line);
+  background: #171827;
+  flex-wrap: wrap;
+}
+.trace-bar .title {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: #c9d1ff;
+}
+.trace-bar .hint {
+  flex: 1 1 200px;
+  min-width: 0;
+  color: var(--tr-muted);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trace-bar .status {
+  margin-left: auto;
+  color: var(--tr-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.trace-bar button {
+  background: #23253a;
+  border: 1px solid rgba(148, 160, 214, 0.35);
+  color: var(--tr-text);
+  border-radius: 6px;
+  padding: 2px 9px;
+  box-shadow: none;
+  font-size: 12px;
+}
+.trace-bar button:hover:not(:disabled) {
+  border-color: #8ea2ff;
+  filter: none;
+}
+.trace-bar .zoom {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  min-width: 40px;
+  text-align: center;
+  color: var(--tr-muted);
+}
+.trace-bar .legend {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--tr-muted);
+}
+.trace-bar .legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 4px;
+  background: currentColor;
+}
+.trace-bar .legend .layer-input {
+  color: var(--tr-input);
+}
+.trace-bar .legend .layer-orch {
+  color: var(--tr-orch);
+}
+.trace-bar .legend .layer-agent {
+  color: var(--tr-agent);
+}
+.trace-bar .legend .layer-tool {
+  color: var(--tr-tool);
+}
+.trace-bar .legend .layer-eval {
+  color: var(--tr-eval);
+}
+.trace-bar .legend .layer-error {
+  color: var(--tr-error);
+}
+
+.trace-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background-image: radial-gradient(var(--tr-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.trace-canvas[data-dragging="true"] {
+  cursor: grabbing;
+}
+.trace-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 40px;
+  padding-right: 40px;
+}
+.trace-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--tr-muted);
+  pointer-events: none;
+}
+
+/* the run + staff strip above the columns */
+.trace-shift {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  max-width: 1400px;
+}
+
+/* columns: one per golden item, left to right in arrival order */
+.trace-cols {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.trace-col {
+  width: 300px;
+  flex: none;
+  border: 1px solid var(--tr-line);
+  border-radius: 10px;
+  background: var(--tr-card);
+  overflow: hidden;
+}
+.trace-col-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--tr-line);
+  background: rgba(64, 82, 217, 0.12);
+}
+.trace-col-head .idx {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #c9d1ff;
+}
+.trace-col-head .sid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tr-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trace-col-head .who {
+  font-weight: 700;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.trace-col-head .pill {
+  font-size: 9px;
+  padding: 3px 6px 2px;
+  flex: none;
+}
+/* a case that deviated from its golden expectation: the whole head asks for attention */
+.trace-col.verdict-fail {
+  border-color: rgba(255, 89, 102, 0.75);
+}
+.trace-col.verdict-fail .trace-col-head {
+  background: rgba(230, 64, 77, 0.32);
+}
+.trace-col.verdict-fail .trace-col-head .idx {
+  color: #ffd2cc;
+}
+
+/* bands: dotted separators, aligned across columns by a shared min-height */
+.trace-band {
+  padding: 4px 8px 8px;
+  border-top: 1px dashed rgba(148, 160, 214, 0.35);
+}
+.trace-band:first-of-type {
+  border-top: none;
+}
+.band-title {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tr-muted);
+  margin: 2px 0 4px;
+}
+.band-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+}
+/* the dotted spine that strings a column's badges together */
+.band-list::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 4px;
+  bottom: 4px;
+  border-left: 1px dotted rgba(148, 160, 214, 0.35);
+}
+.band-none {
+  color: rgba(143, 151, 184, 0.5);
+  padding-left: 6px;
+}
+
+/* badges */
+.trace-badge {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px auto minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: baseline;
+  width: 100%;
+  height: 22px;
+  padding: 0 6px 0 4px;
+  border: none;
+  border-left: 3px solid var(--layer);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--tr-text);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  line-height: 22px;
+  cursor: pointer;
+  box-shadow: none;
+  --layer: var(--tr-muted);
+}
+.trace-badge:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  filter: none;
+  border-color: var(--layer);
+}
+.trace-badge:active:not(:disabled) {
+  transform: none;
+}
+.trace-badge.indent {
+  margin-left: 18px;
+  width: calc(100% - 18px);
+}
+.trace-badge.current {
+  outline: 2px solid #8ea2ff;
+  outline-offset: 1px;
+  background: rgba(89, 115, 242, 0.18);
+}
+.trace-badge .mark {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-align: center;
+}
+.trace-badge .mark.ok {
+  color: var(--tr-ok);
+}
+.trace-badge .mark.bad {
+  color: var(--tr-error);
+}
+.trace-badge .mark.warn {
+  color: var(--tr-warn);
+}
+.trace-badge .mark.unknown {
+  color: var(--tr-muted);
+}
+.trace-badge .head {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--layer);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.trace-badge .agent-glyph {
+  display: inline-flex;
+  font-size: 12px;
+  line-height: 1;
+}
+.trace-badge .text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trace-badge .meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--tr-muted);
+  white-space: nowrap;
+}
+.trace-badge.layer-input {
+  --layer: var(--tr-input);
+}
+.trace-badge.layer-orch {
+  --layer: var(--tr-orch);
+}
+.trace-badge.layer-agent {
+  --layer: var(--tr-agent);
+}
+.trace-badge.layer-tool {
+  --layer: var(--tr-tool);
+}
+.trace-badge.layer-eval {
+  --layer: var(--tr-eval);
+}
+.trace-badge.layer-error {
+  --layer: var(--tr-error);
+  background: rgba(230, 64, 77, 0.1);
+}
+.trace-shift .trace-badge {
+  width: auto;
+  max-width: 320px;
+}
+
+/* ---------- layout switcher (Grid · Columns · Rows) and tile size ---------- */
+.trace-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+.trace-seg[hidden],
+.trace-camera[hidden] {
+  display: none;
+}
+.trace-bar .trace-seg button {
+  border-radius: 0;
+  margin-left: -1px;
+}
+.trace-bar .trace-seg button:first-of-type {
+  border-radius: 6px 0 0 6px;
+  margin-left: 0;
+}
+.trace-bar .trace-seg button:last-of-type {
+  border-radius: 0 6px 6px 0;
+}
+.trace-bar .trace-seg button.on {
+  background: #3a4190;
+  border-color: #8ea2ff;
+  color: #fff;
+  position: relative;
+}
+.trace-seg .seg-label {
+  font-size: 11px;
+  color: var(--tr-muted);
+  margin-right: 6px;
+}
+.trace-camera {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Grid: short tiles that wrap to the width and scroll on their own ---------- */
+.trace[data-layout="grid"] .trace-canvas {
+  overflow: auto;
+  cursor: default;
+  touch-action: auto;
+}
+.trace[data-layout="grid"] .trace-world {
+  position: static;
+  transform: none;
+  padding: 14px 16px 40px;
+  will-change: auto;
+}
+.trace[data-layout="grid"] .trace-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-w, 320px), 1fr));
+  grid-auto-flow: row dense;
+  gap: 10px;
+}
+.trace-tile {
+  width: auto;
+  height: var(--tile-h, 290px);
+  display: flex;
+  flex-direction: column;
+}
+.trace-tile.expanded {
+  grid-column: span 2;
+  grid-row: span 2;
+  height: calc(var(--tile-h, 290px) * 2 + 10px);
+}
+.trace-tile .trace-col-head .sid {
+  flex: 1;
+  min-width: 0;
+  color: var(--tr-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+.tile-grow {
+  flex: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--tr-muted);
+  border-radius: 5px;
+  padding: 0 5px;
+  font-size: 13px;
+  line-height: 18px;
+  box-shadow: none;
+}
+.tile-grow:hover:not(:disabled) {
+  color: var(--tr-text);
+  border-color: var(--tr-line);
+  filter: none;
+}
+.tile-progress {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 4px 8px 0;
+}
+.tile-progress .seg {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(148, 160, 214, 0.18);
+}
+.tile-progress .seg.lit.band-input {
+  background: var(--tr-input);
+}
+.tile-progress .seg.lit.band-orch {
+  background: var(--tr-orch);
+}
+.tile-progress .seg.lit.band-work {
+  background: var(--tr-agent);
+}
+.tile-progress .seg.lit.band-eval {
+  background: var(--tr-eval);
+}
+.tile-progress .seg.warn {
+  background: var(--tr-warn);
+}
+.tile-progress .seg.bad {
+  background: var(--tr-error);
+}
+.trace-tile-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* no overscroll containment: at a tile's end the wheel carries on to the page */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 160, 214, 0.35) transparent;
+}
+.trace[data-layout="grid"] .trace-shift {
+  margin-bottom: 12px;
+  max-width: none;
+}
+
+/* ---------- Rows: cases stacked, each pipeline one lane per band, left to right ---------- */
+.trace[data-layout="rows"] .trace-cols {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.trace-row {
+  width: auto;
+  min-width: 720px;
+}
+.trace-row .trace-col-head .sid {
+  color: var(--tr-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+.trace-row .trace-col-head .pill {
+  margin-left: 6px;
+}
+.trace-lanes {
+  display: flex;
+  flex-direction: column;
+}
+.trace-lane {
+  display: grid;
+  grid-template-columns: 124px auto;
+  align-items: center;
+  padding: 3px 8px;
+  border-top: 1px dashed rgba(148, 160, 214, 0.35);
+}
+.trace-lane:first-child {
+  border-top: none;
+}
+.trace-lane .band-title {
+  margin: 0;
+}
+.lane-list {
+  display: flex;
+  gap: 4px;
+  position: relative;
+}
+/* the dotted spine runs left to right in a lane */
+.lane-list::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  border-top: 1px dotted rgba(148, 160, 214, 0.35);
+}
+.lane-list .trace-badge {
+  width: 236px;
+  flex: none;
+}
+.lane-list .trace-badge.indent {
+  margin-left: 0;
+  width: 236px;
+}
+
+/* ---------- the playhead: the board is the whole run, the future is dimmed ---------- */
+.trace-badge.ahead {
+  opacity: 0.32;
+}
+.trace-badge.ahead:hover {
+  opacity: 0.7;
+}
+.trace-col.ahead {
+  opacity: 0.45;
+}
+
+/* ---------- isolate: one agent lit across the board ---------- */
+.trace-badge.muted {
+  opacity: 0.14;
+}
+.trace-badge.muted:hover {
+  opacity: 0.6;
+}
+.trace-col.muted {
+  opacity: 0.4;
+}
+.trace-shift .trace-badge[data-agent] {
+  cursor: pointer;
+}
+.trace-shift .trace-badge.on {
+  outline: 2px solid var(--tr-agent);
+  outline-offset: 1px;
+  background: rgba(255, 207, 90, 0.14);
+  opacity: 1;
+}
+.trace-focus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--tr-agent);
+}
+.trace-focus[hidden] {
+  display: none;
+}
+
+/* ---------- section titles stay put while a tile scrolls ---------- */
+.trace-tile-body .band-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -8px 4px;
+  padding: 5px 8px 4px;
+  background: #1f212e;
+  border-bottom: 1px solid rgba(148, 160, 214, 0.14);
+}
+.trace-tile-body .trace-band {
+  padding-top: 0;
+}
+
+/* ---------- an MCP tool call is the tool, hung off the step that made it ---------- */
+.trace-badge .mcp-tag {
+  font-family: var(--font-ui);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 13px;
+  color: #1a1206;
+  background: var(--tr-tool);
+}
+.band-list .trace-badge.layer-tool.indent::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 8px;
+  border-top: 1px dotted rgba(255, 154, 90, 0.7);
+}

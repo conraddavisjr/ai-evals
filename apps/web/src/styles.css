@@ -16,6 +16,8 @@
   --lavender: #b79bea;
   --good: #7fd58a;
   --bad: #ff6b5e;
+  /* caution, kept apart from the accent (--gold doubles as the accent in this theme) */
+  --warn: #ffd27a;
   --font-display: "Lilita One", "Nunito", sans-serif;
   --font-ui: "Nunito", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
@@ -183,7 +185,8 @@ h4 {
   display: flex;
   flex-direction: column;
 }
-header {
+/* the app header only: bare `header` also hit every <header> in panels and lists */
+.app > header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -266,6 +269,7 @@ main {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 .brand .mark {
   filter: drop-shadow(0 0 10px rgba(255, 157, 61, 0.55));
@@ -274,6 +278,7 @@ main {
   display: flex;
   flex-direction: column;
   line-height: 1.05;
+  min-width: 0;
 }
 .brand .title {
   font-family: var(--font-display);
@@ -290,6 +295,10 @@ main {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 700;
+  /* a long business name must not wrap and grow the header */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .status {
   display: flex;
@@ -332,10 +341,11 @@ main {
 }
 
 main {
+  --panel-width: 360px;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) var(--panel-width);
 }
 .stage {
   display: flex;
@@ -618,9 +628,9 @@ main {
 .mode-help p {
   margin: 0;
 }
-/* Reserve the tallest collapsed summary so the stage does not resize on every mode switch. */
+/* Reserve the two-line collapsed summary so the stage does not resize on every mode switch. */
 .mode-help:not(.open) {
-  min-height: calc(1.45em * 4);
+  min-height: calc(1.45em * 2);
 }
 .mode-help.open p {
   margin: 0 0 8px;
@@ -758,12 +768,61 @@ label.inline {
 
 /* ---------- panel ---------- */
 .panel {
+  position: relative;
   border-left: 1px solid var(--line);
   background: linear-gradient(180deg, var(--panel), #0d2029);
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+}
+/* Drag handle on the panel's left edge; the visible bar only shows on hover or while dragging. */
+.panel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 10px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.panel-resizer:hover:not(:disabled),
+.panel-resizer:active:not(:disabled) {
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
+.panel-resizer:focus-visible {
+  outline: none;
+}
+.panel-resizer:focus-visible::after {
+  opacity: 0.9;
+}
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: var(--gold);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.panel-resizer:hover::after,
+body.resizing-panel .panel-resizer::after {
+  opacity: 0.9;
+}
+body.resizing-panel {
+  cursor: col-resize;
+  user-select: none;
 }
 .tabs {
   display: flex;
@@ -787,10 +846,13 @@ label.inline {
   text-shadow: 0 0 10px rgba(255, 210, 122, 0.35);
 }
 .panel-body {
+  --panel-pad-top: 12px;
+  --panel-pad-x: 14px;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 14px 24px;
+  padding: var(--panel-pad-top) var(--panel-pad-x) 24px;
+  container-type: inline-size;
 }
 
 .run-config section {
@@ -800,6 +862,10 @@ label.inline {
   border-radius: var(--radius);
   padding: 10px 12px;
   box-shadow: var(--edge);
+}
+.run-config .spec-desc {
+  margin: -2px 0 6px 118px;
+  font-size: 11px;
 }
 .run-config .row {
   display: flex;
@@ -935,14 +1001,30 @@ label.check input {
 }
 
 .pill {
-  display: inline-block;
+  /* flex centring: uppercase text in a small pill otherwise sits high */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: var(--line);
   font-weight: 800;
+  white-space: nowrap;
+}
+/* a case against its golden expectation, like a test: green when it did what was expected, whatever that was */
+.pill.verdict-pass {
+  background: rgba(127, 213, 138, 0.2);
+  color: #b9f0c0;
+  border: 1px solid rgba(127, 213, 138, 0.55);
+}
+.pill.verdict-fail {
+  background: rgba(255, 107, 94, 0.28);
+  color: #ffd2cc;
+  border: 1px solid rgba(255, 107, 94, 0.8);
 }
 .pill.served,
 .pill.finished {
@@ -958,6 +1040,39 @@ label.check input {
 .pill.failed,
 .pill.abandoned,
 .pill.cancelled {
+  background: rgba(255, 107, 94, 0.18);
+  color: #ffc4bd;
+  border: 1px solid rgba(255, 107, 94, 0.55);
+}
+.agent-glyph {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.1em;
+  margin-right: 3px;
+  color: var(--water);
+}
+.agent-glyph.big {
+  font-size: 1.1em;
+  color: var(--gold);
+}
+.log-row .who {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pill.review-ok {
+  background: rgba(127, 213, 138, 0.14);
+  color: #b9f0c0;
+  border: 1px solid rgba(127, 213, 138, 0.4);
+}
+.pill.review-concern {
+  background: rgba(255, 210, 122, 0.18);
+  color: #ffe6b3;
+  border: 1px solid rgba(255, 210, 122, 0.5);
+}
+.pill.review-escalate {
   background: rgba(255, 107, 94, 0.18);
   color: #ffc4bd;
   border: 1px solid rgba(255, 107, 94, 0.55);
@@ -978,57 +1093,23 @@ label.check input {
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
+.tx.verdict-fail {
+  box-shadow: inset 3px 0 0 var(--bad);
+  padding-left: 8px;
+  background: rgba(255, 107, 94, 0.06);
+}
 .tx-head {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
-.waterfall {
-  margin-top: 6px;
-}
-.waterfall .bar {
-  display: flex;
-  height: 12px;
-  border-radius: 6px;
+.tx-head .tx-title {
+  flex: 1 1 140px;
+  min-width: 0;
   overflow: hidden;
-  background: var(--bg-2);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
-}
-.waterfall .seg {
-  height: 100%;
-  min-width: 1px;
-}
-.waterfall .seg.open {
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.18) 0 4px,
-    transparent 4px 8px
-  );
-}
-.waterfall .legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.waterfall .legend i,
-.swatch {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 3px;
-  margin-right: 3px;
-}
-.waterfall .legend em {
-  font-style: normal;
-  color: var(--text);
-  font-weight: 700;
-}
-.waterfall.compact .bar {
-  height: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .queue ol,
@@ -1075,15 +1156,60 @@ label.check input {
   margin: 4px 0;
 }
 
+/* The trace with an optional nested pane on its right (stacks underneath when the panel is narrow). */
+.log-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-height: 100%;
+}
+.log-split.open {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 45%);
+}
+.log-peek {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: calc(100cqh - 24px);
+  overflow-y: auto;
+  padding: 8px 12px 12px;
+  border-left: 3px solid var(--gold);
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(180deg, rgba(28, 63, 77, 0.55), rgba(16, 38, 47, 0.55));
+  box-shadow: var(--edge);
+}
+.log-peek-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+/* Narrow panel: the pane sits above the rows, pinned while the trace scrolls beneath it. */
+@container (max-width: 540px) {
+  .log-split.open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .log-peek {
+    order: -1;
+    top: calc(-1 * var(--panel-pad-top));
+    max-height: min(46cqh, 420px);
+    border-left: none;
+    border-top: 3px solid var(--gold);
+    border-radius: 0 0 10px 10px;
+    background: linear-gradient(180deg, rgba(28, 63, 77, 0.98), rgba(16, 38, 47, 0.98));
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  }
+}
 .log {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 .log-row {
   display: grid;
-  grid-template-columns: 62px 150px 70px 1fr;
-  gap: 8px;
+  grid-template-columns: 46px minmax(0, 1.3fr) minmax(0, 0.8fr) minmax(0, 1.6fr);
+  gap: 6px;
   text-align: left;
   background: none;
   border: none;
@@ -1095,6 +1221,16 @@ label.check input {
 }
 .log-row:hover {
   background: var(--panel-2);
+}
+.log-row.focus {
+  background: rgba(255, 210, 122, 0.1);
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+.log-row .ty,
+.log-row .who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .log-row .t {
   color: var(--muted);
@@ -1118,6 +1254,13 @@ label.check input {
   color: var(--bad);
 }
 
+.metrics-switch {
+  margin-bottom: 10px;
+}
+.metrics-switch button {
+  font-size: 12px;
+  padding: 4px 12px;
+}
 .metrics .tiles {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1170,17 +1313,41 @@ table.grid th {
 table.grid.small {
   font-size: 11px;
 }
+.table-scroll table.grid th,
+.table-scroll table.grid td {
+  white-space: nowrap;
+}
 table.grid tr.bad td {
   color: var(--bad);
 }
 table.grid tr.current td {
   background: rgba(255, 210, 122, 0.08);
 }
+/* Wide tables scroll sideways inside the panel instead of being clipped. */
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  margin: 0 calc(-1 * var(--panel-pad-x));
+  padding: 0 var(--panel-pad-x);
+}
+.table-scroll table.grid {
+  width: max-content;
+  min-width: 100%;
+}
 
 @media (max-width: 900px) {
-  main {
+  main,
+  main.with-drawer {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+  }
+  .drawer {
+    border-left: none;
+    border-top: 1px solid var(--line-2);
+    max-height: 50vh;
+  }
+  .panel-resizer {
+    display: none;
   }
   .panel {
     border-left: none;
@@ -1192,7 +1359,7 @@ table.grid tr.current td {
 }
 
 /* Cut stone frames, enamel controls and a pale ledger inside the dusk shell. */
-header {
+.app > header {
   min-height: 74px;
   padding: 12px 24px;
   background: linear-gradient(110deg, #24464c, #152e3b 48%, #10242f);
@@ -1240,7 +1407,9 @@ header {
   box-shadow: inset 0 1px #739190;
 }
 .panel-body {
-  padding: 18px 16px 28px;
+  --panel-pad-top: 18px;
+  --panel-pad-x: 16px;
+  padding: var(--panel-pad-top) var(--panel-pad-x) 28px;
   scrollbar-color: #456974 #112832;
   scrollbar-width: thin;
 }
@@ -1423,4 +1592,598 @@ button:focus-visible {
     font-size: 11px;
     gap: 6px;
   }
+}
+
+/* ---------- drill-down drawer ---------- */
+/* An extra grid column between the stage and the side panel; the panel keeps its scroll. */
+main.with-drawer {
+  grid-template-columns: minmax(0, 1fr) var(--drawer-width, min(440px, 34vw)) var(--panel-width);
+}
+.drawer {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #14303b, #0d2029);
+  border-left: 1px solid var(--line-2);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+  animation: drawer-in 160ms ease-out;
+}
+@keyframes drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.drawer-head h3 {
+  margin: 0;
+}
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 24px;
+}
+.drawer-body .explain {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--gold);
+  background: rgba(255, 210, 122, 0.07);
+  border-radius: 0 8px 8px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.drawer-body .stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 6px 0 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.drawer-body .stat-row b {
+  color: var(--gold);
+}
+.drawer-body .jump {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+.metric-link {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.metric-link:hover {
+  color: var(--gold);
+}
+
+/* ---------- late overrides (must win over the themed rules above) ---------- */
+body.resizing-panel .canvas-wrap {
+  pointer-events: none;
+}
+.log-peek .inspector h3 {
+  margin-top: 4px;
+}
+
+/* ---------- inspector: cases, tools and agents, linked ---------- */
+.inspector-back {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.inspector h3 span:not(.muted):not(.mcp-tag) {
+  font-family: var(--font-ui);
+  font-weight: 700;
+}
+.mcp-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 13px;
+  color: #1a1206;
+  background: #ff9a5a;
+  vertical-align: 0.15em;
+}
+.tool-group {
+  margin: 6px 0 10px;
+}
+.tool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: rgba(255, 154, 90, 0.08);
+  border: 1px solid rgba(255, 154, 90, 0.35);
+  color: var(--text);
+  box-shadow: none;
+}
+.tool-chip:hover:not(:disabled) {
+  border-color: #ff9a5a;
+  filter: none;
+}
+.tool-chip.called {
+  border-color: rgba(127, 213, 138, 0.55);
+}
+.tool-chip.missing {
+  opacity: 0.75;
+  border-style: dashed;
+}
+.tool-chip.extra {
+  border-color: rgba(255, 210, 122, 0.7);
+}
+.agent-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 10px;
+}
+.inspector .read-more p {
+  margin: 4px 0 2px;
+}
+.inspector .read-more > .link {
+  font-size: 12px;
+}
+.inspector .read-more .persona {
+  white-space: pre-wrap;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.inspector pre.schema {
+  max-height: 320px;
+  overflow: auto;
+  font-size: 11px;
+}
+.calls .about {
+  margin-left: 8px;
+}
+
+/* ---------- inspector trail: the views you drilled in from, open to the left ---------- */
+main.with-trail {
+  grid-template-columns: minmax(0, 1fr) auto var(--panel-width);
+}
+main.with-drawer.with-trail {
+  grid-template-columns:
+    minmax(0, 1fr) var(--drawer-width, min(440px, 34vw)) auto
+    var(--panel-width);
+}
+.inspector-trail {
+  display: flex;
+  min-height: 0;
+  overflow-x: auto;
+  border-left: 1px solid var(--line-2);
+  background: linear-gradient(180deg, #13303b, #0d2029);
+}
+.trail-pane {
+  width: 340px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line-2);
+  animation: trail-in 170ms ease-out;
+}
+/* the column that just moved left settles into place; the newest view is the panel */
+@keyframes trail-in {
+  from {
+    transform: translateX(28px);
+    opacity: 0.4;
+  }
+}
+.trail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 24, 32, 0.6);
+}
+.trail-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-trail .trail-head .link {
+  flex: none;
+  font-size: 11.5px;
+}
+.trail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 24px;
+  opacity: 0.92;
+}
+.trail-spine {
+  width: 30px;
+  flex: none;
+  padding: 10px 0;
+  border: none;
+  border-right: 1px solid var(--line-2);
+  border-radius: 0;
+  background: rgba(10, 24, 32, 0.5);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: pointer;
+}
+.trail-spine:hover:not(:disabled) {
+  color: var(--text);
+  filter: none;
+  background: rgba(255, 210, 122, 0.06);
+}
+.trail-spine span {
+  display: inline-block;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* with the trail showing, "back" is redundant: the previous view is right there */
+main.with-trail .panel .inspector-back {
+  display: none;
+}
+@media (max-width: 900px) {
+  main.with-trail,
+  main.with-drawer.with-trail {
+    grid-template-columns: 1fr;
+  }
+  .inspector-trail {
+    display: none;
+  }
+  main.with-trail .panel .inspector-back {
+    display: inline-block;
+  }
+}
+
+/* ---------- judge and review views ---------- */
+.eval-glyph {
+  color: #b79bea;
+}
+.inspector .case-link {
+  display: inline-block;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+}
+.meter {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+  font-size: 12.5px;
+}
+.meter-label {
+  color: var(--muted);
+}
+.meter-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.inspector .meter-track i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.inspector .meter-track i.good {
+  background: #7fd58a;
+}
+.inspector .meter-track i.mid {
+  background: #ffd27a;
+}
+.inspector .meter-track i.low {
+  background: #ff6b5e;
+}
+.meter-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.inspector h3 code {
+  white-space: nowrap;
+}
+
+/* ---------- judge answers: hover for the question, click for the evidence ---------- */
+.judge-answers {
+  margin: 2px 0 8px;
+}
+.judge-answers .answer {
+  position: relative;
+}
+.judge-answers .answer-row {
+  display: block;
+  width: 100%;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  box-shadow: none;
+  cursor: pointer;
+}
+.judge-answers .answer-row:hover:not(:disabled),
+.judge-answers .answer.open .answer-row {
+  border-color: var(--line-2);
+  background: rgba(255, 255, 255, 0.03);
+  filter: none;
+}
+.judge-answers .answer-row:active:not(:disabled) {
+  transform: none;
+}
+.judge-answers .answer-tip {
+  display: none;
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(10, 24, 32, 0.97);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+.judge-answers .answer-tip strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--gold);
+}
+.judge-answers .answer:not(.open) .answer-row:hover + .answer-tip,
+.judge-answers .answer:not(.open) .answer-row:focus-visible + .answer-tip {
+  display: block;
+}
+.judge-answers .answer-detail {
+  margin: 4px 0 12px;
+  padding: 8px 10px 4px;
+  border-left: 2px solid #b79bea;
+  background: rgba(183, 155, 234, 0.06);
+  border-radius: 0 6px 6px 0;
+  font-size: 12.5px;
+}
+.judge-answers .answer-detail h5 {
+  margin: 8px 0 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.judge-answers .answer-detail h5:first-child {
+  margin-top: 0;
+}
+.judge-answers .answer-detail p {
+  margin: 0 0 4px;
+}
+.judge-answers .answer-detail dd.good {
+  color: #b9f0c0;
+}
+.judge-answers .answer-detail dd.bad {
+  color: #ffc4bd;
+}
+.judge-answers .small-quote {
+  margin: 4px 0;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* ---------- Cases tab: one entry per case, a timing table under it ---------- */
+.tx-list .tx {
+  padding: 10px 0 12px;
+}
+.tx-list .tx.open {
+  background: rgba(255, 210, 122, 0.05);
+}
+.tx .tx-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tx .tx-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  font-weight: 400;
+}
+.tx .tx-open:hover:not(:disabled) {
+  filter: none;
+}
+.tx-list .tx .tx-open .tx-case {
+  flex: none;
+  font-weight: 800;
+  color: var(--gold);
+}
+.tx .tx-open .tx-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tx-list .tx .tx-open .tx-chevron {
+  color: var(--muted);
+}
+.tx-list .tx .tx-open:hover:not(:disabled) .tx-case {
+  text-decoration: underline;
+}
+.tx .tx-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 6px 0 8px;
+}
+.tx-list table.timing {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.tx-list table.timing th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.tx-list .tx table.timing td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(35, 72, 90, 0.5);
+  vertical-align: baseline;
+}
+/* the step name (and its caret) stays on one line; the "work" column is the one that wraps */
+.tx-list .tx table.timing td:first-child {
+  white-space: nowrap;
+}
+.tx-list table.timing .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.tx-list table.timing .timing-toggle {
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--text);
+}
+.tx-list .tx table.timing tr.tool-row td {
+  font-size: 11.5px;
+  background: rgba(255, 154, 90, 0.04);
+}
+.tx-list .tx table.timing tr.tool-row td:first-child {
+  padding-left: 20px;
+  font-family: var(--font-mono);
+}
+.tx-list .tx table.timing tr.tool-row.bad td {
+  color: var(--bad);
+}
+.run-config .check.sub {
+  padding-left: 22px;
+}
+/* beside an open case the list is a navigator: headers only, the timing stays in the tab */
+.trail-leading .tx-list table.timing {
+  display: none;
+}
+.trail-leading .tx-list .tx .tx-meta {
+  margin-bottom: 0;
+}
+
+/* ---------- menu: settings ---------- */
+.menu .menu-section {
+  margin: 6px 0 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  min-inline-size: 0;
+  padding: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menu .menu-heading {
+  padding: 4px 10px 2px;
+  float: left;
+  width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.menu .menu-theme {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  column-gap: 6px;
+  text-align: left;
+}
+.menu .menu-theme .menu-sub {
+  grid-column: 2;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ---------- inspector: expected against called tools ---------- */
+.inspector .tool-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 2px 0 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.inspector .tool-tally b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.inspector .tool-tally .missing.on b {
+  color: var(--warn);
+}
+.inspector .tool-tally .extra.on b {
+  color: var(--bad);
+}
+.inspector .tool-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.inspector .tool-key .k {
+  display: inline-block;
+  width: 1.2em;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+.inspector .tool-key .k.called {
+  color: var(--good);
+}
+.inspector .tool-key .k.extra {
+  color: var(--bad);
+}
+.tx-list .tx table.timing .timing-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0;
+  white-space: nowrap;
 }

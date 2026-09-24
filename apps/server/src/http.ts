@@ -1,17 +1,37 @@
 import type { CafeStore } from '@cafe/db'
-import { SCENARIOS } from '@cafe/evals'
+import { DOMAIN_PACKS, domainPack } from '@cafe/domains'
+import { runTelemetry } from '@cafe/evals'
 import { createMcpServer, Gateway, ROLE_SCOPES } from '@cafe/mcp-gateway'
 import { PERSONAS } from '@cafe/models'
-import { type Role, RunConfig } from '@cafe/protocol'
+import {
+  DatasetInput,
+  DatasetPatch,
+  datasetItemId,
+  isBuiltinDatasetId,
+  type Role,
+  RunConfig,
+  type Scenario,
+  ScenarioInput,
+  slugify,
+} from '@cafe/protocol'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
+import { z } from 'zod'
+import { BenchRunner } from './bench.js'
+import { listOrchestrators } from './orchestrators/index.js'
 import type { RunManager } from './run-manager.js'
+import { getDataset, listDatasets } from './scenarios.js'
+import { suiteMetrics, suiteTelemetry } from './suite-results.js'
+import { SuiteRunner } from './suite-runner.js'
 
 export interface HttpDeps {
   store: CafeStore
   runs: RunManager
+  /** Optional so a minimal harness (runs only) can mount the API without suites. */
+  suites?: SuiteRunner | undefined
+  bench?: BenchRunner | undefined
   allowLive: boolean
 }
 
@@ -23,6 +43,11 @@ export const MODEL_PRESETS = {
     'mock:barista',
     'mock:barista-forgetful',
     'mock:manager',
+    'mock:support-rep',
+    'mock:support-rep-naive',
+    'mock:support-fulfil',
+    'mock:support-fulfil-forgetful',
+    'mock:support-lead',
     'mock:judge',
   ],
   anthropic: [
@@ -43,12 +68,72 @@ export const MODEL_PRESETS = {
 
 export function createApp(deps: HttpDeps) {
   const { store, runs } = deps
+  const suites = deps.suites ?? new SuiteRunner(store, runs)
+  const bench = deps.bench ?? new BenchRunner(store, deps.allowLive)
   const app = new Hono()
   app.use('*', cors())
 
   app.get('/api/health', (c) => c.json({ ok: true, allowLive: deps.allowLive }))
 
-  app.get('/api/scenarios', (c) => c.json(SCENARIOS))
+  /** The business domains a run can play, with the words, dataset and default models of each. */
+  app.get('/api/domains', (c) =>
+    c.json(
+      DOMAIN_PACKS.map((d) => ({
+        id: d.id,
+        label: d.label,
+        blurb: d.blurb,
+        vocabulary: d.vocabulary,
+        datasetId: d.dataset.id,
+        defaultRoles: d.defaultRoles,
+        tools: d.tools.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
+        roleScopes: d.roleScopes,
+        gateTools: d.gate?.tools ?? [],
+        // the exact questions the judge is asked in this domain, for the Inspector's explanations
+        judgeQuestions: Object.entries(d.judgeQuestions).map(([id, q]) => ({
+          id,
+          type: q.type,
+          instructions: q.instructions,
+          ...('criteria' in q ? { criteria: q.criteria } : {}),
+        })),
+      })),
+    ),
+  )
+
+  /**
+   * The decision bench: labelled decisions (door guardrail, action gate, judge)
+   * asked of several evaluation models side by side, e.g. Jev against LLMs.
+   */
+  app.post('/api/bench', async (c) => {
+    try {
+      return c.json(await bench.start(await c.req.json()), 201)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+    }
+  })
+  app.get('/api/bench', async (c) => c.json(await bench.list()))
+  app.get('/api/bench/:id', async (c) => {
+    const b = await bench.get(c.req.param('id'))
+    return b ? c.json(b) : c.json({ error: 'bench not found' }, 404)
+  })
+  app.post('/api/bench/:id/cancel', (c) => c.json({ cancelled: bench.cancel(c.req.param('id')) }))
+  app.delete('/api/bench/:id', async (c) => {
+    bench.cancel(c.req.param('id'))
+    await store.benches.delete(c.req.param('id'))
+    return c.json({ deleted: true })
+  })
+
+  app.get('/api/scenarios', async (c) => {
+    const ds = c.req.query('dataset')
+    if (!ds) {
+      try {
+        return c.json(domainPack(c.req.query('domain')).dataset.scenarios)
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : String(err) }, 404)
+      }
+    }
+    const d = await getDataset(store, ds)
+    return d ? c.json(d.items) : c.json({ error: 'dataset not found' }, 404)
+  })
 
   app.get('/api/models', (c) =>
     c.json({
@@ -63,7 +148,7 @@ export function createApp(deps: HttpDeps) {
         ollama: Boolean(process.env.OPENAI_COMPATIBLE_BASE_URL),
       },
       defaults: RunConfig.parse({
-        scenarioIds: SCENARIOS.map((s) => s.id),
+        scenarioIds: domainPack('cafe').dataset.scenarios.map((s) => s.id),
         roles: {
           cashier: 'mock:cashier',
           barista: 'mock:barista',
@@ -78,6 +163,194 @@ export function createApp(deps: HttpDeps) {
     const rows = await store.runs.list(100)
     return c.json(rows.map((r) => ({ ...r, active: runs.isActive(r.id) })))
   })
+
+  /** Parse a JSON body with a zod schema; 400 with a readable message otherwise. */
+  const parseBody = async <T>(c: { req: { json(): Promise<unknown> } }, schema: z.ZodType<T>) => {
+    let raw: unknown
+    try {
+      raw = await c.req.json()
+    } catch {
+      return { error: 'Body must be JSON' } as const
+    }
+    const r = schema.safeParse(raw)
+    return r.success ? ({ data: r.data } as const) : ({ error: z.prettifyError(r.error) } as const)
+  }
+
+  // ---------- golden datasets ----------
+
+  /** Tool catalogue for the item editor's "expected tools" pickers and the MCP node. */
+  app.get('/api/tools', (c) => {
+    let pack: ReturnType<typeof domainPack>
+    try {
+      pack = domainPack(c.req.query('domain'))
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 404)
+    }
+    return c.json({
+      tools: pack.tools.map((t) => ({
+        name: t.name,
+        scope: t.scope,
+        description: t.description,
+        // the parameters as the model sees them: the remote server's schema, or ours from zod
+        inputSchema: t.inputJsonSchema ?? z.toJSONSchema(t.input),
+      })),
+      roleScopes: pack.roleScopes,
+    })
+  })
+  /** Engines that can drive a shift; RunConfig.orchestrator names one. */
+  app.get('/api/orchestrators', (c) => c.json(listOrchestrators()))
+  app.get('/api/datasets', async (c) => c.json(await listDatasets(store)))
+  app.get('/api/datasets/:id', async (c) => {
+    const d = await getDataset(store, c.req.param('id'))
+    return d ? c.json(d) : c.json({ error: 'dataset not found' }, 404)
+  })
+  app.post('/api/datasets', async (c) => {
+    const p = await parseBody(c, DatasetInput)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    const now = Date.now()
+    const row = await store.datasets.create({
+      name: p.data.name,
+      description: p.data.description,
+      now,
+    })
+    const seed: Scenario[] = []
+    if (p.data.cloneFrom) {
+      const src = await getDataset(store, p.data.cloneFrom)
+      if (!src) return c.json({ error: `cloneFrom dataset ${p.data.cloneFrom} not found` }, 400)
+      seed.push(...src.items)
+    }
+    const used = new Set<string>()
+    const place = (slug: string) => {
+      let s = slug
+      for (let n = 2; used.has(s); n++) s = `${slug}-${n}`
+      used.add(s)
+      return s
+    }
+    for (const item of seed) {
+      const slug = place(item.id.replace(/^ds:[^:]+:/, ''))
+      await store.datasets.upsertItem(row.id, { ...item, id: datasetItemId(row.id, slug) }, now)
+    }
+    for (const input of p.data.items) {
+      const { slug: wanted, ...rest } = input
+      const slug = place(wanted ?? slugify(rest.title))
+      await store.datasets.upsertItem(row.id, { ...rest, id: datasetItemId(row.id, slug) }, now)
+    }
+    return c.json(await getDataset(store, row.id), 201)
+  })
+  app.patch('/api/datasets/:id', async (c) => {
+    const id = c.req.param('id')
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    const p = await parseBody(c, DatasetPatch)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    if (!(await store.datasets.get(id))) return c.json({ error: 'dataset not found' }, 404)
+    await store.datasets.update(id, { ...p.data, now: Date.now() })
+    return c.json(await getDataset(store, id))
+  })
+  app.delete('/api/datasets/:id', async (c) => {
+    const id = c.req.param('id')
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    await store.datasets.delete(id)
+    return c.json({ deleted: true })
+  })
+  app.post('/api/datasets/:id/items', async (c) => {
+    const id = c.req.param('id')
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    if (!(await store.datasets.get(id))) return c.json({ error: 'dataset not found' }, 404)
+    const p = await parseBody(c, ScenarioInput)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    const { slug: wanted, ...rest } = p.data
+    const existing = new Set((await store.datasets.items(id)).map((i) => i.id))
+    const base = wanted ?? slugify(rest.title)
+    let slug = base
+    for (let n = 2; existing.has(datasetItemId(id, slug)); n++) slug = `${base}-${n}`
+    const scenario: Scenario = { ...rest, id: datasetItemId(id, slug) }
+    await store.datasets.upsertItem(id, scenario, Date.now())
+    return c.json(scenario, 201)
+  })
+  app.put('/api/datasets/:id/items/:itemId', async (c) => {
+    const id = c.req.param('id')
+    const itemId = c.req.param('itemId')
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    const current = (await store.datasets.items(id)).find((i) => i.id === itemId)
+    if (!current) return c.json({ error: 'item not found' }, 404)
+    const p = await parseBody(c, ScenarioInput)
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    const { slug: _slug, ...rest } = p.data
+    const scenario: Scenario = { ...rest, id: itemId }
+    await store.datasets.upsertItem(id, scenario, Date.now(), current.position)
+    return c.json(scenario)
+  })
+  app.delete('/api/datasets/:id/items/:itemId', async (c) => {
+    const id = c.req.param('id')
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    await store.datasets.deleteItem(id, c.req.param('itemId'))
+    return c.json({ deleted: true })
+  })
+  app.post('/api/datasets/:id/items/reorder', async (c) => {
+    const id = c.req.param('id')
+    if (isBuiltinDatasetId(id)) return c.json({ error: 'the built-in dataset is read-only' }, 409)
+    const p = await parseBody(c, z.object({ ids: z.array(z.string()) }))
+    if ('error' in p) return c.json({ error: p.error }, 400)
+    await store.datasets.reorder(id, p.data.ids, Date.now())
+    return c.json(await getDataset(store, id))
+  })
+
+  // ---------- suites ----------
+
+  app.get('/api/suites', async (c) => {
+    const rows = await store.suites.list(100)
+    const out = []
+    for (const r of rows) out.push(await suites.detail(r.id))
+    return c.json(out.filter((d) => d !== null))
+  })
+  app.post('/api/suites', async (c) => {
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Body must be JSON' }, 400)
+    }
+    try {
+      const { suiteId } = await suites.start(body as Parameters<SuiteRunner['start']>[0])
+      return c.json({ suiteId }, 201)
+    } catch (err) {
+      const msg =
+        err instanceof z.ZodError
+          ? z.prettifyError(err)
+          : err instanceof Error
+            ? err.message
+            : String(err)
+      return c.json({ error: msg }, 400)
+    }
+  })
+  app.get('/api/suites/:id', async (c) => {
+    const d = await suites.detail(c.req.param('id'))
+    return d ? c.json(d) : c.json({ error: 'suite not found' }, 404)
+  })
+  app.post('/api/suites/:id/cancel', (c) => c.json({ cancelled: suites.cancel(c.req.param('id')) }))
+  app.delete('/api/suites/:id', async (c) => {
+    const id = c.req.param('id')
+    if (suites.isActive(id)) return c.json({ error: 'suite is active; cancel it first' }, 409)
+    await store.suites.delete(id)
+    return c.json({ deleted: true })
+  })
+  app.get('/api/suites/:id/metrics', async (c) => {
+    const d = await suites.detail(c.req.param('id'))
+    return d ? c.json(await suiteMetrics(store, d)) : c.json({ error: 'suite not found' }, 404)
+  })
+  app.get('/api/suites/:id/telemetry', async (c) => {
+    const d = await suites.detail(c.req.param('id'))
+    return d ? c.json(await suiteTelemetry(store, d)) : c.json({ error: 'suite not found' }, 404)
+  })
+  app.get('/api/suites/:id/spans', async (c) => {
+    const q = c.req.query()
+    const rows = await store.spans.forSuite(c.req.param('id'), {
+      ...(q.kind ? { kinds: q.kind.split(',') } : {}),
+    })
+    return c.json(q.variant ? rows.filter((r) => r.attributes['cafe.variant'] === q.variant) : rows)
+  })
+
+  // ---------- runs ----------
 
   app.post('/api/runs', async (c) => {
     let body: unknown
@@ -180,8 +453,30 @@ export function createApp(deps: HttpDeps) {
     if (!m) return c.json({ error: 'metrics not ready' }, 404)
     return c.json(m)
   })
+  // OpenTelemetry spans for a run: raw for drill-down, aggregated for the charts. Both work mid-run.
+  app.get('/api/runs/:id/spans', async (c) => {
+    const q = c.req.query()
+    const rows = await store.spans.forRun(c.req.param('id'), {
+      ...(q.txId ? { txId: q.txId } : {}),
+      ...(q.kind ? { kinds: q.kind.split(',') } : {}),
+      limit: Math.min(20_000, Number(q.limit) || 5000),
+      offset: Number(q.offset) || 0,
+    })
+    return c.json(rows)
+  })
+  app.get('/api/runs/:id/telemetry', async (c) => {
+    const id = c.req.param('id')
+    const [rows, metrics] = await Promise.all([
+      store.spans.forRun(id, { limit: 20_000 }),
+      store.metrics.get(id),
+    ])
+    return c.json(runTelemetry(id, rows, metrics))
+  })
   app.get('/api/runs/:id/orders', async (c) =>
     c.json(await store.orders.listByRun(c.req.param('id'))),
+  )
+  app.get('/api/runs/:id/reviews', async (c) =>
+    c.json(await store.reviews.forRun(c.req.param('id'))),
   )
   app.get('/api/runs/:id/judgements', async (c) =>
     c.json(await store.judgements.forRun(c.req.param('id'))),
@@ -197,7 +492,7 @@ export function createApp(deps: HttpDeps) {
   /**
    * Real MCP over streamable HTTP, one endpoint per role and run, e.g.
    *   POST /mcp/<runId>/barista
-   * Point an MCP client at it and it sees exactly the barista's tool slice.
+   * Point an MCP client at it and it sees exactly that role's tool slice in the run's domain.
    */
   app.all('/mcp/:runId/:role', async (c) => {
     const role = c.req.param('role') as Role
@@ -207,7 +502,14 @@ export function createApp(deps: HttpDeps) {
     const run = await store.runs.get(runId)
     if (!run) return c.json({ error: 'run not found' }, 404)
     const events: unknown[] = []
-    const gateway = new Gateway({ store, emit: (e) => events.push(e) })
+    // the run's own domain decides which tools and scopes the external client sees
+    const pack = domainPack(run.config.domain)
+    const gateway = new Gateway({
+      store,
+      emit: (e) => events.push(e),
+      tools: pack.tools,
+      roleScopes: pack.roleScopes,
+    })
     const cap = gateway.capability({ agentId: `external-${role}`, role, runId })
     const server = createMcpServer(gateway, cap)
     const transport = new WebStandardStreamableHTTPServerTransport({})

@@ -15,7 +15,8 @@
     "phaser": "^3.90.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "three": "^0.186.0"
+    "three": "^0.186.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/react": "^19",

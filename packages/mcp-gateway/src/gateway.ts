@@ -1,4 +1,5 @@
 import type { Role } from '@cafe/protocol'
+import { ATTR, recordError, startSpan } from '@cafe/telemetry'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 import { type ChaosEngine, createChaos, TransientToolError } from './chaos.js'
@@ -26,7 +27,7 @@ export class Gateway {
   private readonly sleep: (ms: number) => Promise<void>
 
   constructor(private readonly opts: GatewayOptions) {
-    for (const t of ALL_TOOLS) this.tools.set(t.name, t)
+    for (const t of opts.tools ?? ALL_TOOLS) this.tools.set(t.name, t)
     this.chaos = createChaos(opts.chaos)
     this.now = opts.now ?? (() => Date.now())
     this.sleep = opts.sleep ?? defaultSleep
@@ -40,12 +41,15 @@ export class Gateway {
     txId?: string | undefined
     scopes?: readonly string[]
   }): Capability {
-    return { ...input, scopes: input.scopes ?? scopesFor(input.role) }
+    return {
+      ...input,
+      scopes: input.scopes ?? this.opts.roleScopes?.[input.role] ?? scopesFor(input.role),
+    }
   }
 
   /** The tools a capability may call. This is what gets advertised to the model. */
   toolsFor(cap: Capability): ToolDef[] {
-    return ALL_TOOLS.filter((t) => cap.scopes.includes(t.scope))
+    return [...this.tools.values()].filter((t) => cap.scopes.includes(t.scope))
   }
 
   async call(cap: Capability, toolName: string, rawArgs: unknown): Promise<ToolResult> {
@@ -55,10 +59,26 @@ export class Gateway {
     const base = () => ({ txId: cap.txId, agentId: cap.agentId, role: cap.role }) as const
     const args = (rawArgs && typeof rawArgs === 'object' ? rawArgs : {}) as Record<string, unknown>
     this.opts.emit({ type: 'agent.tool_called', ...base(), callId, tool: toolName, args })
+    // Nested under whatever is active: the agent's step span when called from runAgent.
+    const span = startSpan('tool', `tool ${toolName}`, {
+      [ATTR.TOOL]: toolName,
+      [ATTR.CALL_ID]: callId,
+      [ATTR.AGENT_ID]: cap.agentId,
+      [ATTR.ROLE]: cap.role,
+      ...(cap.txId ? { [ATTR.TX_ID]: cap.txId } : {}),
+    })
 
     const finish = (r: ToolResult): ToolResult => {
       const latencyMs = this.now() - started
       const out = { ...r, latencyMs } as ToolResult
+      span.setAttribute(ATTR.TOOL_OK, out.ok)
+      span.setAttribute(ATTR.LATENCY_MS, latencyMs)
+      if (cap.txId) span.setAttribute(ATTR.TX_ID, cap.txId)
+      if (!out.ok) {
+        span.setAttribute(ATTR.TOOL_CODE, out.code)
+        recordError(span, new Error(out.error), out.code)
+      }
+      span.end()
       this.opts.emit(
         out.ok
           ? {
@@ -84,6 +104,7 @@ export class Gateway {
     }
 
     const tool = this.tools.get(toolName)
+    if (tool) span.setAttribute(ATTR.TOOL_SCOPE, tool.scope)
     if (!tool)
       return finish({
         ok: false,
@@ -115,6 +136,17 @@ export class Gateway {
         error: `Invalid arguments: ${z.prettifyError(parsed.error)}`,
         latencyMs: 0,
       })
+    }
+
+    if (this.opts.guard) {
+      const verdict = await this.opts.guard({ cap, tool: toolName, args: parsed.data })
+      if (verdict && !verdict.allow)
+        return finish({
+          ok: false,
+          code: 'blocked',
+          error: `Blocked by the action gate: ${verdict.reason}`,
+          latencyMs: 0,
+        })
     }
 
     const extra = this.chaos.extraLatencyMs()

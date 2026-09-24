@@ -1,0 +1,159 @@
+/* ---------- charts (SVG, panel surface) ---------- */
+.chart {
+  position: relative;
+  width: 100%;
+  font-family: var(--font-ui);
+}
+.chart svg {
+  display: block;
+  overflow: visible;
+  font-size: 11px;
+}
+.chart text {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.chart .row-label {
+  fill: var(--text);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.chart .value-label,
+.chart .cell-text {
+  fill: var(--text);
+  font-size: 10.5px;
+}
+.chart .row-note {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+}
+.chart .row-note.bad {
+  font-weight: 700;
+}
+.chart .grid line {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.chart .axis-title {
+  font-family: var(--font-ui);
+}
+.chart .dot {
+  opacity: 0.85;
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+.chart .tick-p50 {
+  stroke-width: 3;
+}
+.chart .tick-p95 {
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+.chart .tick-p99 {
+  stroke-width: 1;
+  stroke-dasharray: 1 2;
+  opacity: 0.8;
+}
+.chart .hit.pickable {
+  cursor: pointer;
+}
+.chart .bar {
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+.chart .bar.end {
+  rx: 4;
+}
+.chart .line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.chart .marker {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.chart .crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+.chart .hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.chart .cell.empty {
+  stroke: var(--line);
+  stroke-dasharray: 2 2;
+}
+.chart .cell.bad {
+  stroke: var(--bad);
+  stroke-width: 1.5;
+}
+.chart .col-label {
+  fill: var(--text);
+  font-family: var(--font-ui);
+  font-weight: 700;
+}
+.heatmap {
+  overflow-x: auto;
+}
+.chart-tip {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  max-width: 260px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(10, 24, 32, 0.96);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.4;
+  box-shadow: var(--shadow);
+}
+.chart-tip .tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-tip i,
+.chart-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.chart-block {
+  margin: 14px 0 6px;
+}
+.chart-block h4 {
+  margin: 0 0 4px;
+}
+.chart-block .sub {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.chart-empty {
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}

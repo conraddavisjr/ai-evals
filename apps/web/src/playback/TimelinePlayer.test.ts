@@ -17,6 +17,11 @@ const recorded = () =>
         type: 'run.started',
         config: {
           name: 'x',
+          domain: 'cafe',
+          triageRoutes: false,
+          gate: { enabled: false, threshold: 0.5 },
+          orchestrator: 'stardust',
+          tools: { kind: 'builtin' },
           scenarioIds: ['a'],
           roles: {
             cashier: 'mock:cashier',
@@ -35,6 +40,7 @@ const recorded = () =>
           arrivalGapMs: 0,
           judgeEnabled: false,
           triageEnabled: false,
+          reviewEnabled: false,
           mockPacing: { llmStepMs: [0, 0], toolMs: [0, 0], hangOrders: [], hangMs: 0 },
         },
       },

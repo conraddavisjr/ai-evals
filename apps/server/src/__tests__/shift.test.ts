@@ -47,6 +47,7 @@ describe('a full mock shift', () => {
       roles: MOCK_ROLES,
       staffing: { cashiers: 2, baristas: 1 },
       arrivalGapMs: 0,
+      triageEnabled: true,
       mockPacing: INSTANT,
     })
     const run = await store.runs.create(config)
@@ -63,6 +64,16 @@ describe('a full mock shift', () => {
     expect(types.filter((t) => t === 'customer.arrived').length).toBe(5)
     expect(types.filter((t) => t === 'triage.decided').length).toBe(5)
     expect(types.filter((t) => t === 'judge.verdict').length).toBe(5)
+    // the manager reviews every visit before the judge sees it
+    const reviews = events.filter(
+      (e): e is Extract<CafeEvent, { type: 'manager.reviewed' }> => e.type === 'manager.reviewed',
+    )
+    expect(reviews.length).toBe(5)
+    for (const r of reviews) {
+      const idx = events.indexOf(r)
+      const judged = events.findIndex((e) => e.txId === r.txId && e.type === 'judge.verdict')
+      expect(idx).toBeLessThan(judged)
+    }
 
     const outcomes = Object.fromEntries(
       events
@@ -127,6 +138,16 @@ describe('a full mock shift', () => {
     expect(metrics?.costUsd).toBe(0)
     expect(metrics?.judgeMeans?.correct).toBeGreaterThan(0.8)
     expect((await store.judgements.forRun(run.id)).length).toBe(5)
+    expect((await store.reviews.forRun(run.id)).length).toBe(5)
+    // out-of-stock is meant to fail, so it is a concern (the ticket died on the rail), not an escalation
+    expect(metrics?.reviewCounts).toEqual({ ok: 4, concern: 1, escalate: 0 })
+    expect(
+      metrics?.perTransaction.find((t) => t.scenarioId === 'out-of-stock')?.review?.verdict,
+    ).toBe('concern')
+    // triage, review and judge calls are all persisted as usage rows now
+    const usage = await store.usage.forRun(run.id)
+    expect(usage.filter((u) => u.role === 'manager').length).toBe(10)
+    expect(usage.filter((u) => u.role === 'judge').length).toBe(5)
     expect((await store.runs.get(run.id))?.status).toBe('finished')
   })
 
@@ -276,17 +297,23 @@ describe('HTTP API', () => {
 describe('orphaned runs', () => {
   it('are marked failed at boot, while runs the manager still owns are left alone', async () => {
     const config = RunConfig.parse({ scenarioIds: ['latte-simple'], roles: MOCK_ROLES })
-    const orphan = await store.runs.create(config)
+    const orphan = await store.runs.create(config, { owner: 'dead-server-process' })
     createdRuns.push(orphan.id)
     await store.runs.setStatus(orphan.id, 'running', { startedAt: Date.now() })
-    const finished = await store.runs.create(config)
+    const finished = await store.runs.create(config, { owner: 'dead-server-process' })
     createdRuns.push(finished.id)
     await store.runs.setStatus(finished.id, 'finished', { finishedAt: Date.now() })
+    // a run with no owner is being driven by the CLI or a test in another process: not ours to reap
+    const foreign = await store.runs.create(config)
+    createdRuns.push(foreign.id)
+    await store.runs.setStatus(foreign.id, 'running', { startedAt: Date.now() })
 
     const runs = new RunManager(store, false)
     const reaped = await runs.reapOrphans()
     expect(reaped).toContain(orphan.id)
     expect(reaped).not.toContain(finished.id)
+    expect(reaped).not.toContain(foreign.id)
+    expect((await store.runs.get(foreign.id))?.status).toBe('running')
     const row = await store.runs.get(orphan.id)
     expect(row?.status).toBe('failed')
     expect(row?.error).toMatch(/interrupted/)
