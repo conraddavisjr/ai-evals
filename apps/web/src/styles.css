@@ -266,6 +266,7 @@ main {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 .brand .mark {
   filter: drop-shadow(0 0 10px rgba(255, 157, 61, 0.55));
@@ -274,6 +275,7 @@ main {
   display: flex;
   flex-direction: column;
   line-height: 1.05;
+  min-width: 0;
 }
 .brand .title {
   font-family: var(--font-display);
@@ -290,6 +292,10 @@ main {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 700;
+  /* a long business name must not wrap and grow the header */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .status {
   display: flex;
