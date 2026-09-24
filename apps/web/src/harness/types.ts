@@ -96,6 +96,8 @@ export interface ToolInfo {
   name: string
   scope: string
   description: string
+  /** JSON Schema of the tool's parameters, as the model sees them. */
+  inputSchema?: unknown
 }
 
 export interface BenchConfigView {

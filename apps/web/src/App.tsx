@@ -64,9 +64,25 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeStream = useRef<(() => void) | null>(null)
 
+  /** Views opened from inside the Inspector (a tool from a case, an agent from a tool), for "back". */
+  const [inspectorBack, setInspectorBack] = useState<string[]>([])
   const onSelect = useCallback((id: string | null) => {
     setSelectedId(id)
+    setInspectorBack([])
     if (id) setTab('inspector')
+  }, [])
+  const inspectorOpen = useCallback(
+    (id: string) => {
+      if (selectedId) setInspectorBack((b) => [...b, selectedId])
+      setSelectedId(id)
+    },
+    [selectedId],
+  )
+  const inspectorBackTo = useCallback(() => {
+    setInspectorBack((b) => {
+      setSelectedId(b.at(-1) ?? null)
+      return b.slice(0, -1)
+    })
   }, [])
   /** Select without leaving the current tab (the Log's nested pane). */
   const onPeek = useCallback((id: string | null) => setSelectedId(id), [])
@@ -489,7 +505,14 @@ export function App() {
             )}
             {tab === 'cases' && <TransactionList player={player} onSelect={onSelect} />}
             {tab === 'queue' && <QueuePanel player={player} />}
-            {tab === 'inspector' && <AgentInspector player={player} selectedId={selectedId} />}
+            {tab === 'inspector' && (
+              <AgentInspector
+                player={player}
+                selectedId={selectedId}
+                onSelect={inspectorOpen}
+                onBack={inspectorBack.length ? inspectorBackTo : undefined}
+              />
+            )}
             {tab === 'metrics' && (
               <MetricsDashboard runId={runId} status={runStatus} player={player} />
             )}

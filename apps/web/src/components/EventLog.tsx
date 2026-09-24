@@ -105,7 +105,7 @@ export function EventLog({
               close ×
             </button>
           </div>
-          <AgentInspector player={player} selectedId={peekId} />
+          <AgentInspector player={player} selectedId={peekId} onSelect={peek} />
         </aside>
       )}
     </div>

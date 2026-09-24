@@ -1,6 +1,6 @@
 import { allTimelines, shortScenarioId } from '@cafe/protocol'
 import { fmtCents, fmtMs } from '../format.js'
-import { CASE_NOUN, caseLabel, outcomeLabel } from '../lib/nomenclature.js'
+import { CASE_NOUN, caseLabel, verdictOf, verdictPill } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { OrderWaterfall } from './OrderWaterfall.js'
 
@@ -31,7 +31,10 @@ export function TransactionList({
           (e) => e.txId === tl.txId && e.type === 'customer.arrived',
         )
         return (
-          <div key={tl.txId} className={`tx ${tl.outcome ?? 'open'}`}>
+          <div
+            key={tl.txId}
+            className={`tx ${tl.outcome ?? 'open'} verdict-${verdictOf(tl.outcome, cust?.expected?.outcome)}`}
+          >
             <div className="tx-head">
               <button
                 type="button"
@@ -49,7 +52,7 @@ export function TransactionList({
                 {(arrived?.type === 'customer.arrived' && arrived.title) ||
                   (tl.scenarioId ? shortScenarioId(tl.scenarioId) : '')}
               </span>
-              <span className={`pill ${tl.outcome ?? 'open'}`}>{outcomeLabel(tl.outcome)}</span>
+              <VerdictPill outcome={tl.outcome} expected={cust?.expected?.outcome} />
               <span className="muted">{fmtMs(tl.totalMs ?? now - tl.startT)}</span>
               {order && <span className="muted">{fmtCents(order.totalCents)}</span>}
               {review && (
@@ -80,5 +83,21 @@ export function TransactionList({
         )
       })}
     </div>
+  )
+}
+
+/** Green when the case did what its golden expectation says (even a refusal), red when it deviated. */
+export function VerdictPill({
+  outcome,
+  expected,
+}: {
+  outcome: string | null | undefined
+  expected: string | null | undefined
+}) {
+  const v = verdictPill(outcome, expected)
+  return (
+    <span className={v.cls} title={v.title}>
+      {v.text}
+    </span>
   )
 }

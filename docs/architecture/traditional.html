@@ -681,7 +681,7 @@ const ARCH = {
         'Every themed word goes through lib/nomenclature.ts, which follows the active domain (the loaded run’s, else the draft’s, or the suite’s on the Experiment page): "agent 1 (support rep 2)", resolved/declined, beat labels.',
         'The Run tab has a Business domain picker and a Decision points section: triage routing and the action gate with its own model and threshold.',
         'The Decision bench page (bench/) runs the same labelled decisions (door, gate, judge) against up to five evaluation models and shows accuracy vs latency per decision point, a scores table and every decision a model got wrong.',
-        'Inspector shows an agent’s model, latency, usage, tool trail and last words; clicking a red “!” lands here.',
+        'Inspector: linked views of a case (its full golden expectation, the expected tools per agent marked called / missing / unexpected, and what happened), a tool (description, scope, holders, input schema, every call in the run) and an agent (persona with Read more, tool slice, model, latency, usage, tool trail); a back stack between them. Case pills are verdicts: green when the outcome matches the expectation, red with a red case header when it deviates.',
         'Metrics tab reads /api/runs/:id/metrics and compares recent shifts.',
       ],
       files: [

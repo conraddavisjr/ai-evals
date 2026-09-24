@@ -66,6 +66,7 @@ export class StaffPool implements StaffingService {
       modelSpec: spec.modelSpec,
       station,
       sprite,
+      persona: spec.systemPrompt,
     })
     this.bus.emit({
       type: 'staffing.changed',

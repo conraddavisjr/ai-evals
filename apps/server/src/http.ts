@@ -180,7 +180,13 @@ export function createApp(deps: HttpDeps) {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 404)
     }
     return c.json({
-      tools: pack.tools.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
+      tools: pack.tools.map((t) => ({
+        name: t.name,
+        scope: t.scope,
+        description: t.description,
+        // the parameters as the model sees them: the remote server's schema, or ours from zod
+        inputSchema: t.inputJsonSchema ?? z.toJSONSchema(t.input),
+      })),
       roleScopes: pack.roleScopes,
     })
   })

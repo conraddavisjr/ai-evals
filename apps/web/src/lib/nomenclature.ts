@@ -117,3 +117,34 @@ export function lineText(i: {
 }): string {
   return `${i.quantity}× ${i.size ? `${i.size} ` : ''}${i.name}${i.modifiers?.length ? ` (${i.modifiers.join(', ')})` : ''}`
 }
+
+/**
+ * Did the case do what its golden expectation says? Like a test: a case that was
+ * expected to be refused (or to fail) and was, passes. Anything else is a deviation.
+ */
+export type Verdict = 'pass' | 'fail' | 'pending' | 'unknown'
+
+export function verdictOf(
+  outcome: string | null | undefined,
+  expected: string | null | undefined,
+): Verdict {
+  if (!outcome) return 'pending'
+  if (!expected) return 'unknown'
+  return outcome === expected ? 'pass' : 'fail'
+}
+
+/** The pill for a case: its outcome in the domain's words, green when expected, red when not. */
+export function verdictPill(
+  outcome: string | null | undefined,
+  expected: string | null | undefined,
+): { cls: string; text: string; title: string } {
+  const v = verdictOf(outcome, expected)
+  const label = outcomeLabel(outcome)
+  const want = expected ? `expected ${outcomeLabel(expected)}` : 'no expectation recorded'
+  if (v === 'pass')
+    return { cls: 'pill verdict-pass', text: `✓ ${label}`, title: `${label}, as expected` }
+  if (v === 'fail')
+    return { cls: 'pill verdict-fail', text: `✗ ${label}`, title: `${label}; ${want}` }
+  if (v === 'unknown') return { cls: `pill ${outcome}`, text: label, title: want }
+  return { cls: 'pill open', text: label, title: want }
+}

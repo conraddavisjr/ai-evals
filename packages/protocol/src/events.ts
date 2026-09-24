@@ -83,6 +83,19 @@ export const CafeEvent = z.discriminatedUnion('type', [
         cashierTools: z.array(z.string()),
         baristaTools: z.array(z.string()),
         tags: z.array(z.string()),
+        /** The rest of the golden output, so the Inspector can show the whole expectation (newer runs). */
+        items: z
+          .array(
+            z.object({
+              name: z.string(),
+              size: z.string().optional(),
+              modifiers: z.array(z.string()).optional(),
+            }),
+          )
+          .optional(),
+        totalCents: z.number().int().optional(),
+        shouldRefuse: z.boolean().optional(),
+        rubric: z.string().optional(),
       })
       .optional(),
   }),
@@ -126,6 +139,8 @@ export const CafeEvent = z.discriminatedUnion('type', [
     modelSpec: ModelSpec,
     station: Station,
     sprite: z.string(),
+    /** The agent's system prompt (its persona), for the Inspector (newer runs). */
+    persona: z.string().optional(),
   }),
   Base.extend(AgentRef.shape).extend({ type: z.literal('agent.moved'), to: Station }),
   Base.extend(AgentRef.shape).extend({ type: z.literal('agent.thinking'), step: z.number().int() }),

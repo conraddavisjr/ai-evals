@@ -198,12 +198,18 @@
 }
 .trace-col-head .pill {
   font-size: 9px;
-  padding: 1px 6px;
-  white-space: nowrap;
+  padding: 3px 6px 2px;
+  flex: none;
 }
-.trace-col.outcome-failed .trace-col-head,
-.trace-col.outcome-abandoned .trace-col-head {
-  background: rgba(230, 64, 77, 0.14);
+/* a case that deviated from its golden expectation: the whole head asks for attention */
+.trace-col.verdict-fail {
+  border-color: rgba(255, 89, 102, 0.75);
+}
+.trace-col.verdict-fail .trace-col-head {
+  background: rgba(230, 64, 77, 0.32);
+}
+.trace-col.verdict-fail .trace-col-head .idx {
+  color: #ffd2cc;
 }
 
 /* bands: dotted separators, aligned across columns by a shared min-height */

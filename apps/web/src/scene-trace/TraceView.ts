@@ -1,5 +1,13 @@
 import { AGENT_GLYPH_SVG } from '../lib/agent-glyph.js'
-import { agentLabel, CASE_NOUN, caseLabel, isAgentId, outcomeLabel } from '../lib/nomenclature.js'
+import {
+  agentLabel,
+  CASE_NOUN,
+  caseLabel,
+  isAgentId,
+  outcomeLabel,
+  verdictOf,
+  verdictPill,
+} from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { SceneCallbacks, SceneHandle } from '../views/types.js'
 import {
@@ -401,10 +409,12 @@ export function createGame(
           !BANDS.some((band) => col.bands[band].some((b) => b.agentId === focusAgent)),
       )
       const known = col.leftSeq !== null && col.leftSeq <= at ? col.outcome : null
-      pill.className = `pill ${known ?? 'open'}`
-      pill.textContent = notYet ? 'not arrived' : outcomeLabel(known)
-      for (const o of ['served', 'refused', 'failed', 'abandoned', 'open'])
-        card.classList.toggle(`outcome-${o}`, o === (known ?? 'open'))
+      const v = verdictPill(known, col.expectedOutcome)
+      pill.className = v.cls
+      pill.textContent = notYet ? 'not arrived' : v.text
+      pill.title = v.title
+      card.classList.toggle('verdict-fail', verdictOf(known, col.expectedOutcome) === 'fail')
+      card.classList.toggle('verdict-pass', verdictOf(known, col.expectedOutcome) === 'pass')
       for (const s of segs) {
         const seen = (xs: number[]) => xs.some((x) => x <= at)
         s.el.classList.toggle('lit', seen(s.seqs))
@@ -485,9 +495,15 @@ export function createGame(
       e.addEventListener('click', () => setFocus(null))
     } else {
       e.addEventListener('click', () => {
-        player.seekToSeq(b.seq)
-        player.pause()
-        callbacks.onSelect(b.agentId ?? b.customerId ?? null)
+        // a case's input and expectations describe the case, not a moment: open it, leave the replay where it is
+        if (b.layer !== 'input' || b.agentId) {
+          player.seekToSeq(b.seq)
+          player.pause()
+        }
+        // a tool call opens the tool; a step, the agent; a case's input or expectations, the case
+        callbacks.onSelect(
+          b.layer === 'tool' ? `tool:${b.head}` : (b.agentId ?? b.customerId ?? null),
+        )
       })
     }
     return e

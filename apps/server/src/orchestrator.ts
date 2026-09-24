@@ -309,6 +309,12 @@ export class ShiftOrchestrator {
         cashierTools: scenario.expected.cashierTools,
         baristaTools: scenario.expected.baristaTools,
         tags: scenario.tags,
+        items: scenario.expected.items,
+        ...(scenario.expected.totalCents !== undefined
+          ? { totalCents: scenario.expected.totalCents }
+          : {}),
+        shouldRefuse: scenario.expected.shouldRefuse,
+        ...(scenario.expected.rubric ? { rubric: scenario.expected.rubric } : {}),
       },
     })
     emit({ type: 'customer.moved', txId, customerId, to: 'waiting' })
