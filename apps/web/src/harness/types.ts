@@ -83,6 +83,8 @@ export interface HarnessClient {
   judgements(
     id: string,
   ): Promise<Array<{ txId: string; blindedTranscript: string; judgeSpec: string }>>
+  /** The orchestrator's reviews with the brief each one read. Optional for other harnesses. */
+  reviews?(id: string): Promise<Array<{ txId: string; brief: string; reviewerSpec: string }>>
   /** Tail a live run. Returns a closer. */
   stream(id: string, handlers: StreamHandlers, afterSeq?: number): () => void
 }

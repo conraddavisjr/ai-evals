@@ -1,15 +1,17 @@
 import { type CafeEvent, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useMemo, useState } from 'react'
 import { fmtCents, fmtMs, fmtUsd, shortModel } from '../format.js'
-import { type ToolInfo, useExperimentApi } from '../harness/index.js'
+import { type ToolInfo, useExperimentApi, useHarness } from '../harness/index.js'
 import { AgentGlyph } from '../lib/AgentGlyph.js'
 import {
   agentLabel,
   caseLabel,
+  describeSpec,
   isAgentId,
   lineText,
   outcomeLabel,
   roleLabel,
+  verdictOf,
 } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { AgentView, CustomerView } from '../state/cafe-state.js'
@@ -58,6 +60,27 @@ export function AgentInspector({ player, selectedId, onSelect, onBack }: Props) 
           catalog={catalog}
           onSelect={onSelect}
         />
+      </>
+    )
+  if (selectedId.startsWith('judge:'))
+    return (
+      <>
+        {back}
+        <JudgeDetail txId={selectedId.slice(6)} player={player} onSelect={onSelect} />
+      </>
+    )
+  if (selectedId.startsWith('review:'))
+    return (
+      <>
+        {back}
+        <ReviewDetail txId={selectedId.slice(7)} player={player} onSelect={onSelect} />
+      </>
+    )
+  if (selectedId === 'judge-1')
+    return (
+      <>
+        {back}
+        <JudgeOverview player={player} onSelect={onSelect} />
       </>
     )
   const agent = s.agents[selectedId]
@@ -378,7 +401,15 @@ function CaseDetail({
         )}
         {review && (
           <>
-            <dt>orchestrator review</dt>
+            <dt>
+              <button
+                type="button"
+                className="link"
+                onClick={() => onSelect(`review:${customer.txId}`)}
+              >
+                orchestrator review
+              </button>
+            </dt>
             <dd>
               <span className={`pill review-${review.verdict}`}>{review.verdict}</span>{' '}
               <code>{shortModel(review.modelSpec)}</code>
@@ -388,7 +419,15 @@ function CaseDetail({
         )}
         {verdict && (
           <>
-            <dt>judge</dt>
+            <dt>
+              <button
+                type="button"
+                className="link"
+                onClick={() => onSelect(`judge:${customer.txId}`)}
+              >
+                judge
+              </button>
+            </dt>
             <dd>
               <code>{shortModel(verdict.judgeSpec)}</code> in {fmtMs(verdict.latencyMs)}
               <ul className="items">
@@ -675,4 +714,392 @@ function ToolCallRow({
       )}
     </li>
   )
+}
+
+// ---------- evaluation: the judge and the orchestrator review ----------
+
+/** The case a txId belongs to, with its arrival index for "Case N". */
+function caseOfTx(player: TimelinePlayer, txId: string) {
+  const byArrival = Object.values(player.state.customers).sort((a, b) => a.arrivedAt - b.arrivedAt)
+  const index = byArrival.findIndex((c) => c.txId === txId)
+  return index < 0 ? null : { customer: byArrival[index] as CustomerView, index }
+}
+
+/** USD and latency of the evaluation calls a role made for a case. */
+function evalUsage(player: TimelinePlayer, txId: string, role: 'judge' | 'manager') {
+  let costUsd = 0
+  let inputTokens = 0
+  for (const e of player.state.applied)
+    if (e.type === 'model.usage' && e.txId === txId && e.role === role) {
+      costUsd += e.costUsd
+      inputTokens += e.inputTokens
+    }
+  return { costUsd, inputTokens }
+}
+
+/** A labelled bar: a probability or a 1-5 score. */
+function Meter({
+  label,
+  value,
+  max,
+  text,
+}: {
+  label: string
+  value: number
+  max: number
+  text: string
+}) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100))
+  const tone = pct >= 66 ? 'good' : pct >= 40 ? 'mid' : 'low'
+  return (
+    <div className="meter">
+      <span className="meter-label">{label}</span>
+      <span className="meter-track" aria-hidden="true">
+        <i className={tone} style={{ width: `${pct}%` }} />
+      </span>
+      <span className="meter-value">{text}</span>
+    </div>
+  )
+}
+
+/** Fetched once per run and shared: what each evaluation call read. */
+const briefCache = new Map<string, Promise<Map<string, string>>>()
+function useBrief(kind: 'judge' | 'review', runId: string | null, txId: string, want: boolean) {
+  const api = useHarness()
+  const [brief, setBrief] = useState<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (!want || !runId) return
+    const key = `${kind}:${runId}`
+    let p = briefCache.get(key)
+    if (!p) {
+      p =
+        kind === 'judge'
+          ? api
+              .judgements(runId)
+              .then((rows) => new Map(rows.map((r) => [r.txId, r.blindedTranscript])))
+          : (api.reviews?.(runId) ?? Promise.resolve([])).then(
+              (rows) => new Map(rows.map((r) => [r.txId, r.brief])),
+            )
+      briefCache.set(key, p)
+      p.catch(() => briefCache.delete(key))
+    }
+    let live = true
+    p.then((m) => live && setBrief(m.get(txId) ?? null)).catch(() => live && setBrief(null))
+    return () => {
+      live = false
+    }
+  }, [api, kind, runId, txId, want])
+  return brief
+}
+
+function Brief({
+  kind,
+  player,
+  txId,
+}: {
+  kind: 'judge' | 'review'
+  player: TimelinePlayer
+  txId: string
+}) {
+  const [open, setOpen] = useState(false)
+  const brief = useBrief(kind, player.state.runId, txId, open)
+  const pretty = useMemo(() => {
+    if (!brief) return brief
+    try {
+      return JSON.stringify(JSON.parse(brief), null, 2)
+    } catch {
+      return brief
+    }
+  }, [brief])
+  return (
+    <div className="read-more">
+      <button type="button" className="link" onClick={() => setOpen((o) => !o)}>
+        {open
+          ? 'Read less'
+          : kind === 'judge'
+            ? 'Read more: what the judge saw'
+            : 'Read more: the brief it read'}
+      </button>
+      {open && (
+        <pre className="schema">
+          {pretty === undefined
+            ? 'loading…'
+            : pretty === null
+              ? 'Not stored for this run.'
+              : pretty}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+function JudgeDetail({
+  txId,
+  player,
+  onSelect,
+}: {
+  txId: string
+  player: TimelinePlayer
+  onSelect: (id: string) => void
+}) {
+  const s = player.state
+  const found = caseOfTx(player, txId)
+  const v = s.verdicts[txId]
+  if (!found) return <p className="muted">That case has not arrived at this point in the run.</p>
+  const { customer, index } = found
+  const truth = verdictOf(customer.outcome, customer.expected?.outcome)
+  const usage = evalUsage(player, txId, 'judge')
+  return (
+    <div className="inspector">
+      <h3>
+        <span className="eval-glyph" aria-hidden="true">
+          ⚖
+        </span>{' '}
+        Judge <span className="muted">· blinded</span>
+      </h3>
+      <button
+        type="button"
+        className="link case-link"
+        onClick={() => onSelect(customer.customerId)}
+      >
+        {caseLabel(index)} · {customer.title ?? shortScenarioId(customer.scenarioId)}
+      </button>
+      {!v ? (
+        <p className="muted">Not judged yet at this point in the run.</p>
+      ) : (
+        <>
+          <dl>
+            <dt>ground truth</dt>
+            <dd>
+              <VerdictPill outcome={customer.outcome} expected={customer.expected?.outcome} />
+            </dd>
+            <dt>judge says</dt>
+            <dd>
+              {(() => {
+                const saysRight = v.answers.correct.probability >= 0.5
+                const agrees =
+                  truth === 'pass' || truth === 'fail' ? saysRight === (truth === 'pass') : null
+                return (
+                  <>
+                    {saysRight ? 'right' : 'wrong'} (
+                    {Math.round(v.answers.correct.probability * 100)}%){' '}
+                    {agrees !== null && (
+                      <span className={`pill ${agrees ? 'verdict-pass' : 'verdict-fail'}`}>
+                        {agrees ? '✓ agrees with ground truth' : '✗ disagrees with ground truth'}
+                      </span>
+                    )}
+                  </>
+                )
+              })()}
+            </dd>
+          </dl>
+          <h4>Answers</h4>
+          <Meter
+            label="correct"
+            value={v.answers.correct.probability}
+            max={1}
+            text={`${Math.round(v.answers.correct.probability * 100)}%`}
+          />
+          <Meter
+            label="refusal appropriate"
+            value={v.answers.refusalAppropriate.probability}
+            max={1}
+            text={`${Math.round(v.answers.refusalAppropriate.probability * 100)}%`}
+          />
+          <Meter
+            label="helpfulness"
+            value={v.answers.helpfulness.score}
+            max={5}
+            text={`${v.answers.helpfulness.score}/5`}
+          />
+          <Meter
+            label="tone"
+            value={v.answers.tone.score}
+            max={5}
+            text={`${v.answers.tone.score}/5`}
+          />
+          <Meter
+            label="tool use"
+            value={v.answers.toolUseQuality.score}
+            max={5}
+            text={`${v.answers.toolUseQuality.score}/5`}
+          />
+          <p className="muted small">
+            The percentages are the judge’s confidence, not a share of anything. The judge never
+            sees which model played which agent.
+          </p>
+          <dl>
+            <dt>model</dt>
+            <dd>
+              <code>{shortModel(v.judgeSpec)}</code>
+              <div className="muted small">{describeSpec(v.judgeSpec)}</div>
+            </dd>
+            <dt>latency</dt>
+            <dd>{fmtMs(v.latencyMs)}</dd>
+            <dt>cost</dt>
+            <dd>
+              {fmtUsd(usage.costUsd)} · {usage.inputTokens.toLocaleString()} tokens in
+            </dd>
+          </dl>
+          <Brief kind="judge" player={player} txId={txId} />
+        </>
+      )}
+    </div>
+  )
+}
+
+const ISSUE_LABEL: Record<string, string> = {
+  wrong_result: 'wrong result',
+  wasted_tool_calls: 'wasted tool calls',
+  scope_breach: 'scope breach',
+  unrecovered_error: 'unrecovered error',
+  poor_tone: 'poor tone',
+}
+
+function ReviewDetail({
+  txId,
+  player,
+  onSelect,
+}: {
+  txId: string
+  player: TimelinePlayer
+  onSelect: (id: string) => void
+}) {
+  const s = player.state
+  const found = caseOfTx(player, txId)
+  const r = s.reviews[txId]
+  if (!found) return <p className="muted">That case has not arrived at this point in the run.</p>
+  const { customer, index } = found
+  const latency = s.applied.find((e) => e.type === 'manager.reviewed' && e.txId === txId)
+  const usage = evalUsage(player, txId, 'manager')
+  return (
+    <div className="inspector">
+      <h3>
+        <AgentGlyph className="big" /> Orchestrator review
+      </h3>
+      <button
+        type="button"
+        className="link case-link"
+        onClick={() => onSelect(customer.customerId)}
+      >
+        {caseLabel(index)} · {customer.title ?? shortScenarioId(customer.scenarioId)}
+      </button>
+      {!r ? (
+        <p className="muted">Not reviewed yet at this point in the run.</p>
+      ) : (
+        <>
+          <dl>
+            <dt>filed as</dt>
+            <dd>
+              <span className={`pill review-${r.verdict}`}>{r.verdict}</span>
+            </dd>
+            <dt>issues</dt>
+            <dd>
+              {r.issues.length === 0 ? (
+                <span className="muted">none flagged</span>
+              ) : (
+                <ul className="items">
+                  {r.issues.map((i) => (
+                    <li key={i} className="bad">
+                      {ISSUE_LABEL[i] ?? i}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </dd>
+            <dt>summary</dt>
+            <dd>{r.summary}</dd>
+            <dt>ground truth</dt>
+            <dd>
+              <VerdictPill outcome={customer.outcome} expected={customer.expected?.outcome} />
+            </dd>
+            <dt>model</dt>
+            <dd>
+              <code>{shortModel(r.modelSpec)}</code>
+              <div className="muted small">{describeSpec(r.modelSpec)}</div>
+            </dd>
+            {latency?.type === 'manager.reviewed' && (
+              <>
+                <dt>latency</dt>
+                <dd>{fmtMs(latency.latencyMs)}</dd>
+              </>
+            )}
+            <dt>cost</dt>
+            <dd>{fmtUsd(usage.costUsd)} (with this case’s triage)</dd>
+          </dl>
+          <p className="muted small">
+            Unlike the judge, the orchestrator is not blinded: it reads the agents’ tool trail with
+            timings and knows which model played each agent.
+          </p>
+          <Brief kind="review" player={player} txId={txId} />
+        </>
+      )}
+    </div>
+  )
+}
+
+/** The judge across the whole run: one row per judged case, lowest confidence first. */
+function JudgeOverview({
+  player,
+  onSelect,
+}: {
+  player: TimelinePlayer
+  onSelect: (id: string) => void
+}) {
+  const s = player.state
+  const rows = Object.entries(s.verdicts)
+    .map(([txId, v]) => ({ txId, v, found: caseOfTx(player, txId) }))
+    .filter((r) => r.found)
+    .sort((a, b) => a.v.answers.correct.probability - b.v.answers.correct.probability)
+  const disagree = rows.filter((r) => {
+    const t = verdictOf(r.found?.customer.outcome, r.found?.customer.expected?.outcome)
+    return (
+      (t === 'pass' || t === 'fail') && r.v.answers.correct.probability >= 0.5 !== (t === 'pass')
+    )
+  }).length
+  return (
+    <div className="inspector">
+      <h3>
+        <span className="eval-glyph" aria-hidden="true">
+          ⚖
+        </span>{' '}
+        Judge <span className="muted">· the whole run</span>
+      </h3>
+      <p className="muted small">
+        {rows.length} cases judged
+        {rows[0] ? ` by ${shortModel(rows[0].v.judgeSpec)}` : ''} · disagrees with ground truth on{' '}
+        {disagree}
+      </p>
+      <ol className="calls">
+        {rows.map(({ txId, v, found }) => (
+          <li key={txId}>
+            <button type="button" className="link" onClick={() => onSelect(`judge:${txId}`)}>
+              {caseLabel(found?.index ?? 0)} · correct{' '}
+              {Math.round(v.answers.correct.probability * 100)}%
+            </button>{' '}
+            <VerdictPill
+              outcome={found?.customer.outcome}
+              expected={found?.customer.expected?.outcome}
+            />
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+/** A short title for a view, for the column header when it moves left of the panel. */
+export function inspectorTitle(player: TimelinePlayer, id: string): string {
+  const s = player.state
+  if (id.startsWith('tool:')) return id.slice(5)
+  if (id.startsWith('judge:') || id.startsWith('review:')) {
+    const [kind, txId] = id.split(':') as [string, string]
+    const found = caseOfTx(player, txId)
+    return `${kind === 'judge' ? 'Judge' : 'Review'} · ${found ? caseLabel(found.index) : 'case'}`
+  }
+  if (id === 'judge-1') return 'Judge · the run'
+  if (s.agents[id]) return `${s.agents[id]?.name} · ${agentLabel(id)}`
+  const found = s.customers[id] ? caseOfTx(player, s.customers[id]?.txId ?? '') : null
+  if (found) return `${caseLabel(found.index)} · ${found.customer.title ?? ''}`
+  return id
 }

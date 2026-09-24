@@ -1803,3 +1803,154 @@ body.resizing-panel .canvas-wrap {
 .calls .about {
   margin-left: 8px;
 }
+
+/* ---------- inspector trail: the views you drilled in from, open to the left ---------- */
+main.with-trail {
+  grid-template-columns: minmax(0, 1fr) auto var(--panel-width);
+}
+main.with-drawer.with-trail {
+  grid-template-columns:
+    minmax(0, 1fr) var(--drawer-width, min(440px, 34vw)) auto
+    var(--panel-width);
+}
+.inspector-trail {
+  display: flex;
+  min-height: 0;
+  overflow-x: auto;
+  border-left: 1px solid var(--line-2);
+  background: linear-gradient(180deg, #13303b, #0d2029);
+}
+.trail-pane {
+  width: 340px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line-2);
+  animation: trail-in 170ms ease-out;
+}
+/* the column that just moved left settles into place; the newest view is the panel */
+@keyframes trail-in {
+  from {
+    transform: translateX(28px);
+    opacity: 0.4;
+  }
+}
+.trail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 24, 32, 0.6);
+}
+.trail-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-trail .trail-head .link {
+  flex: none;
+  font-size: 11.5px;
+}
+.trail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 24px;
+  opacity: 0.92;
+}
+.trail-spine {
+  width: 30px;
+  flex: none;
+  padding: 10px 0;
+  border: none;
+  border-right: 1px solid var(--line-2);
+  border-radius: 0;
+  background: rgba(10, 24, 32, 0.5);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: pointer;
+}
+.trail-spine:hover:not(:disabled) {
+  color: var(--text);
+  filter: none;
+  background: rgba(255, 210, 122, 0.06);
+}
+.trail-spine span {
+  display: inline-block;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* with the trail showing, "back" is redundant: the previous view is right there */
+main.with-trail .panel .inspector-back {
+  display: none;
+}
+@media (max-width: 900px) {
+  main.with-trail,
+  main.with-drawer.with-trail {
+    grid-template-columns: 1fr;
+  }
+  .inspector-trail {
+    display: none;
+  }
+  main.with-trail .panel .inspector-back {
+    display: inline-block;
+  }
+}
+
+/* ---------- judge and review views ---------- */
+.eval-glyph {
+  color: #b79bea;
+}
+.inspector .case-link {
+  display: inline-block;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+}
+.meter {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+  font-size: 12.5px;
+}
+.meter-label {
+  color: var(--muted);
+}
+.meter-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.inspector .meter-track i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.inspector .meter-track i.good {
+  background: #7fd58a;
+}
+.inspector .meter-track i.mid {
+  background: #ffd27a;
+}
+.inspector .meter-track i.low {
+  background: #ff6b5e;
+}
+.meter-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.inspector h3 code {
+  white-space: nowrap;
+}

@@ -501,9 +501,7 @@ export function createGame(
           player.pause()
         }
         // a tool call opens the tool; a step, the agent; a case's input or expectations, the case
-        callbacks.onSelect(
-          b.layer === 'tool' ? `tool:${b.head}` : (b.agentId ?? b.customerId ?? null),
-        )
+        callbacks.onSelect(selectionFor(b))
       })
     }
     return e
@@ -694,6 +692,18 @@ function summary(m: TraceModel, at: number, atEnd: boolean): string {
   const done = m.columns.filter((c) => c.leftSeq !== null && c.leftSeq <= at)
   const passed = done.filter((c) => c.expectedOutcome && c.outcome === c.expectedOutcome).length
   return `${m.columns.length} ${CASE_NOUN.many} · ${done.length} done · ${passed} matched expectation · ${atEnd ? m.runStatus : 'at the playhead'}`
+}
+
+/**
+ * What the Inspector opens for a badge: a tool call opens the tool, the judge and
+ * the orchestrator review open that case's verdict, a step opens its agent, a
+ * case's input opens the case.
+ */
+function selectionFor(b: Badge): string | null {
+  if (b.layer === 'tool') return `tool:${b.head}`
+  if (b.txId && b.head === 'judge') return `judge:${b.txId}`
+  if (b.txId && b.head === 'review') return `review:${b.txId}`
+  return b.agentId ?? b.customerId ?? null
 }
 
 /** Everything a badge shows: a change in any of it (a result, a latency, a verdict) refills the badge. */

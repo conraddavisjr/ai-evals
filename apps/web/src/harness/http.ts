@@ -50,6 +50,7 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
     events: (id, afterSeq = -1) => json<CafeEvent[]>(`/api/runs/${id}/events?afterSeq=${afterSeq}`),
     metrics: (id) => json<RunMetrics>(`/api/runs/${id}/metrics`),
     judgements: (id) => json(`/api/runs/${id}/judgements`),
+    reviews: (id) => json(`/api/runs/${id}/reviews`),
     telemetry: (id) => json<RunTelemetry>(`/api/runs/${id}/telemetry`),
     datasets: () => json('/api/datasets'),
     dataset: (id) => json(`/api/datasets/${id}`),

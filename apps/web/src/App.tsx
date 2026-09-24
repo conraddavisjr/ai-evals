@@ -5,6 +5,7 @@ import { BenchPage } from './bench/BenchPage.js'
 import { AgentInspector } from './components/AgentInspector.js'
 import { DrawerOutlet, useDrawer } from './components/Drawer.js'
 import { EventLog } from './components/EventLog.js'
+import { InspectorTrail } from './components/InspectorTrail.js'
 import { MetricsDashboard } from './components/MetricsDashboard.js'
 import { PlaybackControls } from './components/PlaybackControls.js'
 import { QueuePanel } from './components/QueuePanel.js'
@@ -77,6 +78,24 @@ export function App() {
       setSelectedId(id)
     },
     [selectedId],
+  )
+  /** A trail column becomes the current view again: everything after it closes. */
+  const inspectorFocus = useCallback(
+    (i: number) => {
+      const id = inspectorBack[i]
+      if (id === undefined) return
+      setInspectorBack(inspectorBack.slice(0, i))
+      setSelectedId(id)
+    },
+    [inspectorBack],
+  )
+  /** A link clicked in a trail column: the path continues from that column. */
+  const inspectorOpenFrom = useCallback(
+    (i: number, id: string) => {
+      setInspectorBack(inspectorBack.slice(0, i + 1))
+      setSelectedId(id)
+    },
+    [inspectorBack],
   )
   const inspectorBackTo = useCallback(() => {
     setInspectorBack((b) => {
@@ -287,6 +306,7 @@ export function App() {
   }, [])
 
   const state = player.state
+  const showTrail = page === 'cafe' && tab === 'inspector' && inspectorBack.length > 0
   const agentsList = Object.values(state.agents)
   const staffSummary = `${roleCount('cashier', agentsList.filter((x) => x.role === 'cashier').length)} · ${roleCount('barista', agentsList.filter((x) => x.role === 'barista').length)}`
 
@@ -424,7 +444,7 @@ export function App() {
       </header>
 
       <main
-        className={drawer.current ? 'with-drawer' : ''}
+        className={[drawer.current ? 'with-drawer' : '', showTrail ? 'with-trail' : ''].join(' ')}
         style={{ '--panel-width': `${panel.width}px` } as React.CSSProperties}
       >
         {page === 'architecture' && <ArchitectureView />}
@@ -452,6 +472,15 @@ export function App() {
         </section>
 
         <DrawerOutlet />
+        {showTrail && (
+          <InspectorTrail
+            ids={inspectorBack}
+            player={player}
+            onFocus={inspectorFocus}
+            onOpenFrom={inspectorOpenFrom}
+            panelWidth={panel.width}
+          />
+        )}
         <aside className="panel">
           <button
             type="button"

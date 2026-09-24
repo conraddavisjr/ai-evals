@@ -36,6 +36,8 @@ export interface Badge {
   latencyMs?: number | undefined
   agentId?: string | undefined
   customerId?: string | undefined
+  /** The case the badge belongs to; unset for run-level badges. */
+  txId?: string | undefined
   /** Tool badges sit under their step. */
   indent?: boolean | undefined
 }
@@ -87,7 +89,10 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
   const startOf = new Map<string, number>()
 
   const col = (txId: string) => byTx.get(txId)
-  const place = (c: Column, band: Band, b: Badge) => c.bands[band].push(b)
+  const place = (c: Column, band: Band, b: Badge) => {
+    b.txId = c.txId
+    c.bands[band].push(b)
+  }
   const atMs = (c: Column, t: number) => t - (startOf.get(c.txId) ?? t)
 
   const handle = (e: CafeEvent, c: Column) => {
