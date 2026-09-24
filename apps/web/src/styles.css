@@ -1954,3 +1954,91 @@ main.with-trail .panel .inspector-back {
 .inspector h3 code {
   white-space: nowrap;
 }
+
+/* ---------- judge answers: hover for the question, click for the evidence ---------- */
+.judge-answers {
+  margin: 2px 0 8px;
+}
+.judge-answers .answer {
+  position: relative;
+}
+.judge-answers .answer-row {
+  display: block;
+  width: 100%;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  box-shadow: none;
+  cursor: pointer;
+}
+.judge-answers .answer-row:hover:not(:disabled),
+.judge-answers .answer.open .answer-row {
+  border-color: var(--line-2);
+  background: rgba(255, 255, 255, 0.03);
+  filter: none;
+}
+.judge-answers .answer-row:active:not(:disabled) {
+  transform: none;
+}
+.judge-answers .answer-tip {
+  display: none;
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(10, 24, 32, 0.97);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+.judge-answers .answer-tip strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--gold);
+}
+.judge-answers .answer:not(.open) .answer-row:hover + .answer-tip,
+.judge-answers .answer:not(.open) .answer-row:focus-visible + .answer-tip {
+  display: block;
+}
+.judge-answers .answer-detail {
+  margin: 4px 0 12px;
+  padding: 8px 10px 4px;
+  border-left: 2px solid #b79bea;
+  background: rgba(183, 155, 234, 0.06);
+  border-radius: 0 6px 6px 0;
+  font-size: 12.5px;
+}
+.judge-answers .answer-detail h5 {
+  margin: 8px 0 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.judge-answers .answer-detail h5:first-child {
+  margin-top: 0;
+}
+.judge-answers .answer-detail p {
+  margin: 0 0 4px;
+}
+.judge-answers .answer-detail dd.good {
+  color: #b9f0c0;
+}
+.judge-answers .answer-detail dd.bad {
+  color: #ffc4bd;
+}
+.judge-answers .small-quote {
+  margin: 4px 0;
+  padding: 4px 8px;
+  font-size: 12px;
+}

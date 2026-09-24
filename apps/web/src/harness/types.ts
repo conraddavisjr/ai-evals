@@ -52,6 +52,13 @@ export interface DomainInfo {
   defaultRoles: RoleModels
   /** The tools this domain's action gate guards; empty when it has none. */
   gateTools: string[]
+  /** The judge's questions in this domain's wording (ids are the same in every domain). */
+  judgeQuestions?: Array<{
+    id: string
+    type: 'boolean' | 'score' | 'choice'
+    instructions: string
+    criteria?: readonly string[] | Record<string, string>
+  }>
 }
 
 export interface StreamHandlers {

@@ -1,7 +1,7 @@
 import { type CafeEvent, shortScenarioId } from '@cafe/protocol'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { fmtCents, fmtMs, fmtUsd, shortModel } from '../format.js'
-import { type ToolInfo, useExperimentApi, useHarness } from '../harness/index.js'
+import { type DomainInfo, type ToolInfo, useExperimentApi, useHarness } from '../harness/index.js'
 import { AgentGlyph } from '../lib/AgentGlyph.js'
 import {
   agentLabel,
@@ -15,6 +15,14 @@ import {
 } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { AgentView, CustomerView } from '../state/cafe-state.js'
+import {
+  ANSWER_LABEL,
+  type AnswerId,
+  judgeEvidence,
+  MOCK_RULE,
+  MODEL_NOTE,
+  readScale,
+} from './judge-explain.js'
 import { VerdictPill } from './TransactionList.js'
 
 /** Selections the Inspector understands: an agent id, a case's customer id, or `tool:<name>`. */
@@ -894,36 +902,10 @@ function JudgeDetail({
             </dd>
           </dl>
           <h4>Answers</h4>
-          <Meter
-            label="correct"
-            value={v.answers.correct.probability}
-            max={1}
-            text={`${Math.round(v.answers.correct.probability * 100)}%`}
-          />
-          <Meter
-            label="refusal appropriate"
-            value={v.answers.refusalAppropriate.probability}
-            max={1}
-            text={`${Math.round(v.answers.refusalAppropriate.probability * 100)}%`}
-          />
-          <Meter
-            label="helpfulness"
-            value={v.answers.helpfulness.score}
-            max={5}
-            text={`${v.answers.helpfulness.score}/5`}
-          />
-          <Meter
-            label="tone"
-            value={v.answers.tone.score}
-            max={5}
-            text={`${v.answers.tone.score}/5`}
-          />
-          <Meter
-            label="tool use"
-            value={v.answers.toolUseQuality.score}
-            max={5}
-            text={`${v.answers.toolUseQuality.score}/5`}
-          />
+          <p className="muted small">
+            Hover an answer for the question; click it for the evidence.
+          </p>
+          <JudgeAnswers v={v} player={player} txId={txId} />
           <p className="muted small">
             The percentages are the judge’s confidence, not a share of anything. The judge never
             sees which model played which agent.
@@ -1102,4 +1084,141 @@ export function inspectorTitle(player: TimelinePlayer, id: string): string {
   const found = s.customers[id] ? caseOfTx(player, s.customers[id]?.txId ?? '') : null
   if (found) return `${caseLabel(found.index)} · ${found.customer.title ?? ''}`
   return id
+}
+
+/** Fetched once: the judge questions per domain, in each domain's wording. */
+let domainsPromise: Promise<DomainInfo[]> | null = null
+function useJudgeQuestions(domain: string) {
+  const api = useHarness()
+  const [qs, setQs] = useState<DomainInfo['judgeQuestions'] | null>(null)
+  useEffect(() => {
+    if (!api.domains) return
+    if (!domainsPromise) {
+      domainsPromise = api.domains()
+      domainsPromise.catch(() => {
+        domainsPromise = null
+      })
+    }
+    let live = true
+    domainsPromise
+      .then((ds) => live && setQs(ds.find((d) => d.id === domain)?.judgeQuestions ?? null))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [api, domain])
+  return qs
+}
+
+type VerdictAnswers = NonNullable<TimelinePlayer['state']['verdicts'][string]>
+
+/**
+ * The judge's five answers, each a bar you can hover (the question and how to read
+ * the number) and open (the evidence it read, and how this judge decides).
+ */
+function JudgeAnswers({
+  v,
+  player,
+  txId,
+}: {
+  v: VerdictAnswers
+  player: TimelinePlayer
+  txId: string
+}) {
+  const questions = useJudgeQuestions(player.state.config?.domain ?? 'cafe')
+  const brief = useBrief('judge', player.state.runId, txId, true)
+  const transcript = useMemo(() => {
+    if (!brief) return null
+    try {
+      return JSON.parse(brief) as unknown
+    } catch {
+      return null
+    }
+  }, [brief])
+  const [open, setOpen] = useState<AnswerId | null>(null)
+  const mock = v.judgeSpec.startsWith('mock:')
+  const rows: Array<{ id: AnswerId; kind: 'probability' | 'score'; value: number }> = [
+    { id: 'correct', kind: 'probability', value: v.answers.correct.probability },
+    {
+      id: 'refusalAppropriate',
+      kind: 'probability',
+      value: v.answers.refusalAppropriate.probability,
+    },
+    { id: 'helpfulness', kind: 'score', value: v.answers.helpfulness.score },
+    { id: 'tone', kind: 'score', value: v.answers.tone.score },
+    { id: 'toolUseQuality', kind: 'score', value: v.answers.toolUseQuality.score },
+  ]
+  return (
+    <div className="judge-answers">
+      {rows.map(({ id, kind, value }) => {
+        const scale = readScale(kind, value)
+        const question = questions?.find((q) => q.id === id)?.instructions
+        const isOpen = open === id
+        const evidence = isOpen && transcript ? judgeEvidence(id, transcript) : null
+        return (
+          <div key={id} className={`answer ${isOpen ? 'open' : ''}`}>
+            <button
+              type="button"
+              className="answer-row"
+              aria-expanded={isOpen}
+              aria-describedby={`tip-${id}`}
+              onClick={() => setOpen(isOpen ? null : id)}
+            >
+              <Meter
+                label={ANSWER_LABEL[id]}
+                value={value}
+                max={kind === 'probability' ? 1 : 5}
+                text={kind === 'probability' ? `${Math.round(value * 100)}%` : `${value}/5`}
+              />
+            </button>
+            <div className="answer-tip" role="tooltip" id={`tip-${id}`}>
+              <strong>{scale.headline}</strong>
+              <div>{question ?? 'loading the question…'}</div>
+              <div className="muted">{isOpen ? 'click to close' : 'click for the evidence'}</div>
+            </div>
+            {isOpen && (
+              <div className="answer-detail">
+                <h5>The question</h5>
+                <p>{question ?? 'loading…'}</p>
+                <h5>How to read {scale.headline}</h5>
+                <p>{scale.explain}</p>
+                <h5>What it had to go on</h5>
+                {brief === undefined ? (
+                  <p className="muted">loading the transcript…</p>
+                ) : !evidence ? (
+                  <p className="muted">The transcript was not stored for this run.</p>
+                ) : (
+                  <>
+                    {evidence.rows.length > 0 && (
+                      <dl>
+                        {evidence.rows.map((r) => (
+                          <Fragment key={r.label}>
+                            <dt>{r.label}</dt>
+                            <dd
+                              className={r.tone === 'bad' ? 'bad' : r.tone === 'good' ? 'good' : ''}
+                            >
+                              {r.tone === 'bad' ? '✗ ' : r.tone === 'good' ? '✓ ' : ''}
+                              {r.value}
+                            </dd>
+                          </Fragment>
+                        ))}
+                      </dl>
+                    )}
+                    {evidence.quotes.map((q) => (
+                      <blockquote key={`${q.who}:${q.text}`} className="small-quote">
+                        <span className="muted small">{q.who}</span> “{q.text}”
+                      </blockquote>
+                    ))}
+                    {evidence.note && <p className="muted small">{evidence.note}</p>}
+                  </>
+                )}
+                <h5>How this judge decides</h5>
+                <p>{mock ? `Scripted mock rule: ${MOCK_RULE[id]}` : MODEL_NOTE}</p>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }

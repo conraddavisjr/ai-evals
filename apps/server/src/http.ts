@@ -88,6 +88,13 @@ export function createApp(deps: HttpDeps) {
         tools: d.tools.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
         roleScopes: d.roleScopes,
         gateTools: d.gate?.tools ?? [],
+        // the exact questions the judge is asked in this domain, for the Inspector's explanations
+        judgeQuestions: Object.entries(d.judgeQuestions).map(([id, q]) => ({
+          id,
+          type: q.type,
+          instructions: q.instructions,
+          ...('criteria' in q ? { criteria: q.criteria } : {}),
+        })),
       })),
     ),
   )
