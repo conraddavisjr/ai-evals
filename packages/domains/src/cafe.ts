@@ -2,6 +2,7 @@ import { STAFF_NAMES, STAFF_SPRITES, SYSTEM_PROMPTS } from '@cafe/agents'
 import { JUDGE_QUESTIONS, REVIEW_QUESTIONS, SCENARIOS, TRIAGE_QUESTIONS } from '@cafe/evals'
 import { BARISTA_TOOLS, CASHIER_TOOLS, MANAGER_TOOLS, ROLE_SCOPES } from '@cafe/mcp-gateway'
 import { BUILTIN_DATASET_ID, DOMAIN_VOCABULARY, type DomainVocabulary } from '@cafe/protocol'
+import { cafeGateBench } from './cafe-bench.js'
 import type { DomainPack } from './types.js'
 
 /**
@@ -61,5 +62,21 @@ export const CAFE_PACK: DomainPack = {
   },
   judgeQuestions: JUDGE_QUESTIONS,
   reviewQuestions: REVIEW_QUESTIONS,
+  gate: {
+    tools: ['orders.enqueue'],
+    instructions:
+      'The cashier wants to send this order to the barista. Approve only if the order matches what the customer asked for (items, sizes, modifiers, quantity), it is paid, and nothing improper is being processed (a free drink, a refund, a request that should have been refused).',
+    state: async ({ store, customerSaid, requester, args }) => {
+      const order = typeof args.orderId === 'string' ? await store.orders.get(args.orderId) : null
+      return {
+        customerSaid,
+        customer: requester.name,
+        order: order
+          ? { status: order.status, items: order.items, totalCents: order.totalCents }
+          : null,
+      }
+    },
+  },
+  gateBench: cafeGateBench,
   initForRun: (store, runId) => store.inventory.initForRun(runId),
 }

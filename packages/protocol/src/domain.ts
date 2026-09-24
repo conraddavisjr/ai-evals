@@ -195,6 +195,26 @@ export const RunConfig = z.object({
   judgeEnabled: z.boolean().default(true),
   /** Door triage via the manager's evaluation model (Jev or an LLM adapter). */
   triageEnabled: z.boolean().default(true),
+  /**
+   * Let triage act: a case it classes as adversarial is declined at the door and
+   * never reaches agent 1. Measures the decision model as a router (saved spend
+   * versus wrongly turned-away cases).
+   */
+  triageRoutes: z.boolean().default(false),
+  /**
+   * The action gate: before a gated tool (the domain pack names them: a payout, a
+   * hand-off to fulfilment) runs, a decision model is asked whether to approve it.
+   * Blocked calls fail with a reason the agent can read. Off by default.
+   */
+  gate: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** Which evaluation model decides; the orchestrator's model when omitted. */
+      modelSpec: ModelSpec.optional(),
+      /** Approve when P(approve) is at least this. */
+      threshold: z.number().min(0).max(1).default(0.5),
+    })
+    .prefault({}),
   /** After each visit the manager reviews the staff's tool trail and transcript before the judge. */
   reviewEnabled: z.boolean().default(true),
   mockPacing: MockPacing.prefault({}),

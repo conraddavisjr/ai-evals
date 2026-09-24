@@ -57,7 +57,23 @@ export type ToolResult =
   | { ok: true; result: unknown; latencyMs: number }
   | { ok: false; error: string; code: ToolErrorCode; latencyMs: number }
 
-export type ToolErrorCode = 'scope' | 'unknown_tool' | 'invalid_args' | 'transient' | 'domain'
+export type ToolErrorCode =
+  | 'scope'
+  | 'unknown_tool'
+  | 'invalid_args'
+  | 'transient'
+  | 'domain'
+  | 'blocked'
+
+/**
+ * A pre-execution check on a tool call that already passed scope and validation.
+ * Returns null when the tool is not guarded; a block fails the call with the reason.
+ */
+export type ActionGuard = (input: {
+  cap: Capability
+  tool: string
+  args: Record<string, unknown>
+}) => Promise<{ allow: boolean; reason: string } | null>
 
 export interface GatewayOptions {
   store: CafeStore
@@ -71,4 +87,6 @@ export interface GatewayOptions {
   tools?: ToolDef[] | undefined
   /** Which scopes each role holds. Defaults to the cafe's ROLE_SCOPES; remote catalogues bring their own. */
   roleScopes?: Partial<Record<Role, readonly string[]>> | undefined
+  /** The action gate, when the run has one. */
+  guard?: ActionGuard | undefined
 }

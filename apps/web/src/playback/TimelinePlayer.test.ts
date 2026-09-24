@@ -18,6 +18,8 @@ const recorded = () =>
         config: {
           name: 'x',
           domain: 'cafe',
+          triageRoutes: false,
+          gate: { enabled: false, threshold: 0.5 },
           orchestrator: 'stardust',
           tools: { kind: 'builtin' },
           scenarioIds: ['a'],

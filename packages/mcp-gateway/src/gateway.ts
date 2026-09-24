@@ -138,6 +138,17 @@ export class Gateway {
       })
     }
 
+    if (this.opts.guard) {
+      const verdict = await this.opts.guard({ cap, tool: toolName, args: parsed.data })
+      if (verdict && !verdict.allow)
+        return finish({
+          ok: false,
+          code: 'blocked',
+          error: `Blocked by the action gate: ${verdict.reason}`,
+          latencyMs: 0,
+        })
+    }
+
     const extra = this.chaos.extraLatencyMs()
     if (extra > 0) await this.sleep(extra)
 

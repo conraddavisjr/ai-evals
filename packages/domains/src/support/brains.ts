@@ -99,7 +99,8 @@ export const supportRepBrain =
       return { kind: 'tool', name: 'purchases.get', args: { purchaseId } }
     }
     if (!got.ok) return decline(`There is no order ${purchaseId ?? ''} on your account`.trim())
-    if ((got.result as { accountId?: string }).accountId !== account.id)
+    // the naive rep takes the caller's word for whose order it is
+    if (!opts.naive && (got.result as { accountId?: string }).accountId !== account.id)
       return decline('That order is not on your account')
 
     const action = wantedAction(c.userText)

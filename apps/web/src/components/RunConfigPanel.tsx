@@ -313,6 +313,12 @@ export function RunConfigPanel({
         </label>
       </section>
 
+      <DecisionPoints
+        draft={draft}
+        patch={patch}
+        gateTools={domains.find((d) => d.id === (draft.domain ?? 'cafe'))?.gateTools ?? []}
+      />
+
       <section>
         <h3>
           Chaos{' '}
@@ -459,5 +465,90 @@ export function RunConfigPanel({
         )}
       </section>
     </div>
+  )
+}
+
+/**
+ * Where a decision model (Jev, or any LLM through the evaluation adapter) acts in
+ * the run beyond judging: triage can route cases away at the door, and the action
+ * gate approves or blocks the domain's riskiest tool calls before they execute.
+ */
+function DecisionPoints({
+  draft,
+  patch,
+  gateTools,
+}: {
+  draft: RunDraft
+  patch: (p: Partial<RunDraft>) => void
+  gateTools: string[]
+}) {
+  const gate = { enabled: false, ...draft.gate }
+  const threshold = gate.threshold ?? 0.5
+  const setGate = (p: Partial<typeof gate>) => patch({ gate: { ...gate, ...p } })
+  const triageOn = draft.triageEnabled ?? true
+  return (
+    <section>
+      <h3>Decision points</h3>
+      <p className="muted small">
+        Typed, fast, calibrated decisions: where a decision model such as{' '}
+        <code>gateway:typesafe-ai/jev</code> is strongest. Each uses the {roleLabel('manager')}
+        {"'"}s model unless you pick another.
+      </p>
+      <label className="check" title={triageOn ? undefined : 'Turn door triage on first'}>
+        <input
+          type="checkbox"
+          disabled={!triageOn}
+          checked={triageOn && (draft.triageRoutes ?? false)}
+          onChange={(e) => patch({ triageRoutes: e.target.checked })}
+        />{' '}
+        route: decline cases triage classes as adversarial before agent 1 sees them
+      </label>
+      <label
+        className="check"
+        title={gateTools.length ? undefined : 'This domain has no gated tools'}
+      >
+        <input
+          type="checkbox"
+          disabled={gateTools.length === 0}
+          checked={gate.enabled && gateTools.length > 0}
+          onChange={(e) => setGate({ enabled: e.target.checked })}
+        />{' '}
+        action gate on{' '}
+        {gateTools.length ? gateTools.map((t) => <code key={t}>{t}</code>) : 'nothing'}
+      </label>
+      {gate.enabled && gateTools.length > 0 && (
+        <>
+          <label className="row">
+            <span>gate model</span>
+            <input
+              list="model-specs"
+              placeholder={`${draft.roles.manager} (orchestrator)`}
+              value={gate.modelSpec ?? ''}
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                const { modelSpec: _drop, ...rest } = gate
+                patch({ gate: v ? { ...rest, modelSpec: v } : rest })
+              }}
+              spellCheck={false}
+            />
+          </label>
+          <div className="muted small spec-desc">
+            {describeSpec(gate.modelSpec ?? draft.roles.manager)}
+          </div>
+          <label className="row">
+            <span>approve at</span>
+            <input
+              type="range"
+              min={0.05}
+              max={0.95}
+              step={0.05}
+              value={threshold}
+              onChange={(e) => setGate({ threshold: Number(e.target.value) })}
+            />
+            <span className="muted">P ≥ {Math.round(threshold * 100)}%</span>
+          </label>
+        </>
+      )}
+    </section>
   )
 }

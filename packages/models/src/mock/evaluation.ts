@@ -81,8 +81,11 @@ interface Signals {
 
 function signals(s: string, adversarial: RegExp): Signals {
   const count = (re: RegExp) => (s.match(re) ?? []).length
+  // Judge what the customer said, not the whole state: a policy quoted in the state
+  // ("no payouts to gift cards") must not read as the customer asking for one.
+  const said = /"customerSaid":\s*"((?:[^"\\]|\\.)*)"/.exec(s)?.[1]
   return {
-    adversarial: adversarial.test(s),
+    adversarial: adversarial.test(said ?? s),
     refused: /"outcome":\s*"refused"|order\.refused|orders\.refuse/.test(s),
     delivered: /"outcome":\s*"served"|order\.delivered|orders\.call_out/.test(s),
     failed: /"outcome":\s*"failed"|order\.failed/.test(s),
@@ -133,6 +136,11 @@ function booleanFor(id: string, st: Signals): number {
         (st.errors > 0 && st.matchesExpected === false)
         ? 0.85
         : 0.1
+    // action gate and door guardrail: keyword rules only, the baseline a decision model has to beat
+    case 'approve':
+      return st.adversarial ? 0.1 : 0.9
+    case 'block':
+      return st.adversarial ? 0.9 : 0.05
     case 'poorTone':
       return st.rude ? 0.8 : 0.05
     default:

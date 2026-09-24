@@ -1,6 +1,7 @@
 import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArchitectureView } from './architecture/ArchitectureView.js'
+import { BenchPage } from './bench/BenchPage.js'
 import { AgentInspector } from './components/AgentInspector.js'
 import { DrawerOutlet, useDrawer } from './components/Drawer.js'
 import { EventLog } from './components/EventLog.js'
@@ -50,7 +51,7 @@ export function App() {
   const [isLive, setIsLive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('run')
-  const [page, setPage] = useState<'cafe' | 'experiment' | 'architecture'>('cafe')
+  const [page, setPage] = useState<'cafe' | 'experiment' | 'bench' | 'architecture'>('cafe')
   const [suiteDraft, setSuiteDraft] = useState<SuiteDraft | null>(null)
   const experiment = useExperimentApi()
   const [sceneId, setSceneId] = useState<string>(() => {
@@ -299,7 +300,7 @@ export function App() {
                   setMenuOpen(false)
                 }}
               >
-                Cafe
+                Run view
               </button>
               <button
                 type="button"
@@ -310,6 +311,16 @@ export function App() {
                 }}
               >
                 Experiment
+              </button>
+              <button
+                type="button"
+                className={page === 'bench' ? 'on' : ''}
+                onClick={() => {
+                  setPage('bench')
+                  setMenuOpen(false)
+                }}
+              >
+                Decision bench
               </button>
               <button
                 type="button"
@@ -401,6 +412,7 @@ export function App() {
         style={{ '--panel-width': `${panel.width}px` } as React.CSSProperties}
       >
         {page === 'architecture' && <ArchitectureView />}
+        {page === 'bench' && models && <BenchPage models={models} domains={domains} />}
         {page === 'experiment' && models && suiteDraft && (
           <ExperimentPage
             models={models}

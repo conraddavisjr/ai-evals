@@ -6,6 +6,31 @@ import type { DomainVocabulary, Role, RoleModels, Scenario } from '@cafe/protoco
 /** The three agent slots the harness staffs: intake (agent 1), fulfilment (agent 2), orchestrator. */
 export type AgentSlot = 'cashier' | 'barista' | 'manager'
 
+/** Everything a gate decision may read about the call it is asked to approve. */
+export interface GateInput {
+  store: CafeStore
+  runId: string
+  /** The case's opening line. */
+  customerSaid: string
+  /** Who is asking: the persona of the case, with the account id when the case has one. */
+  requester: { name: string; accountId?: string | undefined }
+  tool: string
+  args: Record<string, unknown>
+}
+
+/**
+ * Where a decision model (Jev, or any LLM through the evaluation adapter) approves
+ * or blocks a tool call before it runs. Typed, fast and calibrated is exactly the
+ * decision-model sweet spot; a pack names the calls worth guarding.
+ */
+export interface GateSpec {
+  tools: string[]
+  /** The approve question, in the domain's terms. */
+  instructions: string
+  /** The JSON state the decision model reads. */
+  state: (input: GateInput) => Promise<Record<string, unknown>>
+}
+
 export interface StaffSlot {
   /** Display names, cycled when more than one agent fills the slot. */
   names: string[]
@@ -54,6 +79,12 @@ export interface DomainPack {
   triage: { state: (utterance: string) => string; questions: TriageQuestions }
   judgeQuestions: JudgeQuestions
   reviewQuestions: ReviewQuestions
+  /** The action gate's placement in this domain (RunConfig.gate turns it on). */
+  gate?: GateSpec | undefined
+  /** Labelled gate decisions for the decision bench (same state shape as the live gate). */
+  gateBench?:
+    | (() => Array<{ id: string; title: string; state: unknown; label: boolean; note: string }>)
+    | undefined
   /** Per-run setup (the cafe stocks its pantry). */
   initForRun?: ((store: CafeStore, runId: string) => Promise<void>) | undefined
 }

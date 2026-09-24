@@ -127,10 +127,27 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'orch',
           head: 'triage',
-          text: `${e.intent}${e.escalate ? ' · escalate' : ''} · ${Math.round(e.escalateProbability * 100)}%`,
+          text: `${e.intent}${e.escalate ? ' · escalate' : ''} · ${Math.round(e.escalateProbability * 100)}%${e.routed ? ' · routed away' : ''}`,
+          detail: e.modelSpec,
           latencyMs: e.latencyMs,
-          mark: e.escalate ? 'warn' : undefined,
+          mark: e.routed || e.escalate ? 'warn' : undefined,
           customerId: e.customerId,
+        })
+        break
+      case 'guard.decided':
+        // sits in the work band, right under the call it approved or blocked
+        place(c, 'work', {
+          seq: e.seq,
+          t: e.t,
+          atMs: rel,
+          layer: 'eval',
+          head: 'gate',
+          text: `${short(e.tool)} · approve ${Math.round(e.approveProbability * 100)}% · ${e.allowed ? 'allowed' : 'blocked'}`,
+          detail: `${e.modelSpec} · ${JSON.stringify(e.args)}`,
+          latencyMs: e.latencyMs,
+          mark: e.allowed ? 'ok' : 'bad',
+          agentId: e.agentId,
+          indent: true,
         })
         break
       case 'customer.moved':

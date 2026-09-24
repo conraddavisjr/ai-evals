@@ -103,6 +103,20 @@ export const CafeEvent = z.discriminatedUnion('type', [
     escalateProbability: z.number().min(0).max(1),
     modelSpec: ModelSpec,
     latencyMs: z.number(),
+    /** Triage routing was on and this decision sent the case away before agent 1 saw it. */
+    routed: z.boolean().optional(),
+  }),
+
+  // action gate: the decision model approves or blocks a gated tool call before it runs
+  Base.extend({
+    type: z.literal('guard.decided'),
+    agentId: z.string(),
+    tool: z.string(),
+    args: z.record(z.string(), z.unknown()),
+    approveProbability: z.number().min(0).max(1),
+    allowed: z.boolean(),
+    modelSpec: ModelSpec,
+    latencyMs: z.number(),
   }),
 
   // agents

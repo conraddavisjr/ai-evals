@@ -19,6 +19,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
+import { BenchRunner } from './bench.js'
 import { listOrchestrators } from './orchestrators/index.js'
 import type { RunManager } from './run-manager.js'
 import { getDataset, listDatasets } from './scenarios.js'
@@ -30,6 +31,7 @@ export interface HttpDeps {
   runs: RunManager
   /** Optional so a minimal harness (runs only) can mount the API without suites. */
   suites?: SuiteRunner | undefined
+  bench?: BenchRunner | undefined
   allowLive: boolean
 }
 
@@ -67,6 +69,7 @@ export const MODEL_PRESETS = {
 export function createApp(deps: HttpDeps) {
   const { store, runs } = deps
   const suites = deps.suites ?? new SuiteRunner(store, runs)
+  const bench = deps.bench ?? new BenchRunner(store, deps.allowLive)
   const app = new Hono()
   app.use('*', cors())
 
@@ -84,9 +87,33 @@ export function createApp(deps: HttpDeps) {
         defaultRoles: d.defaultRoles,
         tools: d.tools.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
         roleScopes: d.roleScopes,
+        gateTools: d.gate?.tools ?? [],
       })),
     ),
   )
+
+  /**
+   * The decision bench: labelled decisions (door guardrail, action gate, judge)
+   * asked of several evaluation models side by side, e.g. Jev against LLMs.
+   */
+  app.post('/api/bench', async (c) => {
+    try {
+      return c.json(await bench.start(await c.req.json()), 201)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+    }
+  })
+  app.get('/api/bench', async (c) => c.json(await bench.list()))
+  app.get('/api/bench/:id', async (c) => {
+    const b = await bench.get(c.req.param('id'))
+    return b ? c.json(b) : c.json({ error: 'bench not found' }, 404)
+  })
+  app.post('/api/bench/:id/cancel', (c) => c.json({ cancelled: bench.cancel(c.req.param('id')) }))
+  app.delete('/api/bench/:id', async (c) => {
+    bench.cancel(c.req.param('id'))
+    await store.benches.delete(c.req.param('id'))
+    return c.json({ deleted: true })
+  })
 
   app.get('/api/scenarios', async (c) => {
     const ds = c.req.query('dataset')

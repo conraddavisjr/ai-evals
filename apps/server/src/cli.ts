@@ -6,7 +6,9 @@ loadEnv()
 import { resolve } from 'node:path'
 import { createDb, createPgStore, runMigrations, seedCatalog } from '@cafe/db'
 import { domainPack } from '@cafe/domains'
+import { BENCH_TASK_INFO, type BenchTask } from '@cafe/evals'
 import { isMockSpec, RunConfig, type RunConfigInput, vocabularyFor } from '@cafe/protocol'
+import { BenchRunner } from './bench.js'
 import { EventBus } from './event-bus.js'
 import { orchestratorFor } from './orchestrators/index.js'
 import { RunManager } from './run-manager.js'
@@ -25,6 +27,10 @@ import { initTracing } from './telemetry/tracing.js'
  *   pnpm eval --domain support --instant   (another business: its golden dataset and mock agents)
  *   pnpm eval --dataset <datasetId>        (a saved golden dataset; ids may be mixed in --scenarios)
  *   pnpm eval --suite runs/suite.example.json   (variants x repeats over one dataset, side by side)
+ *   pnpm eval --domain support --gate gateway:typesafe-ai/jev   (a decision model approves payouts)
+ *   pnpm eval --route                      (triage turns adversarial cases away at the door)
+ *   pnpm eval --bench --domain support --specs mock:support-lead,gateway:typesafe-ai/jev,anthropic/claude-haiku-4-5-20251001
+ *        [--tasks door,gate,judge] [--judge-run <runId>]   (decision bench: same labelled decisions, model vs model)
  *   flags: --no-judge --no-triage --no-review --max-usd 0.5 --orchestrator stardust
  */
 function parseArgs(argv: string[]) {
@@ -76,6 +82,10 @@ function configsFromArgs(
       judge: str('judge', pack.defaultRoles.judge),
     },
     staffing: { cashiers: Number(str('cashiers', '2')), baristas: Number(str('baristas', '1')) },
+    triageRoutes: args.route === true,
+    gate: args.gate
+      ? { enabled: true, ...(typeof args.gate === 'string' ? { modelSpec: args.gate } : {}) }
+      : { enabled: false },
     arrivalGapMs: Number(str('gap', '0')),
     judgeEnabled: args['no-judge'] !== true,
     triageEnabled: args['no-triage'] !== true,
@@ -101,6 +111,13 @@ async function main() {
     process.env.CAFE_TRACING === 'false'
       ? null
       : initTracing({ store, otlpUrl: process.env.OTEL_EXPORTER_OTLP_ENDPOINT })
+
+  if (args.bench) {
+    await runBenchCli(store, args)
+    await tracing?.shutdown()
+    await close()
+    return
+  }
 
   if (typeof args.suite === 'string') {
     await runSuite(store, resolve(process.env.INIT_CWD ?? process.cwd(), args.suite))
@@ -277,6 +294,49 @@ function printTable(header: string[], rows: string[][]) {
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i] ?? 0)).join('  ')
   console.log(`\n${line(header)}\n${widths.map((w) => '-'.repeat(w)).join('  ')}`)
   for (const r of rows) console.log(line(r))
+}
+
+/** The decision bench from the terminal: waits for the report and prints one table per task. */
+async function runBenchCli(
+  store: ReturnType<typeof createPgStore>,
+  args: Record<string, string | boolean>,
+) {
+  const list = (k: string) => (typeof args[k] === 'string' ? (args[k] as string).split(',') : null)
+  const domain = typeof args.domain === 'string' ? args.domain : 'cafe'
+  const runner = new BenchRunner(store, process.env.CAFE_ALLOW_LIVE_MODELS === 'true')
+  const { id, items } = await runner.start({
+    domain,
+    specs: list('specs') ?? [domainPack(domain).defaultRoles.manager],
+    tasks: (list('tasks') ?? [
+      'door',
+      'gate',
+      ...(args['judge-run'] ? ['judge'] : []),
+    ]) as BenchTask[],
+    ...(typeof args['judge-run'] === 'string' ? { judgeRunId: args['judge-run'] } : {}),
+  })
+  console.log(`bench ${id}: ${items} decisions per model`)
+  for (;;) {
+    const b = await runner.get(id)
+    if (b?.status !== 'running') {
+      if (!b?.report) throw new Error(b?.error ?? 'bench failed')
+      const pct = (x: number | null) =>
+        x === null ? '  -  ' : `${(x * 100).toFixed(0)}%`.padStart(5)
+      for (const task of b.report.tasks) {
+        console.log(`\n${BENCH_TASK_INFO[task].label}: ${BENCH_TASK_INFO[task].question}`)
+        console.log(
+          '  model                                        n  acc    prec   recall brier  p50     p95     cost',
+        )
+        for (const sc of b.report.scores.filter((x) => x.task === task))
+          console.log(
+            `  ${sc.spec.padEnd(42)} ${String(sc.answered).padStart(3)}  ${pct(sc.accuracy)}  ${pct(sc.precision)}  ${pct(sc.recall)}  ${sc.brier === null ? '  -  ' : sc.brier.toFixed(3)}  ${`${sc.latency?.p50 ?? '-'}ms`.padStart(6)}  ${`${sc.latency?.p95 ?? '-'}ms`.padStart(6)}  $${sc.costUsd.toFixed(5)}${sc.errors ? `  ${sc.errors} errors` : ''}`,
+          )
+      }
+      console.log('\nOpen it on the Decision bench page to see every disagreement.')
+      return
+    }
+    process.stdout.write(`\r  ${b.progress?.done ?? 0}/${b.progress?.total ?? '?'}`)
+    await new Promise((r) => setTimeout(r, 300))
+  }
 }
 
 main().catch((err) => {

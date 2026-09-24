@@ -33,7 +33,9 @@ export function staffActivity(events: CafeEvent[]): StaffActivity[] {
     StaffActivity & { calls: Map<string, { tool: string; args: Record<string, unknown> }> }
   >()
   for (const e of evs) {
-    if (!('agentId' in e) || typeof e.agentId !== 'string' || e.role === 'customer') continue
+    // gate decisions carry the agent whose call was checked but belong to the orchestration layer
+    if (!('agentId' in e) || typeof e.agentId !== 'string' || !('role' in e)) continue
+    if (e.role === 'customer') continue
     let a = byAgent.get(e.agentId)
     if (!a) {
       a = {

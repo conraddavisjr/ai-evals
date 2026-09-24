@@ -1,4 +1,7 @@
 import type {
+  BenchProgress,
+  BenchReport,
+  BenchTask,
   CafeEvent,
   DatasetDetail,
   DatasetInput,
@@ -47,6 +50,8 @@ export interface DomainInfo {
   vocabulary: DomainVocabulary
   datasetId: string
   defaultRoles: RoleModels
+  /** The tools this domain's action gate guards; empty when it has none. */
+  gateTools: string[]
 }
 
 export interface StreamHandlers {
@@ -93,7 +98,31 @@ export interface ToolInfo {
   description: string
 }
 
+export interface BenchConfigView {
+  domain: string
+  specs: string[]
+  tasks: BenchTask[]
+  judgeRunId?: string | undefined
+  concurrency?: number | undefined
+}
+
+export interface BenchView {
+  id: string
+  status: 'running' | 'finished' | 'failed'
+  config: BenchConfigView
+  report: BenchReport | null
+  error: string | null
+  createdAt: number
+  finishedAt: number | null
+  progress: BenchProgress | null
+}
+
 export interface ExperimentClient {
+  /** The decision bench: the same labelled decisions asked of several evaluation models. */
+  startBench(config: BenchConfigView): Promise<{ id: string; items: number }>
+  bench(id: string): Promise<BenchView>
+  benches(): Promise<Array<Omit<BenchView, 'report' | 'error'>>>
+  deleteBench(id: string): Promise<{ deleted: boolean }>
   /** Aggregated OpenTelemetry view of a run (works while the run is live). */
   telemetry(runId: string): Promise<RunTelemetry>
   /** Raw spans for drill-down. */

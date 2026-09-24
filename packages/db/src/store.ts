@@ -40,6 +40,7 @@ export interface CafeStore {
   spans: SpansStore
   datasets: DatasetsStore
   suites: SuitesStore
+  benches: BenchesStore
 }
 
 export type RunRow = typeof s.runs.$inferSelect
@@ -220,6 +221,19 @@ export interface SuitesStore {
     id: string,
     status: SuiteStatus,
     patch?: { startedAt?: number; finishedAt?: number; error?: string },
+  ): Promise<void>
+  delete(id: string): Promise<void>
+}
+
+export type BenchRow = typeof s.benches.$inferSelect
+
+export interface BenchesStore {
+  create(input: { id: string; config: Record<string, unknown>; now: number }): Promise<BenchRow>
+  get(id: string): Promise<BenchRow | null>
+  list(limit?: number): Promise<BenchRow[]>
+  finish(
+    id: string,
+    patch: { status: 'finished' | 'failed'; report?: unknown; error?: string; now: number },
   ): Promise<void>
   delete(id: string): Promise<void>
 }
@@ -696,6 +710,28 @@ export function createPgStore(db: Db): CafeStore {
     },
   }
 
+  const benches: BenchesStore = {
+    async create({ id, config, now }) {
+      const [row] = await db
+        .insert(s.benches)
+        .values({ id, status: 'running', config, createdAt: now })
+        .returning()
+      return must(row ?? null, 'bench', id)
+    },
+    get: async (id) => one(await db.select().from(s.benches).where(eq(s.benches.id, id))),
+    list: async (limit = 30) =>
+      db.select().from(s.benches).orderBy(sql`${s.benches.createdAt} desc`).limit(limit),
+    async finish(id, { status, report, error, now }) {
+      await db
+        .update(s.benches)
+        .set({ status, report: report ?? null, error: error ?? null, finishedAt: now })
+        .where(eq(s.benches.id, id))
+    },
+    async delete(id) {
+      await db.delete(s.benches).where(eq(s.benches.id, id))
+    },
+  }
+
   const datasets: DatasetsStore = {
     async list() {
       const rows = await db
@@ -863,5 +899,6 @@ export function createPgStore(db: Db): CafeStore {
     spans,
     datasets,
     suites,
+    benches,
   }
 }

@@ -1,6 +1,6 @@
 import { type CafeStore, createDb, createPgStore, runMigrations, seedCatalog } from '@cafe/db'
 import { SUPPORT_PACK } from '@cafe/domains'
-import { type CafeEvent, RunConfig } from '@cafe/protocol'
+import { type CafeEvent, RunConfig, type RunConfigInput } from '@cafe/protocol'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { EventBus } from '../event-bus.js'
 import { createApp } from '../http.js'
@@ -28,8 +28,13 @@ const INSTANT = {
   hangMs: 0,
 }
 
-async function play(ids: string[], roles: Partial<RunConfig['roles']> = {}) {
+async function play(
+  ids: string[],
+  roles: Partial<RunConfig['roles']> = {},
+  extra: Partial<RunConfigInput> = {},
+) {
   const config = RunConfig.parse({
+    ...extra,
     domain: 'support',
     scenarioIds: ids,
     roles: { ...SUPPORT_PACK.defaultRoles, ...roles },
@@ -84,6 +89,41 @@ describe('the support desk domain pack', () => {
     expect(events.some((e) => e.type === 'agent.scope_violation')).toBe(true)
     // the forgetful fulfilment agent never notifies, so nothing is resolved
     expect(metrics?.taskSuccessRate).toBe(0)
+  })
+
+  it('routes manipulation away at triage so agent 1 never sees it', async () => {
+    const { events, outcomes } = await play(
+      ['support-prompt-injection', 'support-damaged-refund'],
+      { cashier: 'mock:support-rep-naive' },
+      { triageRoutes: true },
+    )
+    expect(outcomes['support-prompt-injection']).toBe('refused')
+    expect(outcomes['support-damaged-refund']).toBe('served')
+    const injectionTx = events.find(
+      (e) => e.type === 'customer.arrived' && e.scenarioId === 'support-prompt-injection',
+    )?.txId
+    const routed = events.find((e) => e.type === 'triage.decided' && e.txId === injectionTx)
+    expect(routed?.type === 'triage.decided' && routed.routed).toBe(true)
+    // no agent worked the routed case
+    expect(events.some((e) => e.type === 'agent.tool_called' && e.txId === injectionTx)).toBe(false)
+  })
+
+  it('the action gate blocks a payout the naive rep would have made for someone else', async () => {
+    const { events, outcomes } = await play(
+      ['support-third-party', 'support-damaged-refund'],
+      { cashier: 'mock:support-rep-naive' },
+      { gate: { enabled: true } },
+    )
+    const gates = events.filter(
+      (e): e is Extract<CafeEvent, { type: 'guard.decided' }> => e.type === 'guard.decided',
+    )
+    expect(gates.some((g) => !g.allowed && g.tool === 'cases.add_action')).toBe(true)
+    // the legitimate refund still goes through both gated tools
+    expect(gates.filter((g) => g.allowed).map((g) => g.tool)).toEqual(
+      expect.arrayContaining(['cases.add_action', 'refunds.issue']),
+    )
+    expect(outcomes['support-third-party']).toBe('refused')
+    expect(outcomes['support-damaged-refund']).toBe('served')
   })
 
   it('serves the packs over the API and rejects an unknown domain', async () => {

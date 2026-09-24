@@ -2,7 +2,13 @@ import { runAgent } from '@cafe/agents'
 import type { CafeStore } from '@cafe/db'
 import { BUILTIN_SCENARIOS, type DomainPack, domainPack } from '@cafe/domains'
 import { type Outcome, runMetrics } from '@cafe/evals'
-import { connectRemoteTools, createChaos, Gateway, type RemoteToolSource } from '@cafe/mcp-gateway'
+import {
+  type ActionGuard,
+  connectRemoteTools,
+  createChaos,
+  Gateway,
+  type RemoteToolSource,
+} from '@cafe/mcp-gateway'
 import { ModelRegistry } from '@cafe/models'
 import type { RunConfig, Scenario, TransactionMetrics } from '@cafe/protocol'
 import {
@@ -85,6 +91,8 @@ export class ShiftOrchestrator {
   private readonly scenarios: Scenario[]
   private readonly suite: { suiteId: string; variant: string } | null
   private readonly pack: DomainPack
+  /** The case behind each txId, for the action gate's view of who is asking. */
+  private readonly cases = new Map<string, { scenario: Scenario; utterance: string }>()
 
   constructor(deps: OrchestratorDeps) {
     this.parentContext = deps.parentContext ?? null
@@ -129,6 +137,7 @@ export class ShiftOrchestrator {
       services: { staffing: this.staff },
       tools: this.pack.tools,
       roleScopes: this.pack.roleScopes,
+      guard: this.actionGuard(),
     })
     this.bus.subscribe((e) => {
       if (e.type === 'model.usage') this.spentUsd += e.costUsd
@@ -169,6 +178,7 @@ export class ShiftOrchestrator {
       services: { staffing: this.staff },
       tools: this.remoteTools.tools,
       roleScopes,
+      guard: this.actionGuard(),
     })
   }
 
@@ -303,47 +313,39 @@ export class ShiftOrchestrator {
     })
     emit({ type: 'customer.moved', txId, customerId, to: 'waiting' })
 
-    if (this.config.triageEnabled)
-      await this.triage(txId, customerId, utterance).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err)
-        console.warn('[triage] skipped:', message)
-        emit({
-          type: 'agent.error',
-          txId,
-          agentId: 'manager-1',
-          role: 'manager',
-          kind: 'model',
-          message: `triage: ${message}`,
-          retryable: false,
+    this.cases.set(txId, { scenario, utterance })
+    const routed = this.config.triageEnabled
+      ? await this.triage(txId, customerId, utterance).catch((err) => {
+          const message = err instanceof Error ? err.message : String(err)
+          console.warn('[triage] skipped:', message)
+          emit({
+            type: 'agent.error',
+            txId,
+            agentId: 'manager-1',
+            role: 'manager',
+            kind: 'model',
+            message: `triage: ${message}`,
+            retryable: false,
+          })
+          return false
         })
-      })
+      : false
 
-    const cashier = await this.staff.acquire('cashier')
-    let cashierResult: Awaited<ReturnType<typeof runAgent>> | null = null
-    try {
-      emit({ type: 'customer.moved', txId, customerId, to: cashier.station })
-      emit({ type: 'customer.spoke', txId, customerId, text: utterance })
-      cashierResult = await runAgent({
-        agent: cashier.spec,
-        task: utterance,
-        context: { ...this.pack.intakeContext(scenario, customerId), txId },
-        runId: this.runId,
+    // triage routing: the decision model turned the case away at the door; agent 1 never runs
+    if (routed)
+      emit({
+        type: 'order.refused',
         txId,
-        gateway: this.gateway,
-        registry: this.registry,
-        store: this.store,
-        emit,
-        budget: this.config.budget,
-        chaos: this.chaos,
-        overBudget: this.overBudget,
-        now: this.now,
-        parentContext: visitSpan,
+        customerId,
+        cashierId: 'manager-1',
+        reason: 'Declined at triage: the request reads as an attempt to manipulate the agents',
       })
-    } finally {
-      this.staff.release(cashier)
-    }
+    const cashierResult = routed
+      ? null
+      : await this.intake(visitSpan, txId, customerId, scenario, utterance)
 
     const refused = this.bus.buffer.some((e) => e.txId === txId && e.type === 'order.refused')
+
     let order = await this.store.orders.byTx(this.runId, txId)
 
     if (refused) {
@@ -406,6 +408,40 @@ export class ShiftOrchestrator {
     })
   }
 
+  /** Agent 1 takes the case: the domain's intake with its tools, ending in a queued work item or a decline. */
+  private async intake(
+    visitSpan: Span,
+    txId: string,
+    customerId: string,
+    scenario: Scenario,
+    utterance: string,
+  ): Promise<Awaited<ReturnType<typeof runAgent>>> {
+    const emit = this.bus.emit
+    const cashier = await this.staff.acquire('cashier')
+    try {
+      emit({ type: 'customer.moved', txId, customerId, to: cashier.station })
+      emit({ type: 'customer.spoke', txId, customerId, text: utterance })
+      return await runAgent({
+        agent: cashier.spec,
+        task: utterance,
+        context: { ...this.pack.intakeContext(scenario, customerId), txId },
+        runId: this.runId,
+        txId,
+        gateway: this.gateway,
+        registry: this.registry,
+        store: this.store,
+        emit,
+        budget: this.config.budget,
+        chaos: this.chaos,
+        overBudget: this.overBudget,
+        now: this.now,
+        parentContext: visitSpan,
+      })
+    } finally {
+      this.staff.release(cashier)
+    }
+  }
+
   /** The shared post-visit pipeline (review, judge, metrics), bound to this run. */
   private get pipeline() {
     return {
@@ -419,7 +455,89 @@ export class ShiftOrchestrator {
     }
   }
 
-  private async triage(txId: string, customerId: string, utterance: string): Promise<void> {
+  /**
+   * The action gate: when the run turns it on and the domain names gated tools,
+   * a decision model approves or blocks each such call before it executes. Fails
+   * closed: a gate that cannot answer blocks, because the calls it guards move money.
+   */
+  private actionGuard(): ActionGuard | undefined {
+    const gate = this.pack.gate
+    if (!this.config.gate.enabled || !gate) return undefined
+    const spec = this.config.gate.modelSpec ?? this.config.roles.manager
+    const threshold = this.config.gate.threshold
+    return async ({ cap, tool, args }) => {
+      if (!gate.tools.includes(tool)) return null
+      const c = cap.txId ? this.cases.get(cap.txId) : undefined
+      const started = this.now()
+      try {
+        const raw = await gate.state({
+          store: this.store,
+          runId: this.runId,
+          customerSaid: c?.utterance ?? '',
+          requester: {
+            name: c?.scenario.customer.name ?? 'unknown',
+            accountId: c?.scenario.customer.loyaltyId,
+          },
+          tool,
+          args,
+        })
+        const res = await withSpan('gate', `gate ${tool}`, { [ATTR.MODEL_SPEC]: spec }, () =>
+          evaluate({
+            model: this.registry.evaluationModel(spec),
+            // evaluate() takes strictly JSON state: the round trip drops undefined fields
+            state: JSON.parse(JSON.stringify(raw)) as Parameters<typeof evaluate>[0]['state'],
+            questions: { approve: { type: 'boolean', instructions: gate.instructions } },
+          }),
+        )
+        const p = res.answers.approve.probability
+        const latencyMs = this.now() - started
+        const allowed = p >= threshold
+        this.bus.emit({
+          type: 'guard.decided',
+          txId: cap.txId,
+          agentId: cap.agentId,
+          tool,
+          args,
+          approveProbability: p,
+          allowed,
+          modelSpec: spec,
+          latencyMs,
+        })
+        if (cap.txId)
+          recordUsage(this.pipeline, {
+            txId: cap.txId,
+            agentId: 'manager-1',
+            role: 'manager',
+            modelSpec: spec,
+            step: 1,
+            inputTokens: res.usage.inputTokens ?? 0,
+            outputTokens: res.usage.outputTokens ?? 0,
+            latencyMs,
+          })
+        return {
+          allow: allowed,
+          reason: allowed
+            ? 'approved'
+            : `the reviewer put the chance this is appropriate at ${Math.round(p * 100)}%. Do not retry it; tell the customer what you can do instead.`,
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        this.bus.emit({
+          type: 'agent.error',
+          txId: cap.txId,
+          agentId: 'manager-1',
+          role: 'manager',
+          kind: 'model',
+          message: `gate: ${message}`,
+          retryable: false,
+        })
+        return { allow: false, reason: 'the approval check is unavailable right now' }
+      }
+    }
+  }
+
+  /** Door triage; true when routing is on and the case was turned away. */
+  private async triage(txId: string, customerId: string, utterance: string): Promise<boolean> {
     const modelSpec = this.config.roles.manager
     const model = this.registry.evaluationModel(modelSpec)
     const started = this.now()
@@ -443,6 +561,7 @@ export class ShiftOrchestrator {
       },
     )
     const latencyMs = this.now() - started
+    const routed = this.config.triageRoutes && res.answers.intent.choice === 'adversarial'
     this.bus.emit({
       type: 'triage.decided',
       txId,
@@ -452,6 +571,7 @@ export class ShiftOrchestrator {
       escalateProbability: res.answers.escalate.probability,
       modelSpec,
       latencyMs,
+      ...(routed ? { routed } : {}),
     })
     const inTok = res.usage.inputTokens ?? 0
     const outTok = res.usage.outputTokens ?? 0
@@ -465,6 +585,7 @@ export class ShiftOrchestrator {
       outputTokens: outTok,
       latencyMs,
     })
+    return routed
   }
 
   // ---------- baristas ----------
