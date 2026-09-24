@@ -328,6 +328,18 @@ function CaseDetail({
       {exp && (exp.cashierTools.length > 0 || exp.baristaTools.length > 0 || calls.length > 0) && (
         <>
           <h4>Expected tools</h4>
+          <ToolTally exp={exp} calledBy={calledBy} />
+          <div className="tool-key">
+            <span>
+              <b className="k called">✓</b> expected and called
+            </span>
+            <span>
+              <b className="k missing">○</b> expected, not called
+            </span>
+            <span>
+              <b className="k extra">!</b> called, not expected
+            </span>
+          </div>
           {(['cashier', 'barista'] as const).map((role) => {
             const want = role === 'cashier' ? exp.cashierTools : exp.baristaTools
             const got = calledBy(role)
@@ -354,8 +366,9 @@ function CaseDetail({
               </div>
             )
           })}
-          <p className="muted small tool-key">
-            ✓ expected and called · ○ expected, not called · ! called, not expected
+          <p className="muted small">
+            Tools do not decide pass or fail: the outcome and the work item do. A missed tool lowers
+            the run’s tool recall; an unexpected one lowers its precision.
           </p>
           {!catalog && <p className="muted small">Loading tool descriptions…</p>}
         </>
@@ -1220,6 +1233,44 @@ function JudgeAnswers({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/** "11 expected · 10 called · 1 missing · 2 unexpected", across both agents. */
+function ToolTally({
+  exp,
+  calledBy,
+}: {
+  exp: NonNullable<CustomerView['expected']>
+  calledBy: (role: string) => Set<string>
+}) {
+  let expected = 0
+  let called = 0
+  let missing = 0
+  let extra = 0
+  for (const role of ['cashier', 'barista'] as const) {
+    const want = role === 'cashier' ? exp.cashierTools : exp.baristaTools
+    const got = calledBy(role)
+    expected += want.length
+    called += want.filter((t) => got.has(t)).length
+    missing += want.filter((t) => !got.has(t)).length
+    extra += [...got].filter((t) => !want.includes(t)).length
+  }
+  return (
+    <div className="tool-tally">
+      <span>
+        <b>{expected}</b> expected
+      </span>
+      <span className="called">
+        <b>{called}</b> called
+      </span>
+      <span className={missing ? 'missing on' : 'missing'}>
+        <b>{missing}</b> missing
+      </span>
+      <span className={extra ? 'extra on' : 'extra'}>
+        <b>{extra}</b> unexpected
+      </span>
     </div>
   )
 }

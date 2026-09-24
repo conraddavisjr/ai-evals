@@ -91,7 +91,7 @@ describe('case timing', () => {
       ['agent 2 (barista 1)', 420],
     ])
     const agent1 = t.rows[1]
-    expect(agent1?.detail).toBe('1 model step · 2 tool calls')
+    expect(agent1?.detail).toBe('1 step · 2 tool calls')
     expect(agent1?.tools).toEqual([
       { tool: 'menu.lookup', ms: 12, ok: true },
       { tool: 'orders.create', ms: 8, ok: false },

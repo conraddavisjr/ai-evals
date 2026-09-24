@@ -53,6 +53,7 @@
   --rf-accent-soft: rgba(109, 140, 255, 0.14);
   --rf-accent-ring: rgba(109, 140, 255, 0.5);
   --rf-amber: #e5a54b;
+  --warn: var(--rf-amber-text);
   --rf-amber-text: #f2c47e;
   --rf-good-text: #74e0ad;
   --rf-good-soft: rgba(63, 207, 142, 0.13);
@@ -572,7 +573,8 @@
   line-height: 19px;
 }
 :root[data-theme="refined"] .mode-help:not(.open) {
-  min-height: calc(19px * 4);
+  /* two lines: the collapsed summary; matches the base reserve */
+  min-height: calc(19px * 2);
 }
 :root[data-theme="refined"] .mode-help.open p {
   color: var(--rf-text-2);

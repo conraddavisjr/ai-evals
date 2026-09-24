@@ -108,7 +108,7 @@ export function caseTiming(events: CafeEvent[], txId: string): CaseTiming {
     if (r.kind === 'agent') {
       const n = steps.get(r.key) ?? 0
       r.detail = [
-        n ? `${n} model step${n === 1 ? '' : 's'}` : '',
+        n ? `${n} step${n === 1 ? '' : 's'}` : '',
         r.tools.length ? `${r.tools.length} tool call${r.tools.length === 1 ? '' : 's'}` : '',
       ]
         .filter(Boolean)

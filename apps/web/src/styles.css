@@ -16,6 +16,8 @@
   --lavender: #b79bea;
   --good: #7fd58a;
   --bad: #ff6b5e;
+  /* caution, kept apart from the accent (--gold doubles as the accent in this theme) */
+  --warn: #ffd27a;
   --font-display: "Lilita One", "Nunito", sans-serif;
   --font-ui: "Nunito", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
@@ -2069,6 +2071,10 @@ main.with-trail .panel .inspector-back {
   border-bottom: 1px solid rgba(35, 72, 90, 0.5);
   vertical-align: baseline;
 }
+/* the step name (and its caret) stays on one line; the "work" column is the one that wraps */
+.tx-list .tx table.timing td:first-child {
+  white-space: nowrap;
+}
 .tx-list table.timing .num {
   text-align: right;
   white-space: nowrap;
@@ -2130,4 +2136,54 @@ main.with-trail .panel .inspector-back {
   font-size: 11px;
   font-weight: 400;
   color: var(--muted);
+}
+
+/* ---------- inspector: expected against called tools ---------- */
+.inspector .tool-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 2px 0 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.inspector .tool-tally b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.inspector .tool-tally .missing.on b {
+  color: var(--warn);
+}
+.inspector .tool-tally .extra.on b {
+  color: var(--bad);
+}
+.inspector .tool-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.inspector .tool-key .k {
+  display: inline-block;
+  width: 1.2em;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+.inspector .tool-key .k.called {
+  color: var(--good);
+}
+.inspector .tool-key .k.extra {
+  color: var(--bad);
+}
+.tx-list .tx table.timing .timing-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0;
+  white-space: nowrap;
 }
