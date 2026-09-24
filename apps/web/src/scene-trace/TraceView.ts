@@ -263,42 +263,60 @@ export function createGame(
   }
   applyLayoutClass()
 
-  // ---- rendering: rebuild from the applied events whenever something changed
+  // ---- rendering. The board is the whole run: it is built from every event the
+  // player has received and rebuilt only when more arrive. Moving the playhead
+  // (a badge click, the scrubber, stepping, a case link) never removes anything;
+  // it dims what has not happened yet and moves the "current" outline.
   let dirty = true
+  let cursorDirty = true
   let lastCount = -1
+  let lastEvents: unknown = null
   let lastRender = 0
   let lastSeq: number | null = null
+  let model: TraceModel = { columns: [], shift: [], runStatus: 'idle' }
   const badgeEls = new Map<number, HTMLElement>()
+  /** Per case: the elements whose look depends on where the playhead is. */
+  const caseEls = new Map<
+    string,
+    {
+      col: Column
+      card: HTMLElement
+      pill: HTMLElement
+      segs: Array<{ el: HTMLElement; seqs: number[]; bad: number[]; warn: number[] }>
+    }
+  >()
   /** Per-tile scroll memory so a rebuild never throws away where someone was reading. */
-  const tileScroll = new Map<string, { top: number; pinned: boolean }>()
+  const tileScroll = new Map<string, number>()
+  /** When someone last scrolled or clicked inside a tile; that tile stops following the playhead for a while. */
+  const touched = new Map<string, number>()
+  const HANDS_OFF_MS = 4000
   // rAF pauses in hidden tabs; a slow timer keeps the board current so it is right on return
   let hiddenTimer: ReturnType<typeof setTimeout> | null = null
   const markDirty = () => {
-    dirty = true
+    cursorDirty = true
     if (document.hidden && hiddenTimer === null)
       hiddenTimer = setTimeout(() => {
         hiddenTimer = null
-        if (dirty) {
-          dirty = false
-          render()
-        }
+        if (needsRebuild()) render()
+        else applyCursor()
       }, 250)
   }
+  /** player.reset() swaps in a new array, so identity catches a new run of the same length. */
+  const needsRebuild = () =>
+    dirty || player.events !== lastEvents || player.events.length !== lastCount
   const unsubscribe = player.subscribe({ onApply: markDirty, onSnap: markDirty })
 
   const render = () => {
-    const model = buildTrace(player.state.applied)
+    dirty = false
+    model = buildTrace(player.events)
     empty.style.display = model.columns.length === 0 && model.shift.length === 0 ? '' : 'none'
     // remember each tile's scroll before the rebuild; a tile scrolled to the bottom keeps following
     for (const body of cols.querySelectorAll<HTMLElement>('.trace-tile-body')) {
       const id = body.dataset.tx
-      if (id)
-        tileScroll.set(id, {
-          top: body.scrollTop,
-          pinned: body.scrollHeight - body.scrollTop - body.clientHeight < 8,
-        })
+      if (id) tileScroll.set(id, body.scrollTop)
     }
     badgeEls.clear()
+    caseEls.clear()
     lastSeq = null
     shiftStrip.replaceChildren(...model.shift.map((b) => badge(b)))
     const cards = model.columns.map((c) =>
@@ -307,13 +325,73 @@ export function createGame(
     cols.replaceChildren(...cards)
     if (layout === 'grid')
       for (const body of cols.querySelectorAll<HTMLElement>('.trace-tile-body')) {
-        const mem = body.dataset.tx ? tileScroll.get(body.dataset.tx) : undefined
-        body.scrollTop = !mem || mem.pinned ? body.scrollHeight : mem.top
+        body.scrollTop = (body.dataset.tx && tileScroll.get(body.dataset.tx)) || 0
       }
-    bar.status.textContent = summary(model)
     if (lastCount < 0 && panning()) fit(READABLE_SCALE)
-    lastCount = player.state.applied.length
+    lastCount = player.events.length
+    lastEvents = player.events
     lastRender = performance.now()
+    applyCursor()
+  }
+
+  /** Restyle for the playhead: dim the future, show each case's state as of now, outline the current step. */
+  const applyCursor = () => {
+    cursorDirty = false
+    const at = player.position.lastEvent?.seq ?? -1
+    for (const [seq, e] of badgeEls) e.classList.toggle('ahead', seq > at)
+    for (const { col, card, pill, segs } of caseEls.values()) {
+      const notYet = col.startSeq > at
+      card.classList.toggle('ahead', notYet)
+      const known = col.leftSeq !== null && col.leftSeq <= at ? col.outcome : null
+      pill.className = `pill ${known ?? 'open'}`
+      pill.textContent = notYet ? 'not arrived' : outcomeLabel(known)
+      card.classList.remove(`outcome-${col.outcome ?? 'open'}`, 'outcome-open')
+      card.classList.add(`outcome-${known ?? 'open'}`)
+      for (const s of segs) {
+        const seen = (xs: number[]) => xs.some((x) => x <= at)
+        s.el.classList.toggle('lit', seen(s.seqs))
+        s.el.classList.toggle('bad', seen(s.bad))
+        s.el.classList.toggle('warn', !seen(s.bad) && seen(s.warn))
+      }
+    }
+    const pos = player.position
+    // live views always trail the stream by the buffer; they are at the run's front, not a chosen moment
+    bar.status.textContent = summary(
+      model,
+      at,
+      pos.cursor >= pos.total || player.mode.startsWith('live'),
+    )
+    markCurrent(player.position.lastEvent?.seq ?? null)
+    if (layout === 'grid') followPlayhead(at)
+  }
+
+  /**
+   * Keep each tile scrolled to where its case is at the playhead: the latest step
+   * that has happened, or the top when the case has not started. A tile someone
+   * just scrolled or clicked in is left alone.
+   */
+  const followPlayhead = (at: number) => {
+    const now = performance.now()
+    for (const body of cols.querySelectorAll<HTMLElement>('.trace-tile-body')) {
+      const tx = body.dataset.tx
+      if (!tx || now - (touched.get(tx) ?? Number.NEGATIVE_INFINITY) < HANDS_OFF_MS) continue
+      let latest: HTMLElement | null = null
+      let latestSeq = -1
+      for (const b of body.querySelectorAll<HTMLElement>('.trace-badge')) {
+        const seq = Number(b.dataset.seq)
+        if (seq <= at && seq > latestSeq) {
+          latest = b
+          latestSeq = seq
+        }
+      }
+      if (!latest) {
+        body.scrollTop = 0
+        continue
+      }
+      const top = latest.offsetTop - body.offsetTop
+      if (top < body.scrollTop || top > body.scrollTop + body.clientHeight - 24)
+        body.scrollTop = Math.max(0, top - body.clientHeight * 0.6)
+    }
   }
 
   const badge = (b: Badge): HTMLElement => {
@@ -352,19 +430,17 @@ export function createGame(
   }
 
   /** "Case 3", the case title (or its id on older runs), the outcome. Shared by every layout. */
-  const caseHead = (c: Column, extra?: HTMLElement): HTMLElement => {
+  const caseHead = (c: Column, card: HTMLElement, extra?: HTMLElement): HTMLElement => {
     const head = el('header', 'trace-col-head')
     const sid = c.scenarioId.replace(/^ds:[^:]+:/, '')
     const name = el('span', 'sid', c.title || sid)
     head.title = [caseLabel(c.index), c.title, sid, c.name && `persona: ${c.name}`]
       .filter(Boolean)
       .join('\n')
-    head.append(
-      el('span', 'idx', caseLabel(c.index)),
-      name,
-      el('span', `pill ${c.outcome ?? 'open'}`, outcomeLabel(c.outcome)),
-    )
+    const pill = el('span', `pill ${c.outcome ?? 'open'}`, outcomeLabel(c.outcome))
+    head.append(el('span', 'idx', caseLabel(c.index)), name, pill)
     if (extra) head.append(extra)
+    caseEls.set(c.txId, { col: c, card, pill, segs: [] })
     return head
   }
 
@@ -381,7 +457,7 @@ export function createGame(
 
   const columnCard = (c: Column, model: TraceModel): HTMLElement => {
     const card = el('section', `trace-col outcome-${c.outcome ?? 'open'}`)
-    card.appendChild(caseHead(c))
+    card.appendChild(caseHead(c, card))
     for (const band of BANDS) card.appendChild(bandSection(c, band, bandHeight(model, band)))
     return card
   }
@@ -402,10 +478,16 @@ export function createGame(
       else expanded.add(c.txId)
       render()
     })
-    card.appendChild(caseHead(c, grow))
-    card.appendChild(progressStrip(c))
+    card.appendChild(caseHead(c, card, grow))
+    const strip = progressStrip(c)
+    card.appendChild(strip.el)
+    const refs = caseEls.get(c.txId)
+    if (refs) refs.segs = strip.segs
     const body = el('div', 'trace-tile-body')
     body.dataset.tx = c.txId
+    const handsOn = () => touched.set(c.txId, performance.now())
+    body.addEventListener('wheel', handsOn, { passive: true })
+    body.addEventListener('pointerdown', handsOn)
     for (const band of BANDS) body.appendChild(bandSection(c, band))
     card.appendChild(body)
     return card
@@ -413,7 +495,7 @@ export function createGame(
 
   const rowCard = (c: Column): HTMLElement => {
     const card = el('section', `trace-col trace-row outcome-${c.outcome ?? 'open'}`)
-    card.appendChild(caseHead(c))
+    card.appendChild(caseHead(c, card))
     const lanes = el('div', 'trace-lanes')
     for (const band of BANDS) {
       const lane = el('div', `trace-lane band-${band}`)
@@ -433,31 +515,19 @@ export function createGame(
   let last: number | null = null
   const frame = (now: number) => {
     player.tick(now)
-    if (
-      (dirty || player.state.applied.length !== lastCount) &&
-      performance.now() - lastRender >= RENDER_EVERY_MS
-    ) {
-      dirty = false
-      render()
-    }
-    const seq = player.position.lastEvent?.seq ?? null
+    if (needsRebuild() && performance.now() - lastRender >= RENDER_EVERY_MS) render()
+    else if (cursorDirty || (player.position.lastEvent?.seq ?? null) !== lastSeq) applyCursor()
+    last = now
+    raf = requestAnimationFrame(frame)
+  }
+  /** Outline the badge of the event the playhead is on; in the grid, scroll its tile to it when stepping. */
+  const markCurrent = (seq: number | null) => {
     if (seq !== lastSeq) {
       if (lastSeq !== null) badgeEls.get(lastSeq)?.classList.remove('current')
       const cur = seq !== null ? badgeEls.get(seq) : undefined
       cur?.classList.add('current')
-      // stepping or seeking in the grid: bring the badge into view inside its own tile
-      if (cur && layout === 'grid' && !player.playing) {
-        const body = cur.closest<HTMLElement>('.trace-tile-body')
-        if (body) {
-          const top = cur.offsetTop - body.offsetTop
-          if (top < body.scrollTop || top > body.scrollTop + body.clientHeight - 24)
-            body.scrollTop = Math.max(0, top - body.clientHeight / 3)
-        }
-      }
       lastSeq = seq
     }
-    last = now
-    raf = requestAnimationFrame(frame)
   }
   raf = requestAnimationFrame(frame)
   apply()
@@ -489,20 +559,24 @@ export function createGame(
  * Four segments under a tile's header, one per band, lit once the band has work
  * in it and marked red when anything in it failed. Reads at a glance across 30 tiles.
  */
-function progressStrip(c: Column): HTMLElement {
+function progressStrip(c: Column): {
+  el: HTMLElement
+  segs: Array<{ el: HTMLElement; seqs: number[]; bad: number[]; warn: number[] }>
+} {
   const strip = el('div', 'tile-progress')
-  for (const band of BANDS) {
+  const segs = BANDS.map((band) => {
     const list = c.bands[band]
-    const bad = list.some((b) => b.mark === 'bad')
-    const warn = list.some((b) => b.mark === 'warn')
-    const seg = el(
-      'span',
-      `seg band-${band}${list.length ? ' lit' : ''}${bad ? ' bad' : warn ? ' warn' : ''}`,
-    )
-    seg.title = `${BAND_TITLE[band]}: ${list.length} step${list.length === 1 ? '' : 's'}${bad ? ', something failed' : ''}`
+    const seg = el('span', `seg band-${band}`)
+    seg.title = BAND_TITLE[band]
     strip.appendChild(seg)
-  }
-  return strip
+    return {
+      el: seg,
+      seqs: list.map((b) => b.seq),
+      bad: list.filter((b) => b.mark === 'bad').map((b) => b.seq),
+      warn: list.filter((b) => b.mark === 'warn').map((b) => b.seq),
+    }
+  })
+  return { el: strip, segs }
 }
 
 function bandHeight(model: TraceModel, band: Band): number {
@@ -510,14 +584,12 @@ function bandHeight(model: TraceModel, band: Band): number {
   return 30 + rows * 24
 }
 
-function summary(m: TraceModel): string {
-  const done = m.columns.filter((c) => c.outcome).length
-  const passed = m.columns.filter(
-    (c) => c.expectedOutcome && c.outcome === c.expectedOutcome,
-  ).length
-  return m.columns.length === 0
-    ? `no ${CASE_NOUN.many} yet`
-    : `${m.columns.length} ${CASE_NOUN.many} · ${done} done · ${passed} matched expectation · ${m.runStatus}`
+/** The run as of the playhead: how many cases have arrived, finished and matched. */
+function summary(m: TraceModel, at: number, atEnd: boolean): string {
+  if (m.columns.length === 0) return `no ${CASE_NOUN.many} yet`
+  const done = m.columns.filter((c) => c.leftSeq !== null && c.leftSeq <= at)
+  const passed = done.filter((c) => c.expectedOutcome && c.outcome === c.expectedOutcome).length
+  return `${m.columns.length} ${CASE_NOUN.many} · ${done.length} done · ${passed} matched expectation · ${atEnd ? m.runStatus : 'at the playhead'}`
 }
 
 function markGlyph(m: Badge['mark']): string {

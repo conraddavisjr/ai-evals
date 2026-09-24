@@ -219,5 +219,8 @@ describe('trace model', () => {
     const c = buildTrace(evs).columns[0]
     expect(c?.bands.work[0]?.mark).toBe('unknown')
     expect(c?.bands.orch.at(-1)?.mark).toBe('unknown')
+    // the playhead needs to know when a case arrived and when its outcome became known
+    expect(c?.startSeq).toBe(0)
+    expect(c?.leftSeq).toBe(2)
   })
 })

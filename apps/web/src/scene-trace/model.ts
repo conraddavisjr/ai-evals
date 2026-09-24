@@ -45,6 +45,10 @@ export interface Column {
   name: string
   expectedOutcome: string | null
   outcome: string | null
+  /** Seq of the case's first event: before it, the case has not arrived. */
+  startSeq: number
+  /** Seq of customer.left: from it on, the outcome is known. */
+  leftSeq: number | null
   bands: Record<Band, Badge[]>
 }
 
@@ -383,6 +387,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         break
       case 'customer.left': {
         c.outcome = e.outcome
+        c.leftSeq = e.seq
         const ok =
           c.expectedOutcome === null ? 'unknown' : c.expectedOutcome === e.outcome ? 'ok' : 'bad'
         place(c, 'orch', {
@@ -493,6 +498,8 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         name: '',
         expectedOutcome: null,
         outcome: null,
+        startSeq: e.seq,
+        leftSeq: null,
         bands: { input: [], orch: [], work: [], eval: [] },
       }
       columns.push(c)
