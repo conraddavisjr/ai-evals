@@ -170,7 +170,7 @@ describe('trace model', () => {
     expect(c?.outcome).toBe('served')
     expect(c?.bands.input.map((b) => b.head)).toEqual(['Priya', 'expect'])
     expect(c?.bands.orch.map((b) => [b.head, b.mark])).toEqual([
-      ['triage', undefined],
+      ['router', undefined],
       ['left', 'ok'],
     ])
     const work = c?.bands.work ?? []

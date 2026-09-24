@@ -140,7 +140,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'triage',
+          head: 'router',
           text: `${e.intent}${e.escalate ? ' · escalate' : ''} · ${Math.round(e.escalateProbability * 100)}%${e.routed ? ' · routed away' : ''}`,
           detail: e.modelSpec,
           latencyMs: e.latencyMs,

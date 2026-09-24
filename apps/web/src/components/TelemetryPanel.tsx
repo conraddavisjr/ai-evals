@@ -252,7 +252,8 @@ export function TelemetryCharts({
           <>
             <BarChart
               data={LAYER_ORDER.filter((l) => data.errors.byLayer[l] > 0).map((l) => ({
-                label: l,
+                // the stored layer keeps its old name; people read "router"
+                label: l === 'triage' ? 'router' : l,
                 values: [data.errors.byLayer[l]],
               }))}
               series={[{ name: 'errors', color: STATUS_BAD }]}

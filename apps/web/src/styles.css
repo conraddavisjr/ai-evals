@@ -1108,52 +1108,6 @@ label.check input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.waterfall {
-  margin-top: 6px;
-}
-.waterfall .bar {
-  display: flex;
-  height: 12px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--bg-2);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
-}
-.waterfall .seg {
-  height: 100%;
-  min-width: 1px;
-}
-.waterfall .seg.open {
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.18) 0 4px,
-    transparent 4px 8px
-  );
-}
-.waterfall .legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.waterfall .legend i,
-.swatch {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 3px;
-  margin-right: 3px;
-}
-.waterfall .legend em {
-  font-style: normal;
-  color: var(--text);
-  font-weight: 700;
-}
-.waterfall.compact .bar {
-  height: 6px;
-}
 
 .queue ol,
 .queue ul {
@@ -2041,4 +1995,106 @@ main.with-trail .panel .inspector-back {
   margin: 4px 0;
   padding: 4px 8px;
   font-size: 12px;
+}
+
+/* ---------- Cases tab: one entry per case, a timing table under it ---------- */
+.tx-list .tx {
+  padding: 10px 0 12px;
+}
+.tx-list .tx.open {
+  background: rgba(255, 210, 122, 0.05);
+}
+.tx .tx-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tx .tx-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  font-weight: 400;
+}
+.tx .tx-open:hover:not(:disabled) {
+  filter: none;
+}
+.tx-list .tx .tx-open .tx-case {
+  flex: none;
+  font-weight: 800;
+  color: var(--gold);
+}
+.tx .tx-open .tx-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tx-list .tx .tx-open .tx-chevron {
+  color: var(--muted);
+}
+.tx-list .tx .tx-open:hover:not(:disabled) .tx-case {
+  text-decoration: underline;
+}
+.tx .tx-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 6px 0 8px;
+}
+.tx-list table.timing {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.tx-list table.timing th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.tx-list .tx table.timing td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(35, 72, 90, 0.5);
+  vertical-align: baseline;
+}
+.tx-list table.timing .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.tx-list table.timing .timing-toggle {
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--text);
+}
+.tx-list .tx table.timing tr.tool-row td {
+  font-size: 11.5px;
+  background: rgba(255, 154, 90, 0.04);
+}
+.tx-list .tx table.timing tr.tool-row td:first-child {
+  padding-left: 20px;
+  font-family: var(--font-mono);
+}
+.tx-list .tx table.timing tr.tool-row.bad td {
+  color: var(--bad);
+}
+.run-config .check.sub {
+  padding-left: 22px;
+}
+/* beside an open case the list is a navigator: headers only, the timing stays in the tab */
+.trail-leading .tx-list table.timing {
+  display: none;
+}
+.trail-leading .tx-list .tx .tx-meta {
+  margin-bottom: 0;
 }

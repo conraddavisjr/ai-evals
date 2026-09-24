@@ -117,7 +117,7 @@ export function pipelineData(): ArchData {
         title: 'Orchestrator',
         summary: `Engine + orchestrator model (${words().roles.manager}).`,
         details: [
-          'Schedules arrivals, hands each case to agent 1, runs the agent 2 loops, triages at the door.',
+          'Starts each case, hands it to agent 1, runs the agent 2 loops; optionally routes each case first.',
           'Swappable: the engine is a registry entry (Mastra, LangChain, ...).',
         ],
       },

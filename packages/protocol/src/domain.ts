@@ -189,12 +189,16 @@ export const RunConfig = z.object({
   staffing: Staffing.prefault({}),
   chaos: Chaos.prefault({}),
   budget: Budget.prefault({}),
-  /** Gap between customer arrivals; 0 means all arrive at once. */
+  /** Delay between cases starting; 0 starts them all at once. Mostly for the animated scenes. */
   arrivalGapMs: z.number().int().nonnegative().default(1500),
   /** Use the judge at all. Off keeps mock-only runs completely free. */
   judgeEnabled: z.boolean().default(true),
-  /** Door triage via the manager's evaluation model (Jev or an LLM adapter). */
-  triageEnabled: z.boolean().default(true),
+  /**
+   * The router: before agent 1 sees a case, the orchestrator's evaluation model
+   * (Jev or an LLM adapter) classifies it (intent, escalate). An input guardrail /
+   * pre-classifier; off by default. (The key keeps its old name so stored runs replay.)
+   */
+  triageEnabled: z.boolean().default(false),
   /**
    * Let triage act: a case it classes as adversarial is declined at the door and
    * never reaches agent 1. Measures the decision model as a router (saved spend

@@ -62,7 +62,7 @@ export function RunConfigPanel({
     () =>
       estimateRunUsd(n, draft.roles, {
         judgeEnabled: draft.judgeEnabled ?? true,
-        triageEnabled: draft.triageEnabled ?? true,
+        triageEnabled: draft.triageEnabled ?? false,
         reviewEnabled: draft.reviewEnabled ?? true,
       }),
     [draft.roles, n, draft.judgeEnabled, draft.triageEnabled, draft.reviewEnabled],
@@ -239,7 +239,10 @@ export function RunConfigPanel({
       </section>
 
       <section>
-        <h3>Staffing and pacing</h3>
+        <h3>Agents</h3>
+        <p className="muted small">
+          Instances: how many copies of each agent work cases in parallel.
+        </p>
         <label className="row">
           <span>{roleLabel('cashier')}</span>
           <input
@@ -262,39 +265,10 @@ export function RunConfigPanel({
             }
           />
         </label>
-        <label className="row">
-          <span>arrival gap</span>
-          <input
-            type="range"
-            min={0}
-            max={8000}
-            step={500}
-            value={draft.arrivalGapMs ?? 1500}
-            onChange={(e) => patch({ arrivalGapMs: Number(e.target.value) })}
-          />
-          <span className="muted">{fmtMs(draft.arrivalGapMs ?? 1500)}</span>
-        </label>
-        <label className="row">
-          <span>mock pacing</span>
-          <select
-            value={draft.pacing}
-            onChange={(e) => patch({ pacing: e.target.value as RunDraft['pacing'] })}
-          >
-            <option value="realistic">realistic (0.8–2.5s per model step)</option>
-            <option value="hang">
-              realistic + agent 2 ({words().roles.barista}) hangs on the second {words().workItem}
-            </option>
-            <option value="instant">instant (tests)</option>
-          </select>
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={draft.triageEnabled ?? true}
-            onChange={(e) => patch({ triageEnabled: e.target.checked })}
-          />{' '}
-          door triage by the {roleLabel('manager')}
-        </label>
+      </section>
+
+      <section>
+        <h3>Evaluation</h3>
         <label className="check">
           <input
             type="checkbox"
@@ -321,13 +295,39 @@ export function RunConfigPanel({
 
       <section>
         <h3>
-          Chaos{' '}
+          Advanced{' '}
           <button type="button" className="link" onClick={() => setShowAdvanced((v) => !v)}>
             {showAdvanced ? 'hide' : 'show'}
           </button>
         </h3>
         {showAdvanced && (
           <>
+            <label className="row">
+              <span>delay between cases</span>
+              <input
+                type="range"
+                min={0}
+                max={8000}
+                step={500}
+                value={draft.arrivalGapMs ?? 1500}
+                onChange={(e) => patch({ arrivalGapMs: Number(e.target.value) })}
+              />
+              <span className="muted">{fmtMs(draft.arrivalGapMs ?? 1500)}</span>
+            </label>
+            <label className="row">
+              <span>mock pacing</span>
+              <select
+                value={draft.pacing}
+                onChange={(e) => patch({ pacing: e.target.value as RunDraft['pacing'] })}
+              >
+                <option value="realistic">realistic (0.8–2.5s per model step)</option>
+                <option value="hang">
+                  realistic + agent 2 ({words().roles.barista}) hangs on the second{' '}
+                  {words().workItem}
+                </option>
+                <option value="instant">instant (tests)</option>
+              </select>
+            </label>
             <label className="row">
               <span>tool error rate</span>
               <input
@@ -470,7 +470,7 @@ export function RunConfigPanel({
 
 /**
  * Where a decision model (Jev, or any LLM through the evaluation adapter) acts in
- * the run beyond judging: triage can route cases away at the door, and the action
+ * the run beyond judging: the router classifies (and can turn away) each case, and the action
  * gate approves or blocks the domain's riskiest tool calls before they execute.
  */
 function DecisionPoints({
@@ -485,7 +485,7 @@ function DecisionPoints({
   const gate = { enabled: false, ...draft.gate }
   const threshold = gate.threshold ?? 0.5
   const setGate = (p: Partial<typeof gate>) => patch({ gate: { ...gate, ...p } })
-  const triageOn = draft.triageEnabled ?? true
+  const triageOn = draft.triageEnabled ?? false
   return (
     <section>
       <h3>Decision points</h3>
@@ -494,14 +494,27 @@ function DecisionPoints({
         <code>gateway:typesafe-ai/jev</code> is strongest. Each uses the {roleLabel('manager')}
         {"'"}s model unless you pick another.
       </p>
-      <label className="check" title={triageOn ? undefined : 'Turn door triage on first'}>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={triageOn}
+          onChange={(e) =>
+            patch({
+              triageEnabled: e.target.checked,
+              ...(e.target.checked ? {} : { triageRoutes: false }),
+            })
+          }
+        />{' '}
+        router: classify each {CASE_NOUN.one} (intent, escalate) before agent 1 sees it
+      </label>
+      <label className="check sub" title={triageOn ? undefined : 'Turn the router on first'}>
         <input
           type="checkbox"
           disabled={!triageOn}
           checked={triageOn && (draft.triageRoutes ?? false)}
           onChange={(e) => patch({ triageRoutes: e.target.checked })}
         />{' '}
-        route: decline cases triage classes as adversarial before agent 1 sees them
+        and turn away what it classes as manipulation
       </label>
       <label
         className="check"

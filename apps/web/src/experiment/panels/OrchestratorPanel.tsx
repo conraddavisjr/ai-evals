@@ -2,7 +2,7 @@ import type { ModelsInfo, OrchestratorInfo } from '../../harness/index.js'
 import type { SuiteDraft } from '../suite-draft.js'
 import { ModelPicker } from './ModelPicker.js'
 
-/** The orchestration layer: which engine runs the shift, and the orchestrator model (the cafe's manager) that triages and reviews. */
+/** The orchestration layer: which engine runs the cases, and the orchestrator model that routes and reviews them. */
 export function OrchestratorPanel({
   draft,
   onChange,
@@ -19,9 +19,9 @@ export function OrchestratorPanel({
     <div className="node-panel">
       <h3>Orchestration</h3>
       <p className="muted small">
-        The engine is code: it schedules customers, hands them to the agents and closes each visit.
-        The orchestrator model (the cafe's manager) is the LLM side of it: it triages at the door
-        and reviews every visit before the judge.
+        The engine is code: it starts each case, hands it to the agents and closes it. The
+        orchestrator model is the evaluation-model side of it: optionally it routes each case before
+        agent 1 (classify intent, escalate), and it reviews every case before the judge.
       </p>
       <label className="row">
         <span className="cap">engine</span>
@@ -50,7 +50,7 @@ export function OrchestratorPanel({
           checked={draft.triageEnabled}
           onChange={(e) => onChange({ ...draft, triageEnabled: e.target.checked })}
         />{' '}
-        door triage (intent, escalate)
+        router: classify each case before agent 1 (intent, escalate)
       </label>
       <label className="check">
         <input

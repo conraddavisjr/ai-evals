@@ -8,7 +8,7 @@ const COPY = {
   barista: { countKey: 'baristas' as const, max: 4 },
 }
 
-/** A sub-agent role: its model and how many are on shift. */
+/** A sub-agent role: its model and how many instances run in parallel. */
 export function AgentPanel({
   role,
   draft,
@@ -37,7 +37,9 @@ export function AgentPanel({
         hint="a chat model with tool use"
       />
       <label className="row">
-        <span className="cap">on shift</span>
+        <span className="cap" title="How many copies of this agent work cases in parallel">
+          instances
+        </span>
         <input
           type="number"
           min={1}

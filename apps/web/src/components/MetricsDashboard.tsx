@@ -2,11 +2,12 @@ import { type RunMetrics, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
 import { type RunRow, useHarness } from '../harness/index.js'
+import { caseTiming, timingGroup } from '../lib/case-timing.js'
 import { roleLabel, roleShort } from '../lib/nomenclature.js'
+import { latencyStatsOf } from '../lib/stats.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { useDrawer } from './Drawer.js'
 import { JUDGE_EXPLAIN, JudgeDrill } from './drilldowns.js'
-import { BEAT_COLORS, beatLabel } from './OrderWaterfall.js'
 import { TelemetryPanel } from './TelemetryPanel.js'
 
 /** Summary (the roll-up once a shift closes) or Telemetry (span-based, live). */
@@ -221,32 +222,7 @@ function MetricsSummary({
           </table>
 
           <h4>Where the time goes</h4>
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>beat</th>
-                <th>p50</th>
-                <th>p95</th>
-                <th>max</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(metrics.beatLatency).map(([b, st]) => (
-                <tr key={b}>
-                  <td>
-                    <i
-                      className="swatch"
-                      style={{ background: BEAT_COLORS[b as keyof typeof BEAT_COLORS] }}
-                    />{' '}
-                    {beatLabel(b)}
-                  </td>
-                  <td>{fmtMs(st.p50)}</td>
-                  <td>{fmtMs(st.p95)}</td>
-                  <td>{fmtMs(st.max)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {player ? <StepTiming player={player} /> : <p className="muted">No timings yet.</p>}
 
           <h4>Per case</h4>
           <div className="table-scroll">
@@ -355,5 +331,50 @@ function Tile({
       <div className="l">{label}</div>
       {sub && <div className="s">{sub}</div>}
     </div>
+  )
+}
+
+/**
+ * Each step's time across the run's cases (the same rows as the Cases tab):
+ * the router, each agent, the wait for agent 2, the gate, the review, the judge.
+ */
+function StepTiming({ player }: { player: TimelinePlayer }) {
+  const events = player.state.applied
+  const txIds = [
+    ...new Set(events.flatMap((e) => (e.type === 'customer.arrived' && e.txId ? [e.txId] : []))),
+  ]
+  const groups = new Map<string, number[]>()
+  for (const tx of txIds)
+    for (const r of caseTiming(events, tx).rows) {
+      const g = timingGroup(r)
+      groups.set(g, [...(groups.get(g) ?? []), r.ms])
+    }
+  if (groups.size === 0) return <p className="muted">No timings yet.</p>
+  return (
+    <table className="grid">
+      <thead>
+        <tr>
+          <th>step</th>
+          <th>cases</th>
+          <th>p50</th>
+          <th>p95</th>
+          <th>max</th>
+        </tr>
+      </thead>
+      <tbody>
+        {[...groups].map(([g, ms]) => {
+          const st = latencyStatsOf(ms)
+          return (
+            <tr key={g}>
+              <td>{g}</td>
+              <td>{ms.length}</td>
+              <td>{fmtMs(st.p50)}</td>
+              <td>{fmtMs(st.p95)}</td>
+              <td>{fmtMs(st.max)}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }

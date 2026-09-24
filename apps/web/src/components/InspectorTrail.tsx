@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { AgentInspector, inspectorTitle } from './AgentInspector.js'
 
@@ -21,6 +21,7 @@ export function InspectorTrail({
   onFocus,
   onOpenFrom,
   panelWidth,
+  leading,
 }: {
   /** Earlier views, oldest first; the current one is not included. */
   ids: string[]
@@ -31,6 +32,8 @@ export function InspectorTrail({
   onOpenFrom: (index: number, id: string) => void
   /** The side panel's width, to work out how many columns fit beside the stage. */
   panelWidth: number
+  /** A list the path started from (the Cases list), always open as the first column. */
+  leading?: { title: string; onClose: () => void; body: ReactNode } | undefined
 }) {
   const [viewport, setViewport] = useState(() => window.innerWidth)
   useEffect(() => {
@@ -38,12 +41,31 @@ export function InspectorTrail({
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  if (ids.length === 0) return null
-  const room = viewport - panelWidth - STAGE_MIN - SPINE_W * ids.length
-  const open = Math.max(1, Math.min(MAX_OPEN, ids.length, Math.floor(room / PANE_W)))
+  if (ids.length === 0 && !leading) return null
+  const room = viewport - panelWidth - STAGE_MIN - SPINE_W * ids.length - (leading ? PANE_W : 0)
+  const open = Math.max(
+    leading ? 0 : 1,
+    Math.min(MAX_OPEN - (leading ? 1 : 0), ids.length, Math.floor(room / PANE_W)),
+  )
   const firstOpen = Math.max(0, ids.length - open)
   return (
     <nav className="inspector-trail" aria-label="Where you came from">
+      {leading && (
+        <section className="trail-pane trail-leading" aria-label={leading.title}>
+          <header className="trail-head">
+            <span className="trail-title">{leading.title}</span>
+            <button
+              type="button"
+              className="link"
+              title="Close the details and go back to the list"
+              onClick={leading.onClose}
+            >
+              close right ›
+            </button>
+          </header>
+          <div className="trail-body">{leading.body}</div>
+        </section>
+      )}
       {ids.map((id, i) =>
         i < firstOpen ? (
           <button

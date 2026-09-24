@@ -24,7 +24,7 @@ export function initialDraft(models: ModelsInfo, scenarios: Scenario[]): RunDraf
     budget: { ...d.budget },
     arrivalGapMs: d.arrivalGapMs,
     judgeEnabled: true,
-    triageEnabled: true,
+    triageEnabled: false,
     reviewEnabled: true,
     mockPacing: { ...d.mockPacing },
     pacing: 'realistic',
@@ -106,7 +106,7 @@ export function estimateRunUsd(
     const prof = TOKENS_PER_VISIT[role]
     if (role === 'judge' && !flags.judgeEnabled) continue
     let steps = prof.steps
-    // the manager's two calls per visit: door triage (tiny) and the post-visit review (reads the trail)
+    // the orchestrator's calls per case: the router (tiny, when on) and the review (reads the trail)
     if (role === 'manager') {
       steps = (flags.triageEnabled ? 1 : 0) + (flags.reviewEnabled ? 1 : 0)
       if (steps === 0) continue

@@ -51,7 +51,7 @@ export function initialSuiteDraft(models: ModelsInfo, datasets: DatasetSummary[]
     budget: { maxUsdPerRun: d.budget.maxUsdPerRun, maxStepsPerAgent: d.budget.maxStepsPerAgent },
     arrivalGapMs: 0,
     judgeEnabled: true,
-    triageEnabled: true,
+    triageEnabled: false,
     reviewEnabled: true,
     pacing: 'instant',
     variants: [{ name: 'baseline', roles: {} }],

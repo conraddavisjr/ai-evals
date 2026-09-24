@@ -112,7 +112,7 @@ export function AgentInspector({ player, selectedId, onSelect, onBack }: Props) 
       {back}
       <p className="muted">
         {isAgentId(selectedId)
-          ? `${agentLabel(selectedId)} is not on shift at this point in the run.`
+          ? `${agentLabel(selectedId)} has not started at this point in the run.`
           : 'That case has not arrived at this point in the run.'}
       </p>
     </>
@@ -366,7 +366,7 @@ function CaseDetail({
       <dl>
         {customer.triage && (
           <>
-            <dt>door triage</dt>
+            <dt>router</dt>
             <dd>
               {customer.triage.intent} · escalate {Math.round(customer.triage.probability * 100)}%
             </dd>
@@ -1007,7 +1007,7 @@ function ReviewDetail({
               </>
             )}
             <dt>cost</dt>
-            <dd>{fmtUsd(usage.costUsd)} (with this case’s triage)</dd>
+            <dd>{fmtUsd(usage.costUsd)} (with this case’s router call, when on)</dd>
           </dl>
           <p className="muted small">
             Unlike the judge, the orchestrator is not blinded: it reads the agents’ tool trail with

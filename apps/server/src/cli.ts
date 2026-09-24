@@ -28,10 +28,10 @@ import { initTracing } from './telemetry/tracing.js'
  *   pnpm eval --dataset <datasetId>        (a saved golden dataset; ids may be mixed in --scenarios)
  *   pnpm eval --suite runs/suite.example.json   (variants x repeats over one dataset, side by side)
  *   pnpm eval --domain support --gate gateway:typesafe-ai/jev   (a decision model approves payouts)
- *   pnpm eval --route                      (triage turns adversarial cases away at the door)
+ *   pnpm eval --route                      (the router turns adversarial cases away before agent 1)
  *   pnpm eval --bench --domain support --specs mock:support-lead,gateway:typesafe-ai/jev,anthropic/claude-haiku-4-5-20251001
  *        [--tasks door,gate,judge] [--judge-run <runId>]   (decision bench: same labelled decisions, model vs model)
- *   flags: --no-judge --no-triage --no-review --max-usd 0.5 --orchestrator stardust
+ *   flags: --router --no-judge --no-review --max-usd 0.5 --orchestrator stardust
  */
 function parseArgs(argv: string[]) {
   const out: Record<string, string | boolean> = {}
@@ -88,7 +88,8 @@ function configsFromArgs(
       : { enabled: false },
     arrivalGapMs: Number(str('gap', '0')),
     judgeEnabled: args['no-judge'] !== true,
-    triageEnabled: args['no-triage'] !== true,
+    // the router is opt-in; --route implies it
+    triageEnabled: args.router === true || args.route === true,
     reviewEnabled: args['no-review'] !== true,
   }
   if (args.instant) cfg.mockPacing = INSTANT

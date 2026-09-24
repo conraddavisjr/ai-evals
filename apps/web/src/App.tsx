@@ -65,6 +65,8 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeStream = useRef<(() => void) | null>(null)
 
+  /** Details opened from the Cases list, oldest first: the last one shows in the panel, the list moves left. */
+  const [caseStack, setCaseStack] = useState<string[]>([])
   /** Views opened from inside the Inspector (a tool from a case, an agent from a tool), for "back". */
   const [inspectorBack, setInspectorBack] = useState<string[]>([])
   const onSelect = useCallback((id: string | null) => {
@@ -306,7 +308,9 @@ export function App() {
   }, [])
 
   const state = player.state
-  const showTrail = page === 'cafe' && tab === 'inspector' && inspectorBack.length > 0
+  const casesDetail = page === 'cafe' && tab === 'cases' && caseStack.length > 0
+  const showTrail =
+    (page === 'cafe' && tab === 'inspector' && inspectorBack.length > 0) || casesDetail
   const agentsList = Object.values(state.agents)
   const staffSummary = `${roleCount('cashier', agentsList.filter((x) => x.role === 'cashier').length)} · ${roleCount('barista', agentsList.filter((x) => x.role === 'barista').length)}`
 
@@ -472,13 +476,33 @@ export function App() {
         </section>
 
         <DrawerOutlet />
-        {showTrail && (
+        {showTrail && !casesDetail && (
           <InspectorTrail
             ids={inspectorBack}
             player={player}
             onFocus={inspectorFocus}
             onOpenFrom={inspectorOpenFrom}
             panelWidth={panel.width}
+          />
+        )}
+        {casesDetail && (
+          <InspectorTrail
+            ids={caseStack.slice(0, -1)}
+            player={player}
+            onFocus={(i) => setCaseStack((s) => s.slice(0, i + 1))}
+            onOpenFrom={(i, id) => setCaseStack((s) => [...s.slice(0, i + 1), id])}
+            panelWidth={panel.width}
+            leading={{
+              title: 'Cases',
+              onClose: () => setCaseStack([]),
+              body: (
+                <TransactionList
+                  player={player}
+                  onOpen={(id) => setCaseStack([id])}
+                  openId={caseStack[0]}
+                />
+              ),
+            }}
           />
         )}
         <aside className="panel">
@@ -532,7 +556,17 @@ export function App() {
                 startError={startError}
               />
             )}
-            {tab === 'cases' && <TransactionList player={player} onSelect={onSelect} />}
+            {tab === 'cases' &&
+              (caseStack.length === 0 ? (
+                <TransactionList player={player} onOpen={(id) => setCaseStack([id])} />
+              ) : (
+                <AgentInspector
+                  player={player}
+                  selectedId={caseStack.at(-1) ?? null}
+                  onSelect={(id) => setCaseStack((s) => [...s, id])}
+                  onBack={() => setCaseStack((s) => s.slice(0, -1))}
+                />
+              ))}
             {tab === 'queue' && <QueuePanel player={player} />}
             {tab === 'inspector' && (
               <AgentInspector

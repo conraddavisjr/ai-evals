@@ -215,15 +215,6 @@ html, body { height: 100%; margin: 0; overflow: hidden; } body { background: var
 .archv .node {
   transition: opacity 0.2s;
 }
-/* A node's foreignObject is 400px taller than its card, room for the card to
-   expand. Only the card takes the pointer: otherwise a selected node, which is
-   raised to the top, swallows clicks meant for the node drawn below it. */
-.archv .node foreignObject {
-  pointer-events: none;
-}
-.archv .node .card {
-  pointer-events: auto;
-}
 .archv .node.dim {
   opacity: 0.35;
 }
@@ -242,6 +233,15 @@ html, body { height: 100%; margin: 0; overflow: hidden; } body { background: var
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+/* A node's foreignObject is 400px taller than its card, room for the card to
+   expand. Only the card takes the pointer: otherwise a selected node, which is
+   raised to the top, swallows clicks meant for the node drawn below it. */
+.archv .node foreignObject {
+  pointer-events: none;
+}
+.archv .node .card {
+  pointer-events: auto;
 }
 .archv .card:hover {
   box-shadow: var(--card-shadow-hover);
@@ -687,7 +687,7 @@ const ARCH = {
         'The Log opens a nested inspector pane beside the trace instead of switching tabs; the side panel is resizable up to half the viewport (components/usePanelWidth.ts).',
         'Metrics has a Telemetry view: hand-rolled SVG charts (charts/) over the span aggregate: tool latency and reasoning latency per step as dot strips, cumulative cost, errors by layer and kind, one row per visit. Polls while the run is live.',
         'The Experiment page (experiment/) is a clickable pipeline diagram (the architecture engine in select mode) whose nodes open that layer’s controls: dataset editor, engine + manager, staff models, chaos, judge. Variants beside it each loop the dataset; results show per-variant metrics, an item x variant grid and overlaid telemetry.',
-        'Cases tab renders one waterfall per golden case ("Case 3 · <title>") with beat percentages; the persona is data, not the label.',
+        'Cases tab: one entry per golden case ("Case 3 · <title>") with its verdict, the orchestrator review and why, the judge, and a timing table (router, each agent with its tool calls, the wait for agent 2, gate, review, judge; lib/case-timing.ts). Opening a case shows its details in the panel with the list as a column to its left.',
         'Every themed word goes through lib/nomenclature.ts, which follows the active domain (the loaded run’s, else the draft’s, or the suite’s on the Experiment page): "agent 1 (support rep 2)", resolved/declined, beat labels.',
         'The Run tab has a Business domain picker and a Decision points section: triage routing and the action gate with its own model and threshold.',
         'The Decision bench page (bench/) runs the same labelled decisions (door, gate, judge) against up to five evaluation models and shows accuracy vs latency per decision point, a scores table and every decision a model got wrong.',
@@ -1079,10 +1079,10 @@ const ARCH = {
       seg: 'orch',
       x: 1040,
       y: 770,
-      title: 'Triage, action gate, review + judge',
+      title: 'Router, action gate, review + judge',
       nick: 'the maître d’, the floor manager and the inspector',
       summary:
-        'evaluate() at four decision points: door triage (and routing), the action gate, the orchestrator’s review, the judge.',
+        'evaluate() at four decision points: the router (off by default), the action gate, the orchestrator’s review, the judge.',
       details: [
         'All use an evaluation model (the orchestrator’s, the gate’s own or the judge’s), so Jev and LLMs are interchangeable here; the wording of each question comes from the domain pack, the ids and types never change.',
         'triage.decided carries routed when routing turned the case away; guard.decided carries P(approve), allowed, spec and latency.',

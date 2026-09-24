@@ -36,6 +36,7 @@ async function play(
   const config = RunConfig.parse({
     ...extra,
     domain: 'support',
+    triageEnabled: true,
     scenarioIds: ids,
     roles: { ...SUPPORT_PACK.defaultRoles, ...roles },
     arrivalGapMs: 0,
