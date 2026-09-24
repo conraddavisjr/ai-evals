@@ -6,7 +6,8 @@ import {
   type ScenarioInput,
   shortScenarioId,
 } from '@cafe/protocol'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toggleGroup } from '../../components/run-draft.js'
 import { type DomainInfo, type ToolInfo, useExperimentApi } from '../../harness/index.js'
 import { type SuiteDraft, withDomain } from '../suite-draft.js'
 import { ScenarioForm } from './ScenarioForm.js'
@@ -72,6 +73,24 @@ export function DatasetPanel({
           : [...selected, id]
     onChange({ ...draft, itemIds: next.length === all.length ? null : next })
   }
+  /** A tag's header selects the whole group unless it is already fully selected, then clears it. */
+  const toggleTag = (ids: string[]) => {
+    if (!detail) return
+    const all = detail.items.map((i) => i.id)
+    const next = toggleGroup(selected ?? all, ids)
+    onChange({ ...draft, itemIds: next.length === all.length ? null : next })
+  }
+  // one group per first tag, in a fixed order so happy paths lead and probes follow
+  const groups = useMemo(() => {
+    const order = ['happy', 'edge', 'adversarial', 'stress']
+    const byTag = new Map<string, Scenario[]>()
+    for (const item of detail?.items ?? []) {
+      const tag = item.tags[0] ?? 'untagged'
+      byTag.set(tag, [...(byTag.get(tag) ?? []), item])
+    }
+    const rank = (t: string) => (order.includes(t) ? order.indexOf(t) : order.length)
+    return [...byTag].sort(([a], [b]) => rank(a) - rank(b))
+  }, [detail])
 
   const withBusy = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -191,54 +210,88 @@ export function DatasetPanel({
             <span className="muted">
               ({selected ? `${selected.length} of ${detail.items.length}` : detail.items.length})
             </span>
-            {selected && (
-              <button
-                type="button"
-                className="link"
-                onClick={() => onChange({ ...draft, itemIds: null })}
-              >
-                all
-              </button>
-            )}
+            <button
+              type="button"
+              className="link"
+              disabled={!selected}
+              onClick={() => onChange({ ...draft, itemIds: null })}
+            >
+              all
+            </button>
+            <button
+              type="button"
+              className="link"
+              disabled={selected?.length === 0}
+              onClick={() => onChange({ ...draft, itemIds: [] })}
+            >
+              none
+            </button>
           </h4>
-          <ul className="dataset-items">
-            {detail.items.map((s) => (
-              <li key={s.id} className={isOn(s.id) ? '' : 'off'}>
-                <label className="check">
-                  <input type="checkbox" checked={isOn(s.id)} onChange={() => toggleItem(s.id)} />
-                  <span className="title" title={s.customer.utterances[0]}>
-                    {s.title}
+          {groups.map(([tag, items]) => {
+            const ids = items.map((i) => i.id)
+            const picked = ids.filter(isOn).length
+            return (
+              <div key={tag} className="dataset-group">
+                <button
+                  type="button"
+                  className={`tag ${tag} ${picked === 0 ? 'off' : ''}`}
+                  aria-pressed={picked === ids.length}
+                  title={
+                    picked === ids.length ? `Deselect all ${tag} cases` : `Select all ${tag} cases`
+                  }
+                  onClick={() => toggleTag(ids)}
+                >
+                  {tag}{' '}
+                  <span className="count">
+                    {picked}/{ids.length}
                   </span>
-                </label>
-                <span className="meta">
-                  {s.tags.map((t) => (
-                    <span key={t} className={`tag ${t}`}>
-                      {t}
-                    </span>
+                </button>
+                <ul className="dataset-items">
+                  {items.map((s) => (
+                    <li key={s.id} className={isOn(s.id) ? '' : 'off'}>
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={isOn(s.id)}
+                          onChange={() => toggleItem(s.id)}
+                        />
+                        <span className="title" title={s.customer.utterances[0]}>
+                          {s.title}
+                        </span>
+                      </label>
+                      <span className="meta">
+                        {s.tags.map((t) => (
+                          <span key={t} className={`tag ${t}`}>
+                            {t}
+                          </span>
+                        ))}
+                        <span className="muted mono">{shortScenarioId(s.id)}</span>
+                        <span className="muted">
+                          {s.expected.expectedOutcome ??
+                            (s.expected.shouldRefuse ? 'refused' : 'served')}
+                        </span>
+                        {!builtin && (
+                          <>
+                            <button type="button" className="link" onClick={() => setEditing(s)}>
+                              edit
+                            </button>
+                            <button
+                              type="button"
+                              className="link"
+                              disabled={busy}
+                              onClick={() => void removeItem(s.id)}
+                            >
+                              delete
+                            </button>
+                          </>
+                        )}
+                      </span>
+                    </li>
                   ))}
-                  <span className="muted mono">{shortScenarioId(s.id)}</span>
-                  <span className="muted">
-                    {s.expected.expectedOutcome ?? (s.expected.shouldRefuse ? 'refused' : 'served')}
-                  </span>
-                  {!builtin && (
-                    <>
-                      <button type="button" className="link" onClick={() => setEditing(s)}>
-                        edit
-                      </button>
-                      <button
-                        type="button"
-                        className="link"
-                        disabled={busy}
-                        onClick={() => void removeItem(s.id)}
-                      >
-                        delete
-                      </button>
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+                </ul>
+              </div>
+            )
+          })}
           {builtin ? (
             <p className="muted small">
               The built-in set is read-only. Clone it to edit items or add your own.
