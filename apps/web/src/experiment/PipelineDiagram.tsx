@@ -13,7 +13,10 @@ export function PipelineDiagram({
   selected,
   onSelect,
   summaries,
+  domain,
 }: {
+  /** The suite's business domain; the diagram's words follow it, so a change remounts it. */
+  domain: string
   selected: PipelineNodeId | null
   onSelect: (id: PipelineNodeId | null) => void
   summaries: Partial<Record<PipelineNodeId, string>>
@@ -23,6 +26,7 @@ export function PipelineDiagram({
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pipelineData() reads the active domain's words
   useEffect(() => {
     if (!ref.current) return
     const h = mountArchitecture(ref.current, {
@@ -36,16 +40,18 @@ export function PipelineDiagram({
       h.destroy()
       handle.current = null
     }
-  }, [])
+  }, [domain])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a remount (new domain) needs the summaries again
   useEffect(() => {
     for (const [id, text] of Object.entries(summaries))
       if (text) handle.current?.setSummary(id, text)
-  }, [summaries])
+  }, [summaries, domain])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a remount (new domain) needs the selection again
   useEffect(() => {
     handle.current?.select(selected)
-  }, [selected])
+  }, [selected, domain])
 
   return (
     <div className="pipeline archv archv-app">

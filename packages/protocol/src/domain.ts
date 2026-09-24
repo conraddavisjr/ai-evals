@@ -34,7 +34,8 @@ export type OrderStatus = z.infer<typeof OrderStatus>
 export const OrderItem = z.object({
   menuItemId: z.string(),
   name: z.string(),
-  size: z.enum(['small', 'medium', 'large']).default('medium'),
+  /** Cafe drinks come in sizes; an action line in another domain (a refund) has none. */
+  size: z.enum(['small', 'medium', 'large']).optional(),
   modifiers: z.array(z.string()).default([]),
   quantity: z.number().int().positive().default(1),
   unitPriceCents: z.number().int().nonnegative(),
@@ -154,8 +155,33 @@ export const MockPacing = z.object({
 })
 export type MockPacing = z.infer<typeof MockPacing>
 
+/**
+ * Where the agents' tools come from. `builtin` is the cafe's own catalogue,
+ * in-process against Postgres. `mcp` points the gateway at any MCP server: its
+ * tools are listed at run start and every call is forwarded over the wire, so
+ * the same harness evaluates agents against a different system and its database.
+ */
+export const ToolSource = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('builtin') }),
+  z.object({
+    kind: z.literal('mcp'),
+    /** Streamable HTTP endpoint of the MCP server. */
+    url: z.string().url(),
+    headers: z.record(z.string(), z.string()).default({}),
+    /** Which remote tools each role may call. Tools not listed for a role are out of its scope. */
+    roleTools: z.record(z.string(), z.array(z.string())),
+  }),
+])
+export type ToolSource = z.infer<typeof ToolSource>
+
 export const RunConfig = z.object({
   name: z.string().default('shift'),
+  /**
+   * Which business domain pack plays the cases: its tools, prompts, golden dataset,
+   * triage and judge wording (see packages/domains). The harness is the same for all.
+   */
+  domain: z.string().default('cafe'),
+  tools: ToolSource.default({ kind: 'builtin' }),
   /** Which orchestration engine drives the shift (see apps/server/src/orchestrators). */
   orchestrator: z.string().default('stardust'),
   scenarioIds: z.array(z.string()).min(1),
@@ -163,12 +189,36 @@ export const RunConfig = z.object({
   staffing: Staffing.prefault({}),
   chaos: Chaos.prefault({}),
   budget: Budget.prefault({}),
-  /** Gap between customer arrivals; 0 means all arrive at once. */
+  /** Delay between cases starting; 0 starts them all at once. Mostly for the animated scenes. */
   arrivalGapMs: z.number().int().nonnegative().default(1500),
   /** Use the judge at all. Off keeps mock-only runs completely free. */
   judgeEnabled: z.boolean().default(true),
-  /** Door triage via the manager's evaluation model (Jev or an LLM adapter). */
-  triageEnabled: z.boolean().default(true),
+  /**
+   * The router: before agent 1 sees a case, the orchestrator's evaluation model
+   * (Jev or an LLM adapter) classifies it (intent, escalate). An input guardrail /
+   * pre-classifier; off by default. (The key keeps its old name so stored runs replay.)
+   */
+  triageEnabled: z.boolean().default(false),
+  /**
+   * Let triage act: a case it classes as adversarial is declined at the door and
+   * never reaches agent 1. Measures the decision model as a router (saved spend
+   * versus wrongly turned-away cases).
+   */
+  triageRoutes: z.boolean().default(false),
+  /**
+   * The action gate: before a gated tool (the domain pack names them: a payout, a
+   * hand-off to fulfilment) runs, a decision model is asked whether to approve it.
+   * Blocked calls fail with a reason the agent can read. Off by default.
+   */
+  gate: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** Which evaluation model decides; the orchestrator's model when omitted. */
+      modelSpec: ModelSpec.optional(),
+      /** Approve when P(approve) is at least this. */
+      threshold: z.number().min(0).max(1).default(0.5),
+    })
+    .prefault({}),
   /** After each visit the manager reviews the staff's tool trail and transcript before the judge. */
   reviewEnabled: z.boolean().default(true),
   mockPacing: MockPacing.prefault({}),

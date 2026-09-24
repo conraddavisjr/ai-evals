@@ -2,10 +2,12 @@ import { type RunMetrics, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
 import { type RunRow, useHarness } from '../harness/index.js'
+import { caseTiming, timingGroup } from '../lib/case-timing.js'
+import { roleLabel, roleShort } from '../lib/nomenclature.js'
+import { latencyStatsOf } from '../lib/stats.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { useDrawer } from './Drawer.js'
 import { JUDGE_EXPLAIN, JudgeDrill } from './drilldowns.js'
-import { BEAT_COLORS, BEAT_LABELS } from './OrderWaterfall.js'
 import { TelemetryPanel } from './TelemetryPanel.js'
 
 /** Summary (the roll-up once a shift closes) or Telemetry (span-based, live). */
@@ -92,11 +94,11 @@ function MetricsSummary({
       <button
         type="button"
         className="link metric-link"
-        title="See the visits behind this figure"
+        title="See the cases behind this figure"
         onClick={() =>
           drawer.open({
             title: JUDGE_EXPLAIN[metric]?.title ?? metric,
-            subtitle: 'where the gaps are, visit by visit',
+            subtitle: 'where the gaps are, case by case',
             body: <JudgeDrill metrics={metrics} metric={metric} player={player} />,
           })
         }
@@ -109,10 +111,10 @@ function MetricsSummary({
 
   return (
     <div>
-      {!runId && <p className="muted">Start or load a shift.</p>}
+      {!runId && <p className="muted">Start or load a run.</p>}
       {runId && status !== 'finished' && (
         <p className="muted">
-          Metrics land when the shift closes. Watch the transactions tab for live waterfalls.
+          Metrics land when the run closes. Watch the Cases tab for live waterfalls.
         </p>
       )}
       {err && <p className="bad">{err}</p>}
@@ -156,8 +158,8 @@ function MetricsSummary({
             <>
               <h4>Judge (blinded)</h4>
               <p className="muted small">
-                Means over the visits. The probabilities are the judge's confidence, not a share:
-                click a figure to see which visits it doubted and why.
+                Means over the cases. The probabilities are the judge's confidence, not a share:
+                click a figure to see which cases it doubted and why.
               </p>
               <table className="grid">
                 <tbody>
@@ -202,13 +204,13 @@ function MetricsSummary({
                 <th>p50</th>
                 <th>p95</th>
                 <th>max</th>
-                <th>mean steps / visit</th>
+                <th>mean steps / case</th>
               </tr>
             </thead>
             <tbody>
               {(['cashier', 'barista', 'manager', 'judge'] as const).map((r) => (
                 <tr key={r}>
-                  <td>{r}</td>
+                  <td>{roleLabel(r)}</td>
                   <td>{metrics.latencyByRole[r].count}</td>
                   <td>{fmtMs(metrics.latencyByRole[r].p50)}</td>
                   <td>{fmtMs(metrics.latencyByRole[r].p95)}</td>
@@ -220,34 +222,9 @@ function MetricsSummary({
           </table>
 
           <h4>Where the time goes</h4>
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>beat</th>
-                <th>p50</th>
-                <th>p95</th>
-                <th>max</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(metrics.beatLatency).map(([b, st]) => (
-                <tr key={b}>
-                  <td>
-                    <i
-                      className="swatch"
-                      style={{ background: BEAT_COLORS[b as keyof typeof BEAT_COLORS] }}
-                    />{' '}
-                    {BEAT_LABELS[b as keyof typeof BEAT_LABELS] ?? b}
-                  </td>
-                  <td>{fmtMs(st.p50)}</td>
-                  <td>{fmtMs(st.p95)}</td>
-                  <td>{fmtMs(st.max)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {player ? <StepTiming player={player} /> : <p className="muted">No timings yet.</p>}
 
-          <h4>Per visit</h4>
+          <h4>Per case</h4>
           <div className="table-scroll">
             <table className="grid small">
               <thead>
@@ -290,13 +267,17 @@ function MetricsSummary({
 
       {compare.length > 1 && (
         <>
-          <h4>Compare shifts</h4>
+          <h4>Compare runs</h4>
           <div className="table-scroll">
             <table className="grid small">
               <thead>
                 <tr>
                   <th>when</th>
-                  <th>cashier / barista / manager / judge</th>
+                  <th>
+                    {(['cashier', 'barista', 'manager', 'judge'] as const)
+                      .map(roleShort)
+                      .join(' / ')}
+                  </th>
                   <th>n</th>
                   <th>pass</th>
                   <th>refusal</th>
@@ -350,5 +331,50 @@ function Tile({
       <div className="l">{label}</div>
       {sub && <div className="s">{sub}</div>}
     </div>
+  )
+}
+
+/**
+ * Each step's time across the run's cases (the same rows as the Cases tab):
+ * the router, each agent, the wait for agent 2, the gate, the review, the judge.
+ */
+function StepTiming({ player }: { player: TimelinePlayer }) {
+  const events = player.state.applied
+  const txIds = [
+    ...new Set(events.flatMap((e) => (e.type === 'customer.arrived' && e.txId ? [e.txId] : []))),
+  ]
+  const groups = new Map<string, number[]>()
+  for (const tx of txIds)
+    for (const r of caseTiming(events, tx).rows) {
+      const g = timingGroup(r)
+      groups.set(g, [...(groups.get(g) ?? []), r.ms])
+    }
+  if (groups.size === 0) return <p className="muted">No timings yet.</p>
+  return (
+    <table className="grid">
+      <thead>
+        <tr>
+          <th>step</th>
+          <th>cases</th>
+          <th>p50</th>
+          <th>p95</th>
+          <th>max</th>
+        </tr>
+      </thead>
+      <tbody>
+        {[...groups].map(([g, ms]) => {
+          const st = latencyStatsOf(ms)
+          return (
+            <tr key={g}>
+              <td>{g}</td>
+              <td>{ms.length}</td>
+              <td>{fmtMs(st.p50)}</td>
+              <td>{fmtMs(st.p95)}</td>
+              <td>{fmtMs(st.max)}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }

@@ -1,3 +1,7 @@
+import { loadEnv } from './env.js'
+
+const envFile = loadEnv()
+
 import { createDb, createPgStore, runMigrations, seedCatalog } from '@cafe/db'
 import { serve } from '@hono/node-server'
 import { createApp } from './http.js'
@@ -7,6 +11,7 @@ import { initTracing } from './telemetry/tracing.js'
 
 const port = Number(process.env.PORT ?? 4747)
 const allowLive = process.env.CAFE_ALLOW_LIVE_MODELS === 'true'
+if (envFile) console.log(`[env] loaded ${envFile}`)
 
 const { db } = createDb()
 await runMigrations(db)

@@ -2,9 +2,7 @@
 .archv-app {
   --font-display: var(--font-ui);
   --font-body: var(--font-ui);
-  --font-mono: var(--font-mono);
   --display-weight: 800;
-  --bg: var(--bg);
   --canvas: #0d2130;
   --bar: var(--panel);
   --btn: var(--panel-2);

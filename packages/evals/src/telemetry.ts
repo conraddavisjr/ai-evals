@@ -29,7 +29,7 @@ const layerOf = (kind: string): ErrorLayer =>
             : 'agent'
 
 /** Model calls that carry cost. */
-const COSTED = new Set(['step', 'triage', 'review', 'judge'])
+const COSTED = new Set(['step', 'triage', 'gate', 'review', 'judge'])
 
 /**
  * Fold a run's spans into what the telemetry charts need. Pure: spans in, aggregate

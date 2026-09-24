@@ -26,6 +26,11 @@ export interface SceneView {
   label: string
   /** One line for the switcher tooltip. */
   blurb: string
+  /**
+   * The view draws the cafe itself (counters, espresso machines). A run in a
+   * domain without a scene (`vocabulary.hasScene`) falls back to the Trace board.
+   */
+  cafeArt?: boolean
   /** Async so a view's renderer (Three, Phaser, ...) can be loaded only when it is first shown. */
   mount(
     parent: HTMLElement,

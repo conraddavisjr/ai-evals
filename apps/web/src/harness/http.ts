@@ -7,6 +7,7 @@ import type {
   SpanSummary,
 } from '@cafe/protocol'
 import type {
+  DomainInfo,
   ExperimentClient,
   HarnessClient,
   ModelsInfo,
@@ -36,7 +37,9 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
   }
 
   return {
-    scenarios: () => json<Scenario[]>('/api/scenarios'),
+    scenarios: (domain) =>
+      json<Scenario[]>(`/api/scenarios${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`),
+    domains: () => json<DomainInfo[]>('/api/domains'),
     models: () => json<ModelsInfo>('/api/models'),
     runs: () => json<RunRow[]>('/api/runs'),
     run: (id) => json<RunRow>(`/api/runs/${id}`),
@@ -47,6 +50,7 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
     events: (id, afterSeq = -1) => json<CafeEvent[]>(`/api/runs/${id}/events?afterSeq=${afterSeq}`),
     metrics: (id) => json<RunMetrics>(`/api/runs/${id}/metrics`),
     judgements: (id) => json(`/api/runs/${id}/judgements`),
+    reviews: (id) => json(`/api/runs/${id}/reviews`),
     telemetry: (id) => json<RunTelemetry>(`/api/runs/${id}/telemetry`),
     datasets: () => json('/api/datasets'),
     dataset: (id) => json(`/api/datasets/${id}`),
@@ -62,8 +66,12 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
     deleteItem: (id, itemId) => json(`/api/datasets/${id}/items/${itemId}`, { method: 'DELETE' }),
     reorderItems: (id, ids) =>
       json(`/api/datasets/${id}/items/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
-    tools: () => json('/api/tools'),
+    tools: (domain) => json(`/api/tools${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`),
     orchestrators: () => json('/api/orchestrators'),
+    startBench: (config) => json('/api/bench', { method: 'POST', body: JSON.stringify(config) }),
+    bench: (id) => json(`/api/bench/${id}`),
+    benches: () => json('/api/bench'),
+    deleteBench: (id) => json(`/api/bench/${id}`, { method: 'DELETE' }),
     suites: () => json('/api/suites'),
     suite: (id) => json(`/api/suites/${id}`),
     startSuite: (config) => json('/api/suites', { method: 'POST', body: JSON.stringify(config) }),

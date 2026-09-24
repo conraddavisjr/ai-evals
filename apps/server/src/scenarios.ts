@@ -1,22 +1,21 @@
 import type { CafeStore } from '@cafe/db'
-import { SCENARIO_BY_ID, SCENARIOS } from '@cafe/evals'
+import { BUILTIN_SCENARIOS, DOMAIN_PACKS, type DomainPack, packForDataset } from '@cafe/domains'
 import {
-  BUILTIN_DATASET_ID,
   type DatasetDetail,
   type DatasetSummary,
   parseScenarioId,
   type Scenario,
 } from '@cafe/protocol'
 
-/** The dataset that ships with the code, presented like any other but read-only. */
-function builtinSummary(): DatasetSummary {
+/** A domain pack's dataset: ships with the code, presented like any other but read-only. */
+function builtinSummary(pack: DomainPack): DatasetSummary {
   return {
-    id: BUILTIN_DATASET_ID,
-    name: 'Stardust starter',
-    description:
-      'The scenarios that ship with the cafe: happy paths, edge cases and adversarial customers.',
+    id: pack.dataset.id,
+    name: pack.dataset.name,
+    description: pack.dataset.description,
     builtin: true,
-    itemCount: SCENARIOS.length,
+    domain: pack.id,
+    itemCount: pack.dataset.scenarios.length,
     updatedAt: 0,
   }
 }
@@ -24,7 +23,7 @@ function builtinSummary(): DatasetSummary {
 export async function listDatasets(store: CafeStore): Promise<DatasetSummary[]> {
   const rows = await store.datasets.list()
   return [
-    builtinSummary(),
+    ...DOMAIN_PACKS.map(builtinSummary),
     ...rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -37,7 +36,8 @@ export async function listDatasets(store: CafeStore): Promise<DatasetSummary[]> 
 }
 
 export async function getDataset(store: CafeStore, id: string): Promise<DatasetDetail | null> {
-  if (id === BUILTIN_DATASET_ID) return { ...builtinSummary(), items: SCENARIOS }
+  const pack = packForDataset(id)
+  if (pack) return { ...builtinSummary(pack), items: pack.dataset.scenarios }
   const row = await store.datasets.get(id)
   if (!row) return null
   const items = await store.datasets.items(id)
@@ -63,7 +63,7 @@ export async function resolveScenarios(store: CafeStore, ids: string[]): Promise
   const missing: string[] = []
   const out: Scenario[] = []
   for (const id of ids) {
-    const s = SCENARIO_BY_ID.get(id) ?? fromDb.get(id)
+    const s = BUILTIN_SCENARIOS.get(id) ?? fromDb.get(id)
     if (s) out.push(s)
     else missing.push(id)
   }

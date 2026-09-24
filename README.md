@@ -1,8 +1,9 @@
 # Stardust Cafe
 
-A model-agnostic evaluation harness for multi-agent pipelines, visualized as a Stardew-style cafe.
-Every member of staff is a sub-agent with its own model and its own slice of MCP tools.
-Customers are scripted scenarios (happy path, edge cases, adversarial).
+A model-agnostic evaluation harness for multi-agent pipelines: agentic orchestration, optional MCP tool sources, LLM-as-judge and golden datasets.
+Every agent is a sub-agent with its own model and its own slice of MCP tools.
+The business being simulated is a swappable domain pack: a Stardew-style cafe (with animated scenes) or an e-commerce support desk, and more can be added (`docs/DOMAIN-PACKS.md`).
+Golden cases are scripted scenarios (happy path, edge cases, adversarial).
 The harness records ground-truth correctness, tool-use correctness, blinded LLM-judge scores, latency, failure rate, tokens, and cost, and replays any shift pixel for pixel.
 
 ## What is in the box
@@ -14,7 +15,8 @@ The harness records ground-truth correctness, tool-use correctness, blinded LLM-
 | `packages/mcp-gateway` | The MCP tool server. Tools are grouped by scope; each role holds a capability with its slice. Out-of-scope calls are rejected and emitted as `agent.scope_violation`. Chaos injection (tool errors, latency) lives here. Also exposes each slice as a real MCP server over streamable HTTP. |
 | `packages/models` | `ModelRegistry`: one string spec per role resolves to a chat model or an evaluation model. Anthropic, OpenAI, Google, Vercel AI Gateway (the route to TypeSafe Jev), any OpenAI-compatible server (Ollama), and deterministic `mock:` personas. Cost table and the live-model guard. |
 | `packages/agents` | `runAgent()`: persona + sliced tools + the AI SDK tool loop + budget guard + crash injection. Emits `agent.*` and `model.usage` events. |
-| `packages/evals` | Scenarios, deterministic ground truth, the blinded judge (`experimental_evaluate`, same questions for Jev or any LLM), door triage questions, metrics roll-up. |
+| `packages/domains` | Domain packs: the cafe and the Brightside Goods support desk. Each brings its vocabulary, tools and scopes, agent prompts, scripted mocks, golden dataset, and the triage, review, judge and action-gate wording. |
+| `packages/evals` | Scenarios, deterministic ground truth, the decision bench, the blinded judge (`experimental_evaluate`, same questions for Jev or any LLM), door triage questions, metrics roll-up. |
 | `apps/server` | Hono API: run manager, the shift orchestrator (cashiers, FIFO ticket rail, barista workers, judge), SSE event stream, replay, MCP endpoints, and the headless eval CLI. |
 | `apps/web` | Vite + React + Three.js. A stylized top-down 3D village square (chunky beveled geometry, toon shading, warm lanterns against a dusk-teal palette) consumes events through a `TimelinePlayer` with four playback modes, plus panels for run config, visits with waterfalls, queue, inspector, metrics, and the event log. The pixel-art Phaser version lives on `main`; this look is the `style/painterly-topdown` branch. |
 
@@ -32,7 +34,8 @@ pnpm db:migrate && pnpm db:seed
 pnpm dev                     # API on :4747, web on :5180
 ```
 
-Open http://localhost:5180, keep the default `mock:*` staff, and press **Open the cafe**.
+Open http://localhost:5180, keep the default `mock:*` agents, and press **Start run**.
+Pick another business in the Run tab's **Business domain** picker.
 Everything runs for free on deterministic mock personas that drive the real tools, database, events, and metrics.
 
 Tests need the database running:
@@ -61,20 +64,24 @@ Set them per role in the UI or in a run config file.
 Every run is traced with OpenTelemetry (suite > run > visit > agent turn > step > tool call, plus triage, review and judge).
 Spans land in the `spans` table as they close, so `GET /api/runs/:id/telemetry` (tool latency, reasoning latency per step, cost trajectory, errors by layer, per-visit items) works while a run is live; set `OTEL_EXPORTER_OTLP_ENDPOINT` to also export to Jaeger, Grafana or any OTLP collector.
 
-Live models are refused until `CAFE_ALLOW_LIVE_MODELS=true` is set in `.env`, and every run has a hard USD cap (`budget.maxUsdPerRun`), a step cap, and a token cap per agent.
+The server and the CLI load `.env` themselves, so `pnpm dev` and `pnpm eval` see your keys without sourcing the file. Live models are refused until `CAFE_ALLOW_LIVE_MODELS=true` is set in `.env`, and every run has a hard USD cap (`budget.maxUsdPerRun`), a step cap, and a token cap per agent.
 
 ### Where Jev fits
 
 TypeSafe's Jev is a decision model: state plus typed questions in, typed answers with calibrated probabilities out.
-It cannot run a tool loop, so it cannot be a cashier or barista.
-It is a natural **judge** and **door triage** (manager) model.
+It cannot run a tool loop, so it cannot be agent 1 or agent 2.
+It sits at the harness's decision points: **door triage** (and routing manipulation away), the **action gate** that approves or blocks a payout before it runs, the **orchestrator review** and the **judge**.
+The **Decision bench** page (`pnpm eval --bench`) asks the same labelled decisions of Jev and up to four other models and compares accuracy, calibration, latency and cost; see `docs/DECISION-MODELS.md`.
 Both go through the AI SDK's `experimental_evaluate`, which the Anthropic, OpenAI, and Google providers also implement through structured-output adapters, and which this repo extends to any chat model (`packages/models/src/llm-evaluation-adapter.ts`).
 That means the judge question set is identical whether the judge is Jev, Claude, GPT, Gemini, or an open-weights model, which is what makes judge swaps a fair comparison.
 
 ## Running evals headlessly
 
 ```sh
-pnpm eval --instant                                  # all scenarios, mock staff
+pnpm eval --instant                                  # all scenarios, mock agents
+pnpm eval --domain support --instant                 # the support desk instead of the cafe
+pnpm eval --domain support --route --gate gateway:typesafe-ai/jev   # triage routing + a Jev action gate
+pnpm eval --bench --domain support --specs mock:support-lead,gateway:typesafe-ai/jev,anthropic/claude-haiku-4-5-20251001
 pnpm eval --config runs/compare-models.json          # several configs back to back
 pnpm eval --suite runs/suite.example.json            # a suite: variants x repeats over one golden dataset, compared side by side
 pnpm eval --dataset <id>                             # a saved golden dataset (built-in ids and ds:<dataset>:<slug> can be mixed)
@@ -82,11 +89,11 @@ pnpm eval --cashier anthropic/claude-haiku-4-5-20251001 --judge gateway:typesafe
 ```
 
 `runs/frontier-vs-jev.example.json` is the Claude vs GPT vs Gemini staff comparison with Jev as judge, plus a same-family judge as a control.
-Every CLI run is persisted and appears under **Recent shifts** in the UI for replay.
+Every CLI run is persisted and appears under **Recent runs** in the UI for replay.
 
 The **Experiment** page (hamburger menu) is the workbench for comparisons: click a layer of the pipeline diagram to pick its model or edit the golden dataset, add variants (each loops the whole dataset with its own model assignment, engine, or chaos), run the suite, and read the results side by side: pass rates, refusals, tool precision, latency, judge and review verdicts, cost, an item × variant grid, and the telemetry charts per variant.
 
-Swapping the orchestration engine (Mastra, LangChain, ...): `docs/ORCHESTRATORS.md`. Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
+Adding a business domain: `docs/DOMAIN-PACKS.md`. Where decision models such as Jev fit and how to compare them: `docs/DECISION-MODELS.md`. Swapping the orchestration engine (Mastra, LangChain, ...): `docs/ORCHESTRATORS.md`. Pointing the agents at a different MCP server and its database: `docs/TOOL-SOURCES.md`. Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
 
 ## The 3D scene
 

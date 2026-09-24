@@ -12,6 +12,7 @@ import {
 } from '../charts/index.js'
 import { fmtMs, fmtUsd } from '../format.js'
 import { type ExperimentClient, useExperimentApi } from '../harness/index.js'
+import { roleLabel, roleShort } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { useDrawer } from './Drawer.js'
 import { LatencyDrill } from './drilldowns.js'
@@ -60,12 +61,12 @@ export function TelemetryPanel({
   }, [api, runId, live])
 
   if (!api) return <p className="muted">This harness does not expose telemetry.</p>
-  if (!runId) return <p className="muted">Start or load a shift.</p>
+  if (!runId) return <p className="muted">Start or load a run.</p>
   if (err) return <p className="bad">{err}</p>
   if (!data) return <p className="muted">Loading spans…</p>
   if (data.spanCount === 0)
     return (
-      <p className="muted">No spans yet. Spans land as each tool call, step and visit finishes.</p>
+      <p className="muted">No spans yet. Spans land as each tool call, step and case finishes.</p>
     )
   return <TelemetryCharts data={data} api={api} runId={runId} player={player} />
 }
@@ -113,7 +114,7 @@ export function TelemetryCharts({
     if (!st || !api || !runId) return
     const { role, stepIndex } = st
     drawer.open({
-      title: `${role} · step ${stepIndex} · model latency`,
+      title: `${roleLabel(role)} · step ${stepIndex} · model latency`,
       subtitle: `${st.count} steps`,
       body: (
         <LatencyDrill
@@ -170,14 +171,14 @@ export function TelemetryCharts({
           <>
             <Legend
               items={ROLE_ORDER.filter((r) => data.steps.some((s) => s.role === r)).map((r) => ({
-                label: r,
+                label: roleLabel(r),
                 color: roleColor(r),
               }))}
             />
             <DotStrip
               onPick={canDrill ? (_g, i) => drillStep(i) : undefined}
               groups={data.steps.map((s) => ({
-                label: `${s.role} · step ${s.stepIndex}`,
+                label: `${roleShort(s.role)} · step ${s.stepIndex}`,
                 samples: s.samples,
                 p50: s.p50,
                 p95: s.p95,
@@ -191,13 +192,13 @@ export function TelemetryCharts({
       </section>
 
       <section className="chart-block">
-        <h4>Cost over the shift</h4>
-        <p className="sub">Cumulative spend after each visit, in arrival order.</p>
+        <h4>Cost over the run</h4>
+        <p className="sub">Cumulative spend after each case, in arrival order.</p>
         {data.costTrajectory.length === 0 ? (
-          <div className="chart-empty">No visits yet.</div>
+          <div className="chart-empty">No cases yet.</div>
         ) : !anyCost ? (
           <div className="chart-empty">
-            {fmtUsd(0)} across {data.costTrajectory.length} visits: mock models are free.
+            {fmtUsd(0)} across {data.costTrajectory.length} cases: mock models are free.
           </div>
         ) : (
           <>
@@ -217,17 +218,20 @@ export function TelemetryCharts({
               ]}
               formatY={fmtUsd}
               formatX={(v) => `#${v}`}
-              xLabel="visit"
+              xLabel="case"
             />
             {roles.length > 0 && anyCost && (
               <>
-                <Legend items={roles.map((r) => ({ label: r, color: roleColor(r) }))} />
+                <Legend items={roles.map((r) => ({ label: roleLabel(r), color: roleColor(r) }))} />
                 <BarChart
                   data={data.costTrajectory.map((c) => ({
                     label: `#${c.visitIndex + 1} ${shortScenarioId(c.scenarioId)}`,
                     values: roles.map((r) => c.byRole[r] ?? 0),
                   }))}
-                  series={roles.map((r) => ({ name: r, color: ROLE_COLOR[r] ?? SERIES.water }))}
+                  series={roles.map((r) => ({
+                    name: roleShort(r),
+                    color: ROLE_COLOR[r] ?? SERIES.water,
+                  }))}
                   format={fmtUsd}
                   rowHeight={18}
                 />
@@ -248,7 +252,8 @@ export function TelemetryCharts({
           <>
             <BarChart
               data={LAYER_ORDER.filter((l) => data.errors.byLayer[l] > 0).map((l) => ({
-                label: l,
+                // the stored layer keeps its old name; people read "router"
+                label: l === 'triage' ? 'router' : l,
                 values: [data.errors.byLayer[l]],
               }))}
               series={[{ name: 'errors', color: STATUS_BAD }]}
@@ -266,7 +271,7 @@ export function TelemetryCharts({
                 <thead>
                   <tr>
                     <th>when</th>
-                    <th>visit</th>
+                    <th>case</th>
                     <th>layer</th>
                     <th>where</th>
                     <th>kind</th>
@@ -293,7 +298,7 @@ export function TelemetryCharts({
 
       {!compact && (
         <section className="chart-block">
-          <h4>Per visit</h4>
+          <h4>Per case</h4>
           <p className="sub">One row per golden item: the per-iteration view.</p>
           <div className="table-scroll">
             <table className="grid small">

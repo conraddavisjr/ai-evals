@@ -1,9 +1,14 @@
 import type {
+  BenchProgress,
+  BenchReport,
+  BenchTask,
   CafeEvent,
   DatasetDetail,
   DatasetInput,
   DatasetPatch,
   DatasetSummary,
+  DomainVocabulary,
+  RoleModels,
   RunConfig,
   RunConfigInput,
   RunMetrics,
@@ -37,6 +42,25 @@ export interface ModelsInfo {
   defaults: RunConfig
 }
 
+/** A business domain the harness can play (GET /api/domains). */
+export interface DomainInfo {
+  id: string
+  label: string
+  blurb: string
+  vocabulary: DomainVocabulary
+  datasetId: string
+  defaultRoles: RoleModels
+  /** The tools this domain's action gate guards; empty when it has none. */
+  gateTools: string[]
+  /** The judge's questions in this domain's wording (ids are the same in every domain). */
+  judgeQuestions?: Array<{
+    id: string
+    type: 'boolean' | 'score' | 'choice'
+    instructions: string
+    criteria?: readonly string[] | Record<string, string>
+  }>
+}
+
 export interface StreamHandlers {
   onEvent: (e: CafeEvent) => void
   onDone: (status: string) => void
@@ -51,7 +75,10 @@ export interface StreamHandlers {
  */
 export interface HarnessClient {
   models(): Promise<ModelsInfo>
-  scenarios(): Promise<Scenario[]>
+  /** The golden cases that ship with a domain (the cafe's when omitted). */
+  scenarios(domain?: string): Promise<Scenario[]>
+  /** The business domains on offer. Optional: a harness with one domain can leave it out. */
+  domains?(): Promise<DomainInfo[]>
   runs(): Promise<RunRow[]>
   run(id: string): Promise<RunRow>
   startRun(config: RunConfigInput): Promise<{ runId: string }>
@@ -63,6 +90,8 @@ export interface HarnessClient {
   judgements(
     id: string,
   ): Promise<Array<{ txId: string; blindedTranscript: string; judgeSpec: string }>>
+  /** The orchestrator's reviews with the brief each one read. Optional for other harnesses. */
+  reviews?(id: string): Promise<Array<{ txId: string; brief: string; reviewerSpec: string }>>
   /** Tail a live run. Returns a closer. */
   stream(id: string, handlers: StreamHandlers, afterSeq?: number): () => void
 }
@@ -76,9 +105,35 @@ export interface ToolInfo {
   name: string
   scope: string
   description: string
+  /** JSON Schema of the tool's parameters, as the model sees them. */
+  inputSchema?: unknown
+}
+
+export interface BenchConfigView {
+  domain: string
+  specs: string[]
+  tasks: BenchTask[]
+  judgeRunId?: string | undefined
+  concurrency?: number | undefined
+}
+
+export interface BenchView {
+  id: string
+  status: 'running' | 'finished' | 'failed'
+  config: BenchConfigView
+  report: BenchReport | null
+  error: string | null
+  createdAt: number
+  finishedAt: number | null
+  progress: BenchProgress | null
 }
 
 export interface ExperimentClient {
+  /** The decision bench: the same labelled decisions asked of several evaluation models. */
+  startBench(config: BenchConfigView): Promise<{ id: string; items: number }>
+  bench(id: string): Promise<BenchView>
+  benches(): Promise<Array<Omit<BenchView, 'report' | 'error'>>>
+  deleteBench(id: string): Promise<{ deleted: boolean }>
   /** Aggregated OpenTelemetry view of a run (works while the run is live). */
   telemetry(runId: string): Promise<RunTelemetry>
   /** Raw spans for drill-down. */
@@ -97,7 +152,9 @@ export interface ExperimentClient {
   deleteItem(datasetId: string, itemId: string): Promise<{ deleted: boolean }>
   reorderItems(datasetId: string, ids: string[]): Promise<DatasetDetail>
   /** The tool catalogue with scopes, for the expected-tools pickers. */
-  tools(): Promise<{ tools: ToolInfo[]; roleScopes: Record<string, readonly string[]> }>
+  tools(
+    domain?: string,
+  ): Promise<{ tools: ToolInfo[]; roleScopes: Record<string, readonly string[]> }>
   /** Engines that can drive a shift. */
   orchestrators(): Promise<OrchestratorInfo[]>
   /** Suites: variants x repeats over one dataset. */

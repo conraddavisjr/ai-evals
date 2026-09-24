@@ -12,6 +12,8 @@ export type PacingPreset = 'realistic' | 'instant'
  */
 export interface SuiteDraft {
   name: string
+  /** The business domain every variant plays (a built-in dataset brings its own). */
+  domain: string
   datasetId: string
   /** null = every item in the dataset. */
   itemIds: string[] | null
@@ -34,6 +36,7 @@ export function initialSuiteDraft(models: ModelsInfo, datasets: DatasetSummary[]
   const d = models.defaults
   return {
     name: 'experiment',
+    domain: datasets[0]?.domain ?? 'cafe',
     datasetId: datasets[0]?.id ?? BUILTIN_DATASET_ID,
     itemIds: null,
     orchestrator: d.orchestrator,
@@ -48,13 +51,37 @@ export function initialSuiteDraft(models: ModelsInfo, datasets: DatasetSummary[]
     budget: { maxUsdPerRun: d.budget.maxUsdPerRun, maxStepsPerAgent: d.budget.maxStepsPerAgent },
     arrivalGapMs: 0,
     judgeEnabled: true,
-    triageEnabled: true,
+    triageEnabled: false,
     reviewEnabled: true,
     pacing: 'instant',
     variants: [{ name: 'baseline', roles: {} }],
     concurrency: 1,
     repeats: 1,
   }
+}
+
+/**
+ * Move the draft to another domain: roles still on a scripted mock take that
+ * domain's mocks (a cafe barista mock cannot work a support queue); live models stay.
+ */
+export function withDomain(
+  draft: SuiteDraft,
+  domain: { id: string; defaultRoles: Record<RoleKey, string> },
+): SuiteDraft {
+  if (draft.domain === domain.id) return draft
+  const swap = (spec: string, role: RoleKey) =>
+    spec.startsWith('mock:') ? domain.defaultRoles[role] : spec
+  const roles = { ...draft.roles }
+  for (const role of Object.keys(roles) as RoleKey[]) roles[role] = swap(roles[role], role)
+  const variants = draft.variants.map((v) => {
+    const r = { ...(v.roles as Partial<Record<RoleKey, string>>) }
+    for (const role of Object.keys(r) as RoleKey[]) {
+      const spec = r[role]
+      if (spec) r[role] = swap(spec, role)
+    }
+    return { ...v, roles: r }
+  })
+  return { ...draft, domain: domain.id, roles, variants }
 }
 
 /** A new variant starts as a copy of the base so only the differences need editing. */
@@ -81,6 +108,7 @@ export function toSuiteConfig(draft: SuiteDraft): SuiteConfigInput {
     datasetId: draft.datasetId,
     ...(draft.itemIds ? { itemIds: draft.itemIds } : {}),
     base: {
+      domain: draft.domain,
       orchestrator: draft.orchestrator,
       roles: draft.roles,
       staffing: draft.staffing,

@@ -48,6 +48,7 @@ export type SpanKindName =
   | 'run'
   | 'visit'
   | 'triage'
+  | 'gate'
   | 'agent.turn'
   | 'step'
   | 'tool'

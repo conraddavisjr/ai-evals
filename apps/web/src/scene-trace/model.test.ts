@@ -162,7 +162,7 @@ describe('trace model', () => {
       ],
     ])
     const m = buildTrace(evs)
-    expect(m.shift.map((b) => b.head)).toEqual(['barista-1'])
+    expect(m.shift.map((b) => b.head)).toEqual(['agent 2 (barista 1)'])
     expect(m.columns.length).toBe(1)
     const c = m.columns[0]
     expect(c?.name).toBe('Priya')
@@ -170,15 +170,15 @@ describe('trace model', () => {
     expect(c?.outcome).toBe('served')
     expect(c?.bands.input.map((b) => b.head)).toEqual(['Priya', 'expect'])
     expect(c?.bands.orch.map((b) => [b.head, b.mark])).toEqual([
-      ['triage', undefined],
+      ['router', undefined],
       ['left', 'ok'],
     ])
     const work = c?.bands.work ?? []
     expect(work.map((b) => b.head)).toEqual([
-      'cashier-1',
+      'agent 1 (cashier 1)',
       'menu.lookup',
       'payments.charge',
-      'barista-1',
+      'agent 2 (barista 1)',
       'orders.claim_next',
     ])
     // expected tool: ok; not expected: warn; failed: bad; step carries model latency
@@ -188,6 +188,55 @@ describe('trace model', () => {
     expect(work[0]?.latencyMs).toBe(25)
     expect(work[4]?.mark).toBe('ok')
     expect(c?.bands.eval[0]).toMatchObject({ head: 'review', mark: 'warn' })
+  })
+  it('gives every badge a stable unique key and names the tools a step called', () => {
+    const evs = stream([
+      [
+        0,
+        {
+          type: 'customer.arrived',
+          txId: 't',
+          customerId: 'c',
+          name: 'x',
+          scenarioId: 's',
+          sprite: 'customer_a',
+          utterance: 'hi',
+          expected: { outcome: 'served', cashierTools: [], baristaTools: [], tags: [] },
+        },
+      ],
+      [1, { type: 'agent.thinking', txId: 't', ...ref, step: 1 }],
+      [
+        2,
+        {
+          type: 'agent.tool_called',
+          txId: 't',
+          ...ref,
+          callId: 'a',
+          tool: 'menu.lookup',
+          args: {},
+        },
+      ],
+      [
+        3,
+        {
+          type: 'agent.tool_called',
+          txId: 't',
+          ...ref,
+          callId: 'b',
+          tool: 'orders.create',
+          args: {},
+        },
+      ],
+    ])
+    const m = buildTrace(evs)
+    const all = [...m.shift, ...(m.columns[0] ? Object.values(m.columns[0].bands).flat() : [])]
+    // the arrival yields two badges (input and expectations) from one event
+    expect(new Set(all.map((b) => b.key)).size).toBe(all.length)
+    expect(m.columns[0]?.bands.work[0]?.text).toBe('step 1 → menu.lookup, orders.create')
+    // and a rebuild keys them the same way
+    expect(buildTrace(evs).columns[0]?.bands.input.map((b) => b.key)).toEqual(
+      m.columns[0]?.bands.input.map((b) => b.key),
+    )
   })
   it('marks tools unknown when the item carries no expectations (older runs)', () => {
     const evs = stream([
@@ -219,5 +268,8 @@ describe('trace model', () => {
     const c = buildTrace(evs).columns[0]
     expect(c?.bands.work[0]?.mark).toBe('unknown')
     expect(c?.bands.orch.at(-1)?.mark).toBe('unknown')
+    // the playhead needs to know when a case arrived and when its outcome became known
+    expect(c?.startSeq).toBe(0)
+    expect(c?.leftSeq).toBe(2)
   })
 })

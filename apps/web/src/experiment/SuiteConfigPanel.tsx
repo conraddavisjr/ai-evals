@@ -2,6 +2,7 @@ import type { SuiteVariant } from '@cafe/protocol'
 import { ROLES, type RoleKey } from '../components/run-draft.js'
 import { fmtUsd } from '../format.js'
 import type { ModelsInfo, OrchestratorInfo } from '../harness/index.js'
+import { roleLabel } from '../lib/nomenclature.js'
 import { ModelPicker } from './panels/ModelPicker.js'
 import {
   addVariant,
@@ -141,9 +142,10 @@ export function SuiteConfigPanel({
               {ROLES.map((role) => (
                 <ModelPicker
                   key={role}
-                  label={role}
+                  label={roleLabel(role)}
                   value={(v.roles as Partial<Record<RoleKey, string>>)[role] ?? ''}
                   placeholder={`${eff[role]} (base)`}
+                  inherited={eff[role]}
                   onChange={(spec) => setRole(i, role, spec)}
                   models={models}
                 />
@@ -185,7 +187,7 @@ export function SuiteConfigPanel({
           </div>
           <div className="muted small">
             {total} run{total === 1 ? '' : 's'} × {itemCount} item{itemCount === 1 ? '' : 's'} ={' '}
-            {total * itemCount} visits
+            {total * itemCount} cases
             {draft.concurrency > 1 ? ` · ${draft.concurrency} at a time` : ' · one run at a time'}
           </div>
           {live && !models.allowLive && (

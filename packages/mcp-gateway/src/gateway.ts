@@ -27,7 +27,7 @@ export class Gateway {
   private readonly sleep: (ms: number) => Promise<void>
 
   constructor(private readonly opts: GatewayOptions) {
-    for (const t of ALL_TOOLS) this.tools.set(t.name, t)
+    for (const t of opts.tools ?? ALL_TOOLS) this.tools.set(t.name, t)
     this.chaos = createChaos(opts.chaos)
     this.now = opts.now ?? (() => Date.now())
     this.sleep = opts.sleep ?? defaultSleep
@@ -41,12 +41,15 @@ export class Gateway {
     txId?: string | undefined
     scopes?: readonly string[]
   }): Capability {
-    return { ...input, scopes: input.scopes ?? scopesFor(input.role) }
+    return {
+      ...input,
+      scopes: input.scopes ?? this.opts.roleScopes?.[input.role] ?? scopesFor(input.role),
+    }
   }
 
   /** The tools a capability may call. This is what gets advertised to the model. */
   toolsFor(cap: Capability): ToolDef[] {
-    return ALL_TOOLS.filter((t) => cap.scopes.includes(t.scope))
+    return [...this.tools.values()].filter((t) => cap.scopes.includes(t.scope))
   }
 
   async call(cap: Capability, toolName: string, rawArgs: unknown): Promise<ToolResult> {
@@ -133,6 +136,17 @@ export class Gateway {
         error: `Invalid arguments: ${z.prettifyError(parsed.error)}`,
         latencyMs: 0,
       })
+    }
+
+    if (this.opts.guard) {
+      const verdict = await this.opts.guard({ cap, tool: toolName, args: parsed.data })
+      if (verdict && !verdict.allow)
+        return finish({
+          ok: false,
+          code: 'blocked',
+          error: `Blocked by the action gate: ${verdict.reason}`,
+          latencyMs: 0,
+        })
     }
 
     const extra = this.chaos.extraLatencyMs()

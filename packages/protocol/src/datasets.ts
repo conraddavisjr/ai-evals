@@ -8,6 +8,9 @@ import { Scenario } from './domain.js'
  */
 export const BUILTIN_DATASET_ID = 'builtin:stardust'
 
+/** Every domain pack ships a read-only dataset under a `builtin:` id. */
+export const isBuiltinDatasetId = (id: string): boolean => id.startsWith('builtin:')
+
 export const CUSTOMER_SPRITES = [
   'customer_a',
   'customer_b',
@@ -23,6 +26,8 @@ export const DatasetSummary = z.object({
   description: z.string(),
   /** Ships with the code; read-only. */
   builtin: z.boolean(),
+  /** The domain pack a built-in dataset belongs to. Saved datasets are domain-neutral data. */
+  domain: z.string().optional(),
   itemCount: z.number().int(),
   updatedAt: z.number(),
 })

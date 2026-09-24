@@ -1,3 +1,4 @@
+export * from './bench.js'
 export * from './ground-truth.js'
 export * from './judge.js'
 export * from './metrics.js'

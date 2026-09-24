@@ -1,4 +1,5 @@
 import type { ArchData } from '@arch/data.js'
+import { roleLabel, words } from '../lib/nomenclature.js'
 
 /** Node ids the page dispatches on; each opens a panel with that layer's controls. */
 export type PipelineNodeId =
@@ -38,7 +39,7 @@ export function pipelineData(): ArchData {
       {
         id: 'orch',
         title: 'Orchestration',
-        sub: 'the engine that runs a shift',
+        sub: 'the engine that runs every case',
         nick: '',
         x: 350,
         y: 30,
@@ -102,7 +103,7 @@ export function pipelineData(): ArchData {
         title: 'Golden dataset',
         summary: 'Pick a dataset, add items.',
         details: [
-          'Each item is a customer visit: what they say (input) and what should happen (expected items, total, tools per role, refusal, rubric).',
+          `Each item is one golden case for ${words().business}: what the ${words().requester} says (input) and what should happen (expected ${words().line}s, ${words().moneyLabel}, tools per role, refusal, rubric).`,
           'The suite loops every item once per variant.',
         ],
       },
@@ -114,9 +115,9 @@ export function pipelineData(): ArchData {
         w: W,
         h: H,
         title: 'Orchestrator',
-        summary: 'Engine + manager model.',
+        summary: `Engine + orchestrator model (${words().roles.manager}).`,
         details: [
-          'Schedules arrivals, hands customers to cashiers, runs the barista loops, triages at the door.',
+          'Starts each case, hands it to agent 1, runs the agent 2 loops; optionally routes each case first.',
           'Swappable: the engine is a registry entry (Mastra, LangChain, ...).',
         ],
       },
@@ -127,9 +128,9 @@ export function pipelineData(): ArchData {
         y: 70,
         w: W,
         h: H,
-        title: 'Cashier',
+        title: roleLabel('cashier'),
         summary: 'Model + how many.',
-        details: ['Takes the order with menu, customer, order and payment tools.'],
+        details: [words().agentBlurbs.cashier],
       },
       {
         id: 'barista',
@@ -138,9 +139,9 @@ export function pipelineData(): ArchData {
         y: 230,
         w: W,
         h: H,
-        title: 'Barista',
+        title: roleLabel('barista'),
         summary: 'Model + how many.',
-        details: ['Pulls tickets from the rail with recipe, inventory and fulfilment tools.'],
+        details: [words().agentBlurbs.barista],
       },
       {
         id: 'mcp',
@@ -163,11 +164,11 @@ export function pipelineData(): ArchData {
         y: 70,
         w: W,
         h: H,
-        title: 'Manager review',
-        summary: 'The orchestrator reasons over the visit.',
+        title: 'Orchestrator review',
+        summary: 'The orchestrator model reasons over the case.',
         details: [
-          'Reads the unblinded tool trail, transcript and errors; files the visit as ok, concern or escalate with typed issues.',
-          'Uses the manager model.',
+          'Reads the unblinded tool trail, transcript and errors; files the case as ok, concern or escalate with typed issues.',
+          `Uses the orchestrator model (the ${words().roles.manager}).`,
         ],
       },
       {
@@ -200,11 +201,11 @@ export function pipelineData(): ArchData {
     edges: [
       { from: 'dataset', to: 'orchestrator', label: 'items, in order' },
       { from: 'orchestrator', to: 'cashier', label: 'runAgent' },
-      { from: 'orchestrator', to: 'barista', label: 'barista loop' },
+      { from: 'orchestrator', to: 'barista', label: 'agent 2 loop' },
       { from: 'cashier', to: 'mcp', label: 'tool calls' },
       { from: 'barista', to: 'mcp', label: 'tool calls' },
       { from: 'mcp', to: 'review', label: 'tool trail' },
-      { from: 'orchestrator', to: 'review', label: 'after each visit' },
+      { from: 'orchestrator', to: 'review', label: 'after each case' },
       { from: 'review', to: 'judge', label: 'then the judge' },
       { from: 'judge', to: 'telemetry', label: 'verdicts' },
       { from: 'mcp', to: 'telemetry', label: 'spans' },

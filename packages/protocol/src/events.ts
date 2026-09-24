@@ -24,7 +24,11 @@ const AgentRef = z.object({ agentId: z.string(), role: Role })
 export const AgentErrorKind = z.enum(['crash', 'budget', 'model', 'tool', 'timeout', 'scope'])
 export type AgentErrorKind = z.infer<typeof AgentErrorKind>
 
-export const TriageIntent = z.enum(['order', 'question', 'complaint', 'adversarial'])
+/**
+ * The intent a triage decided. Each domain pack defines its own options (the cafe's
+ * are order, question, complaint, adversarial); `adversarial` is shared by convention.
+ */
+export const TriageIntent = z.string().min(1)
 export type TriageIntent = z.infer<typeof TriageIntent>
 
 export const JudgeAnswers = z.object({
@@ -68,6 +72,8 @@ export const CafeEvent = z.discriminatedUnion('type', [
     customerId: z.string(),
     name: z.string(),
     scenarioId: z.string(),
+    /** The golden case's title, so views can label a case by what it tests rather than by its persona. */
+    title: z.string().optional(),
     sprite: z.string(),
     utterance: z.string(),
     /** The golden item's expectations, so a consumer of the stream alone can mark each step right or wrong. */
@@ -77,6 +83,19 @@ export const CafeEvent = z.discriminatedUnion('type', [
         cashierTools: z.array(z.string()),
         baristaTools: z.array(z.string()),
         tags: z.array(z.string()),
+        /** The rest of the golden output, so the Inspector can show the whole expectation (newer runs). */
+        items: z
+          .array(
+            z.object({
+              name: z.string(),
+              size: z.string().optional(),
+              modifiers: z.array(z.string()).optional(),
+            }),
+          )
+          .optional(),
+        totalCents: z.number().int().optional(),
+        shouldRefuse: z.boolean().optional(),
+        rubric: z.string().optional(),
       })
       .optional(),
   }),
@@ -97,6 +116,20 @@ export const CafeEvent = z.discriminatedUnion('type', [
     escalateProbability: z.number().min(0).max(1),
     modelSpec: ModelSpec,
     latencyMs: z.number(),
+    /** Triage routing was on and this decision sent the case away before agent 1 saw it. */
+    routed: z.boolean().optional(),
+  }),
+
+  // action gate: the decision model approves or blocks a gated tool call before it runs
+  Base.extend({
+    type: z.literal('guard.decided'),
+    agentId: z.string(),
+    tool: z.string(),
+    args: z.record(z.string(), z.unknown()),
+    approveProbability: z.number().min(0).max(1),
+    allowed: z.boolean(),
+    modelSpec: ModelSpec,
+    latencyMs: z.number(),
   }),
 
   // agents
@@ -106,6 +139,8 @@ export const CafeEvent = z.discriminatedUnion('type', [
     modelSpec: ModelSpec,
     station: Station,
     sprite: z.string(),
+    /** The agent's system prompt (its persona), for the Inspector (newer runs). */
+    persona: z.string().optional(),
   }),
   Base.extend(AgentRef.shape).extend({ type: z.literal('agent.moved'), to: Station }),
   Base.extend(AgentRef.shape).extend({ type: z.literal('agent.thinking'), step: z.number().int() }),
