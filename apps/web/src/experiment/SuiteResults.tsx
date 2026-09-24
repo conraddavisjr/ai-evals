@@ -8,6 +8,7 @@ import {
   type SuiteTelemetryView,
   useExperimentApi,
 } from '../harness/index.js'
+import { sentence } from '../lib/nomenclature.js'
 
 const OUTCOME_COLOR: Record<string, string> = {
   served: '#3f7a4a',
@@ -62,7 +63,7 @@ export function SuiteResults({
   return (
     <div className="suite-results">
       <h3>
-        {suite.name} <span className={`pill ${suite.status}`}>{suite.status}</span>
+        {suite.name} <span className={`pill ${suite.status}`}>{sentence(suite.status)}</span>
       </h3>
 
       <div className="table-scroll">

@@ -411,7 +411,7 @@ export function createGame(
       const known = col.leftSeq !== null && col.leftSeq <= at ? col.outcome : null
       const v = verdictPill(known, col.expectedOutcome)
       pill.className = v.cls
-      pill.textContent = notYet ? 'not arrived' : v.text
+      pill.textContent = notYet ? 'Not arrived' : v.text
       pill.title = v.title
       card.classList.toggle('verdict-fail', verdictOf(known, col.expectedOutcome) === 'fail')
       card.classList.toggle('verdict-pass', verdictOf(known, col.expectedOutcome) === 'pass')

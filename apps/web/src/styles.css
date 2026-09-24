@@ -183,7 +183,8 @@ h4 {
   display: flex;
   flex-direction: column;
 }
-header {
+/* the app header only: bare `header` also hit every <header> in panels and lists */
+.app > header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -625,9 +626,9 @@ main {
 .mode-help p {
   margin: 0;
 }
-/* Reserve the tallest collapsed summary so the stage does not resize on every mode switch. */
+/* Reserve the two-line collapsed summary so the stage does not resize on every mode switch. */
 .mode-help:not(.open) {
-  min-height: calc(1.45em * 4);
+  min-height: calc(1.45em * 2);
 }
 .mode-help.open p {
   margin: 0 0 8px;
@@ -1356,7 +1357,7 @@ table.grid tr.current td {
 }
 
 /* Cut stone frames, enamel controls and a pale ledger inside the dusk shell. */
-header {
+.app > header {
   min-height: 74px;
   padding: 12px 24px;
   background: linear-gradient(110deg, #24464c, #152e3b 48%, #10242f);
@@ -2097,4 +2098,36 @@ main.with-trail .panel .inspector-back {
 }
 .trail-leading .tx-list .tx .tx-meta {
   margin-bottom: 0;
+}
+
+/* ---------- menu: settings ---------- */
+.menu .menu-section {
+  margin: 6px 0 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  min-inline-size: 0;
+  padding: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menu .menu-heading {
+  padding: 4px 10px 2px;
+  float: left;
+  width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.menu .menu-theme {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  column-gap: 6px;
+  text-align: left;
+}
+.menu .menu-theme .menu-sub {
+  grid-column: 2;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
 }

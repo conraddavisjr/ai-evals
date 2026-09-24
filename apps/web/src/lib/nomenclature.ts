@@ -142,9 +142,23 @@ export function verdictPill(
   const label = outcomeLabel(outcome)
   const want = expected ? `expected ${outcomeLabel(expected)}` : 'no expectation recorded'
   if (v === 'pass')
-    return { cls: 'pill verdict-pass', text: `✓ ${label}`, title: `${label}, as expected` }
+    return {
+      cls: 'pill verdict-pass',
+      text: `✓ ${sentence(label)}`,
+      title: `${label}, as expected`,
+    }
   if (v === 'fail')
-    return { cls: 'pill verdict-fail', text: `✗ ${label}`, title: `${label}; ${want}` }
-  if (v === 'unknown') return { cls: `pill ${outcome}`, text: label, title: want }
-  return { cls: 'pill open', text: label, title: want }
+    return { cls: 'pill verdict-fail', text: `✗ ${sentence(label)}`, title: `${label}; ${want}` }
+  if (v === 'unknown') return { cls: `pill ${outcome}`, text: sentence(label), title: want }
+  return { cls: 'pill open', text: sentence(label), title: want }
+}
+
+/** Pills and labels read in sentence case: "Resolved", "In progress". Words inside prose stay as they are. */
+export function sentence(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
+
+/** "Review: OK", "Review: concern". */
+export function reviewLabel(verdict: string): string {
+  return `Review: ${verdict === 'ok' ? 'OK' : verdict}`
 }

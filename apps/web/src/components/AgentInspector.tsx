@@ -10,6 +10,7 @@ import {
   isAgentId,
   lineText,
   outcomeLabel,
+  reviewLabel,
   roleLabel,
   verdictOf,
 } from '../lib/nomenclature.js'
@@ -419,7 +420,7 @@ function CaseDetail({
               </button>
             </dt>
             <dd>
-              <span className={`pill review-${review.verdict}`}>{review.verdict}</span>{' '}
+              <span className={`pill review-${review.verdict}`}>{reviewLabel(review.verdict)}</span>{' '}
               <code>{shortModel(review.modelSpec)}</code>
               <div>{review.summary}</div>
             </dd>
@@ -893,7 +894,7 @@ function JudgeDetail({
                     {Math.round(v.answers.correct.probability * 100)}%){' '}
                     {agrees !== null && (
                       <span className={`pill ${agrees ? 'verdict-pass' : 'verdict-fail'}`}>
-                        {agrees ? '✓ agrees with ground truth' : '✗ disagrees with ground truth'}
+                        {agrees ? '✓ Agrees with ground truth' : '✗ Disagrees with ground truth'}
                       </span>
                     )}
                   </>
@@ -973,7 +974,7 @@ function ReviewDetail({
           <dl>
             <dt>filed as</dt>
             <dd>
-              <span className={`pill review-${r.verdict}`}>{r.verdict}</span>
+              <span className={`pill review-${r.verdict}`}>{reviewLabel(r.verdict)}</span>
             </dd>
             <dt>issues</dt>
             <dd>

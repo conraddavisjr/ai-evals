@@ -2,7 +2,7 @@ import { allTimelines, shortScenarioId } from '@cafe/protocol'
 import { Fragment, useState } from 'react'
 import { fmtMs } from '../format.js'
 import { caseTiming, type TimingRow } from '../lib/case-timing.js'
-import { CASE_NOUN, caseLabel, verdictOf, verdictPill } from '../lib/nomenclature.js'
+import { CASE_NOUN, caseLabel, reviewLabel, verdictOf, verdictPill } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 const ISSUE_LABEL: Record<string, string> = {
@@ -80,7 +80,9 @@ export function TransactionList({
               <span className="mono">{fmtMs(timing.totalMs ?? tl.totalMs ?? now - tl.startT)}</span>
               {review && (
                 <span title={REVIEW_MEANING[review.verdict]}>
-                  <span className={`pill review-${review.verdict}`}>review: {review.verdict}</span>
+                  <span className={`pill review-${review.verdict}`}>
+                    {reviewLabel(review.verdict)}
+                  </span>
                   {review.verdict !== 'ok' && (
                     <span className="muted small">
                       {' '}

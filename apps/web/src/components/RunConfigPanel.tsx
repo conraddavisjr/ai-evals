@@ -2,7 +2,14 @@ import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fmtMs, fmtUsd, shortModel } from '../format.js'
 import { type DomainInfo, type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
-import { CASE_NOUN, describeSpec, roleCount, roleLabel, words } from '../lib/nomenclature.js'
+import {
+  CASE_NOUN,
+  describeSpec,
+  roleCount,
+  roleLabel,
+  sentence,
+  words,
+} from '../lib/nomenclature.js'
 import { estimateRunUsd, ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
 
 export interface RunConfigPanelProps {
@@ -451,7 +458,7 @@ export function RunConfigPanel({
                     {r.config.domain && r.config.domain !== 'cafe' ? ` · ${r.config.domain}` : ''}
                   </button>
                   <span className={`pill ${status}`} title={r.error ?? undefined}>
-                    {status}
+                    {sentence(status)}
                   </span>
                   <span className="muted small">
                     {ROLES.map((role) =>

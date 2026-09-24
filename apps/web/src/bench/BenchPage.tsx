@@ -11,7 +11,7 @@ import {
   useExperimentApi,
   useHarness,
 } from '../harness/index.js'
-import { describeSpec } from '../lib/nomenclature.js'
+import { describeSpec, sentence } from '../lib/nomenclature.js'
 import './bench.css'
 
 const MAX_SPECS = 5
@@ -346,7 +346,7 @@ export function BenchPage({ models, domains }: { models: ModelsInfo; domains: Do
                       {b.config.specs.map(shortModel).join(' vs ')}
                     </button>
                     <span className={`pill ${b.status === 'running' ? 'running' : b.status}`}>
-                      {b.status}
+                      {sentence(b.status)}
                     </span>
                   </li>
                 ))}

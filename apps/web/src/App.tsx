@@ -23,9 +23,10 @@ import {
   useExperimentApi,
   useHarness,
 } from './harness/index.js'
-import { outcomeLabel, roleCount, setActiveDomain, words } from './lib/nomenclature.js'
+import { outcomeLabel, roleCount, sentence, setActiveDomain, words } from './lib/nomenclature.js'
 import { TimelinePlayer } from './playback/TimelinePlayer.js'
 import { usePlayer } from './playback/usePlayer.js'
+import { applyTheme, readTheme, THEMES, type ThemeId } from './themes/theme.js'
 import { DEFAULT_VIEW_ID, findView, SCENE_VIEWS, type SceneHandle } from './views/index.js'
 
 type Tab = 'run' | 'inspector' | 'queue' | 'cases' | 'metrics' | 'log'
@@ -63,6 +64,7 @@ export function App() {
     }
   })
   const [menuOpen, setMenuOpen] = useState(false)
+  const [theme, setTheme] = useState<ThemeId>(readTheme)
   const closeStream = useRef<(() => void) | null>(null)
 
   /** Details opened from the Cases list, oldest first: the last one shows in the panel, the list moves left. */
@@ -372,6 +374,28 @@ export function App() {
               >
                 Architecture
               </button>
+              <fieldset className="menu-section">
+                <legend className="menu-heading">Settings · Theme</legend>
+                {THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    aria-pressed={theme === t.id}
+                    className={`menu-theme ${theme === t.id ? 'on' : ''}`}
+                    title={t.blurb}
+                    onClick={() => {
+                      applyTheme(t.id)
+                      setTheme(t.id)
+                    }}
+                  >
+                    <span className="menu-radio" aria-hidden="true">
+                      {theme === t.id ? '●' : '○'}
+                    </span>{' '}
+                    {t.label}
+                    <span className="menu-sub">{t.blurb}</span>
+                  </button>
+                ))}
+              </fieldset>
             </nav>
           )}
         </div>
@@ -408,7 +432,7 @@ export function App() {
         <div className="status">
           {runId ? (
             <>
-              <span className={`pill ${runStatus}`}>{runStatus}</span>
+              <span className={`pill ${runStatus}`}>{sentence(runStatus)}</span>
               <span className="muted mono runid">{runId.slice(-8)}</span>
               <span className="muted staff">{staffSummary}</span>
               <span className="muted">

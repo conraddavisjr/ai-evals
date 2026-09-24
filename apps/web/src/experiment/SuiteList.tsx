@@ -1,5 +1,6 @@
 import type { SuiteDetail } from '@cafe/protocol'
 import { useExperimentApi } from '../harness/index.js'
+import { sentence } from '../lib/nomenclature.js'
 
 /** Past and running suites, with progress per variant. */
 export function SuiteList({
@@ -24,7 +25,7 @@ export function SuiteList({
             <button type="button" className="link" onClick={() => onSelect(s.id)}>
               {new Date(s.createdAt).toLocaleString()} · {s.name}
             </button>
-            <span className={`pill ${s.status}`}>{s.status}</span>
+            <span className={`pill ${s.status}`}>{sentence(s.status)}</span>
             <span className="muted small">
               {s.config.variants.length} variant{s.config.variants.length === 1 ? '' : 's'}
               {s.config.repeats > 1 ? ` × ${s.config.repeats}` : ''} · {s.progress.done}/
