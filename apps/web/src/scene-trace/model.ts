@@ -16,6 +16,11 @@ export const BAND_TITLE: Record<Band, string> = {
 export type Mark = 'ok' | 'bad' | 'warn' | 'unknown'
 
 export interface Badge {
+  /**
+   * Stable identity across rebuilds: one event can yield two badges (an arrival's
+   * input and its expectations). Assigned by buildTrace once the board is laid out.
+   */
+  key?: string
   seq: number
   t: number
   layer: Layer
@@ -235,6 +240,9 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         }
         openCalls.set(e.callId, b)
         place(c, 'work', b)
+        // the step that made the call names it, so the actor row says what it did
+        const step = openSteps.get(e.agentId)
+        if (step) step.text = `${step.text}${step.text.includes('→') ? ',' : ' →'} ${e.tool}`
         break
       }
       case 'agent.tool_returned': {
@@ -529,6 +537,14 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           agentId,
           indent: true,
         })
+  const seen = new Map<number, number>()
+  const keyed = (b: Badge) => {
+    const n = seen.get(b.seq) ?? 0
+    seen.set(b.seq, n + 1)
+    b.key = `${b.seq}.${n}`
+  }
+  for (const b of shift) keyed(b)
+  for (const c of columns) for (const band of BANDS) for (const b of c.bands[band]) keyed(b)
   return { columns, shift, runStatus }
 }
 

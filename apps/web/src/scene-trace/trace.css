@@ -472,7 +472,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* no overscroll containment: at a tile's end the wheel carries on to the page */
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 160, 214, 0.35) transparent;
 }
@@ -547,4 +547,69 @@
 }
 .trace-col.ahead {
   opacity: 0.45;
+}
+
+/* ---------- isolate: one agent lit across the board ---------- */
+.trace-badge.muted {
+  opacity: 0.14;
+}
+.trace-badge.muted:hover {
+  opacity: 0.6;
+}
+.trace-col.muted {
+  opacity: 0.4;
+}
+.trace-shift .trace-badge[data-agent] {
+  cursor: pointer;
+}
+.trace-shift .trace-badge.on {
+  outline: 2px solid var(--tr-agent);
+  outline-offset: 1px;
+  background: rgba(255, 207, 90, 0.14);
+  opacity: 1;
+}
+.trace-focus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--tr-agent);
+}
+.trace-focus[hidden] {
+  display: none;
+}
+
+/* ---------- section titles stay put while a tile scrolls ---------- */
+.trace-tile-body .band-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -8px 4px;
+  padding: 5px 8px 4px;
+  background: #1f212e;
+  border-bottom: 1px solid rgba(148, 160, 214, 0.14);
+}
+.trace-tile-body .trace-band {
+  padding-top: 0;
+}
+
+/* ---------- an MCP tool call is the tool, hung off the step that made it ---------- */
+.trace-badge .mcp-tag {
+  font-family: var(--font-ui);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 13px;
+  color: #1a1206;
+  background: var(--tr-tool);
+}
+.band-list .trace-badge.layer-tool.indent::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 8px;
+  border-top: 1px dotted rgba(255, 154, 90, 0.7);
 }

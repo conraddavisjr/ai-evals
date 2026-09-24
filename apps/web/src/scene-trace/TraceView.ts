@@ -1,5 +1,5 @@
 import { AGENT_GLYPH_SVG } from '../lib/agent-glyph.js'
-import { CASE_NOUN, caseLabel, isAgentId, outcomeLabel } from '../lib/nomenclature.js'
+import { agentLabel, CASE_NOUN, caseLabel, isAgentId, outcomeLabel } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { SceneCallbacks, SceneHandle } from '../views/types.js'
 import {
@@ -252,7 +252,7 @@ export function createGame(
     writePref(LAYOUT_KEY, l)
     applyLayoutClass()
     canvas.scrollTo(0, 0)
-    render()
+    rebuild()
     if (panning()) fit(READABLE_SCALE)
     else apply()
   }
@@ -264,29 +264,36 @@ export function createGame(
   applyLayoutClass()
 
   // ---- rendering. The board is the whole run: it is built from every event the
-  // player has received and rebuilt only when more arrive. Moving the playhead
-  // (a badge click, the scrubber, stepping, a case link) never removes anything;
-  // it dims what has not happened yet and moves the "current" outline.
-  let dirty = true
+  // player has received. New events are merged into the existing DOM (only new or
+  // changed badges are touched), so scrolling, hovering and clicking keep working
+  // while a run streams in. Moving the playhead never removes anything; it dims
+  // what has not happened yet and moves the "current" outline.
+  let fullRebuild = true
   let cursorDirty = true
   let lastCount = -1
   let lastEvents: unknown = null
   let lastRender = 0
   let lastSeq: number | null = null
   let model: TraceModel = { columns: [], shift: [], runStatus: 'idle' }
-  const badgeEls = new Map<number, HTMLElement>()
-  /** Per case: the elements whose look depends on where the playhead is. */
-  const caseEls = new Map<
-    string,
-    {
-      col: Column
-      card: HTMLElement
-      pill: HTMLElement
-      segs: Array<{ el: HTMLElement; seqs: number[]; bad: number[]; warn: number[] }>
-    }
-  >()
-  /** Per-tile scroll memory so a rebuild never throws away where someone was reading. */
-  const tileScroll = new Map<string, number>()
+  /** Isolate: one agent's badges stay lit across the board, everything else fades. */
+  let focusAgent: string | null = null
+  interface BadgeRef {
+    el: HTMLElement
+    sig: string
+    seq: number
+    agentId: string | undefined
+  }
+  const badges = new Map<string, BadgeRef>()
+  const firstBySeq = new Map<number, HTMLElement>()
+  interface CardRef {
+    col: Column
+    card: HTMLElement
+    pill: HTMLElement
+    lists: Record<Band, HTMLElement>
+    sections: Record<Band, HTMLElement>
+    segs: Array<{ el: HTMLElement; seqs: number[]; bad: number[]; warn: number[] }>
+  }
+  const cards = new Map<string, CardRef>()
   /** When someone last scrolled or clicked inside a tile; that tile stops following the playhead for a while. */
   const touched = new Map<string, number>()
   const HANDS_OFF_MS = 4000
@@ -297,36 +304,58 @@ export function createGame(
     if (document.hidden && hiddenTimer === null)
       hiddenTimer = setTimeout(() => {
         hiddenTimer = null
-        if (needsRebuild()) render()
+        if (needsRender()) render()
         else applyCursor()
       }, 250)
   }
   /** player.reset() swaps in a new array, so identity catches a new run of the same length. */
-  const needsRebuild = () =>
-    dirty || player.events !== lastEvents || player.events.length !== lastCount
+  const needsRender = () =>
+    fullRebuild || player.events !== lastEvents || player.events.length !== lastCount
   const unsubscribe = player.subscribe({ onApply: markDirty, onSnap: markDirty })
 
+  /** Throw the DOM away and lay the board out again (a new run, a new layout). */
+  const rebuild = () => {
+    fullRebuild = true
+    render()
+  }
+
   const render = () => {
-    dirty = false
+    const full = fullRebuild || player.events !== lastEvents
+    fullRebuild = false
     model = buildTrace(player.events)
     empty.style.display = model.columns.length === 0 && model.shift.length === 0 ? '' : 'none'
-    // remember each tile's scroll before the rebuild; a tile scrolled to the bottom keeps following
-    for (const body of cols.querySelectorAll<HTMLElement>('.trace-tile-body')) {
-      const id = body.dataset.tx
-      if (id) tileScroll.set(id, body.scrollTop)
+    if (full) {
+      badges.clear()
+      cards.clear()
+      shiftStrip.replaceChildren()
+      cols.replaceChildren()
+      lastSeq = null
     }
-    badgeEls.clear()
-    caseEls.clear()
-    lastSeq = null
-    shiftStrip.replaceChildren(...model.shift.map((b) => badge(b)))
-    const cards = model.columns.map((c) =>
-      layout === 'grid' ? tileCard(c) : layout === 'rows' ? rowCard(c) : columnCard(c, model),
-    )
-    cols.replaceChildren(...cards)
-    if (layout === 'grid')
-      for (const body of cols.querySelectorAll<HTMLElement>('.trace-tile-body')) {
-        body.scrollTop = (body.dataset.tx && tileScroll.get(body.dataset.tx)) || 0
+    firstBySeq.clear()
+    syncList(shiftStrip, model.shift, true)
+    for (const c of model.columns) {
+      let ref = cards.get(c.txId)
+      if (!ref) {
+        ref = makeCard(c)
+        cards.set(c.txId, ref)
+        cols.appendChild(ref.card)
       }
+      ref.col = c
+      for (const band of BANDS) {
+        syncList(ref.lists[band], c.bands[band], false)
+        if (layout === 'columns')
+          ref.sections[band].style.minHeight = `${bandHeight(model, band)}px`
+      }
+      if (ref.segs.length)
+        BANDS.forEach((band, i) => {
+          const seg = ref.segs[i]
+          if (!seg) return
+          const list = c.bands[band]
+          seg.seqs = list.map((b) => b.seq)
+          seg.bad = list.filter((b) => b.mark === 'bad').map((b) => b.seq)
+          seg.warn = list.filter((b) => b.mark === 'warn').map((b) => b.seq)
+        })
+    }
     if (lastCount < 0 && panning()) fit(READABLE_SCALE)
     lastCount = player.events.length
     lastEvents = player.events
@@ -334,19 +363,48 @@ export function createGame(
     applyCursor()
   }
 
-  /** Restyle for the playhead: dim the future, show each case's state as of now, outline the current step. */
+  /** Make `list` hold exactly these badges in this order, reusing elements and updating only what changed. */
+  const syncList = (list: HTMLElement, items: Badge[], chip: boolean) => {
+    items.forEach((b, i) => {
+      const key = b.key ?? String(b.seq)
+      const sig = signature(b)
+      let ref = badges.get(key)
+      if (!ref) {
+        ref = { el: makeBadge(b, chip), sig, seq: b.seq, agentId: b.agentId }
+        badges.set(key, ref)
+      } else if (ref.sig !== sig) {
+        fillBadge(ref.el, b)
+        ref.sig = sig
+      }
+      if (!firstBySeq.has(b.seq)) firstBySeq.set(b.seq, ref.el)
+      const at = list.children[i]
+      if (at !== ref.el) list.insertBefore(ref.el, at ?? null)
+    })
+    while (list.children.length > items.length) list.lastElementChild?.remove()
+    if (items.length === 0 && !chip) list.appendChild(el('div', 'band-none', '·'))
+  }
+
+  /** Restyle for the playhead and the isolate: dim the future, show each case's state as of now. */
   const applyCursor = () => {
     cursorDirty = false
     const at = player.position.lastEvent?.seq ?? -1
-    for (const [seq, e] of badgeEls) e.classList.toggle('ahead', seq > at)
-    for (const { col, card, pill, segs } of caseEls.values()) {
+    for (const r of badges.values()) {
+      r.el.classList.toggle('ahead', r.seq > at)
+      r.el.classList.toggle('muted', focusAgent !== null && r.agentId !== focusAgent)
+    }
+    for (const { col, card, pill, segs } of cards.values()) {
       const notYet = col.startSeq > at
       card.classList.toggle('ahead', notYet)
+      card.classList.toggle(
+        'muted',
+        focusAgent !== null &&
+          !BANDS.some((band) => col.bands[band].some((b) => b.agentId === focusAgent)),
+      )
       const known = col.leftSeq !== null && col.leftSeq <= at ? col.outcome : null
       pill.className = `pill ${known ?? 'open'}`
       pill.textContent = notYet ? 'not arrived' : outcomeLabel(known)
-      card.classList.remove(`outcome-${col.outcome ?? 'open'}`, 'outcome-open')
-      card.classList.add(`outcome-${known ?? 'open'}`)
+      for (const o of ['served', 'refused', 'failed', 'abandoned', 'open'])
+        card.classList.toggle(`outcome-${o}`, o === (known ?? 'open'))
       for (const s of segs) {
         const seen = (xs: number[]) => xs.some((x) => x <= at)
         s.el.classList.toggle('lit', seen(s.seqs))
@@ -354,6 +412,13 @@ export function createGame(
         s.el.classList.toggle('warn', !seen(s.bad) && seen(s.warn))
       }
     }
+    for (const chip of shiftStrip.querySelectorAll<HTMLElement>('.trace-badge')) {
+      const on = focusAgent !== null && chip.dataset.agent === focusAgent
+      chip.classList.toggle('on', on)
+      if (chip.dataset.agent) chip.setAttribute('aria-pressed', String(on))
+    }
+    bar.focus.hidden = focusAgent === null
+    bar.focusText.textContent = focusAgent ? `isolating ${agentLabel(focusAgent)}` : ''
     const pos = player.position
     // live views always trail the stream by the buffer; they are at the run's front, not a chosen moment
     bar.status.textContent = summary(
@@ -365,16 +430,27 @@ export function createGame(
     if (layout === 'grid') followPlayhead(at)
   }
 
+  const setFocus = (agentId: string | null) => {
+    focusAgent = agentId
+    callbacks.onSelect(agentId)
+    applyCursor()
+  }
+  bar.focusClear.addEventListener('click', () => setFocus(null))
+  const onKey = (ev: KeyboardEvent) => {
+    if (ev.key === 'Escape' && focusAgent !== null) setFocus(null)
+  }
+  window.addEventListener('keydown', onKey)
+
   /**
    * Keep each tile scrolled to where its case is at the playhead: the latest step
    * that has happened, or the top when the case has not started. A tile someone
-   * just scrolled or clicked in is left alone.
+   * just scrolled or clicked in is left alone, and nothing moves while the playhead stands still.
    */
   const followPlayhead = (at: number) => {
     const now = performance.now()
-    for (const body of cols.querySelectorAll<HTMLElement>('.trace-tile-body')) {
-      const tx = body.dataset.tx
-      if (!tx || now - (touched.get(tx) ?? Number.NEGATIVE_INFINITY) < HANDS_OFF_MS) continue
+    for (const [tx, ref] of cards) {
+      const body = ref.card.querySelector<HTMLElement>('.trace-tile-body')
+      if (!body || now - (touched.get(tx) ?? Number.NEGATIVE_INFINITY) < HANDS_OFF_MS) continue
       let latest: HTMLElement | null = null
       let latestSeq = -1
       for (const b of body.querySelectorAll<HTMLElement>('.trace-badge')) {
@@ -385,18 +461,42 @@ export function createGame(
         }
       }
       if (!latest) {
-        body.scrollTop = 0
+        if (body.scrollTop !== 0) body.scrollTop = 0
         continue
       }
       const top = latest.offsetTop - body.offsetTop
-      if (top < body.scrollTop || top > body.scrollTop + body.clientHeight - 24)
+      if (top < body.scrollTop + 22 || top > body.scrollTop + body.clientHeight - 24)
         body.scrollTop = Math.max(0, top - body.clientHeight * 0.6)
     }
   }
 
-  const badge = (b: Badge): HTMLElement => {
-    const e = el('button', `trace-badge layer-${b.layer}${b.indent ? ' indent' : ''}`)
+  const makeBadge = (b: Badge, chip: boolean): HTMLElement => {
+    const e = el('button', '')
     e.type = 'button'
+    fillBadge(e, b)
+    if (chip && b.agentId && isAgentId(b.agentId)) {
+      // a staff chip isolates that agent across the board; click it again to show everything
+      const agentId = b.agentId
+      e.dataset.agent = agentId
+      e.setAttribute('aria-pressed', 'false')
+      e.addEventListener('click', () => setFocus(focusAgent === agentId ? null : agentId))
+    } else if (chip) {
+      // run and done chips carry no single agent: they clear an isolate
+      e.addEventListener('click', () => setFocus(null))
+    } else {
+      e.addEventListener('click', () => {
+        player.seekToSeq(b.seq)
+        player.pause()
+        callbacks.onSelect(b.agentId ?? b.customerId ?? null)
+      })
+    }
+    return e
+  }
+
+  /** Fill (or refill, when a result or latency arrives) a badge's contents in place. */
+  const fillBadge = (e: HTMLElement, b: Badge) => {
+    const keep = ['current', 'ahead', 'muted', 'on'].filter((c) => e.classList.contains(c))
+    e.className = `trace-badge layer-${b.layer}${b.indent ? ' indent' : ''} ${keep.join(' ')}`
     e.dataset.seq = String(b.seq)
     const mark = el('span', `mark ${b.mark ?? 'none'}`, markGlyph(b.mark))
     const head = el('span', 'head', b.head)
@@ -405,126 +505,113 @@ export function createGame(
       g.innerHTML = AGENT_GLYPH_SVG
       head.prepend(g)
     }
+    // an MCP tool call reads as the tool, not as the agent that made it
+    if (b.layer === 'tool') head.prepend(el('span', 'mcp-tag', 'MCP'))
     const text = el('span', 'text', b.text)
     const meta = el(
       'span',
       'meta',
       `${b.atMs > 0 ? `+${fmt(b.atMs)}` : ''}${b.latencyMs !== undefined ? ` · ${fmt(b.latencyMs)}` : ''}`,
     )
-    e.append(mark, head, text, meta)
+    e.replaceChildren(mark, head, text, meta)
     e.title = [
-      b.head,
+      b.layer === 'tool'
+        ? `MCP tool ${b.head}${b.agentId ? `, called by ${agentLabel(b.agentId)}` : ''}`
+        : b.head,
       b.text,
       b.detail,
       b.latencyMs !== undefined ? `${fmt(b.latencyMs)} latency` : '',
     ]
       .filter(Boolean)
       .join('\n')
-    e.addEventListener('click', () => {
-      player.seekToSeq(b.seq)
-      player.pause()
-      callbacks.onSelect(b.agentId ?? b.customerId ?? null)
-    })
-    badgeEls.set(b.seq, e)
-    return e
   }
 
   /** "Case 3", the case title (or its id on older runs), the outcome. Shared by every layout. */
-  const caseHead = (c: Column, card: HTMLElement, extra?: HTMLElement): HTMLElement => {
+  const caseHead = (c: Column, extra?: HTMLElement): { head: HTMLElement; pill: HTMLElement } => {
     const head = el('header', 'trace-col-head')
     const sid = c.scenarioId.replace(/^ds:[^:]+:/, '')
     const name = el('span', 'sid', c.title || sid)
     head.title = [caseLabel(c.index), c.title, sid, c.name && `persona: ${c.name}`]
       .filter(Boolean)
       .join('\n')
-    const pill = el('span', `pill ${c.outcome ?? 'open'}`, outcomeLabel(c.outcome))
+    const pill = el('span', 'pill open', outcomeLabel(null))
     head.append(el('span', 'idx', caseLabel(c.index)), name, pill)
     if (extra) head.append(extra)
-    caseEls.set(c.txId, { col: c, card, pill, segs: [] })
-    return head
+    return { head, pill }
   }
 
-  const bandSection = (c: Column, band: Band, minHeight?: number): HTMLElement => {
-    const sec = el('div', `trace-band band-${band}`)
-    if (minHeight) sec.style.minHeight = `${minHeight}px`
-    sec.appendChild(el('div', 'band-title', BAND_TITLE[band]))
-    const list = el('div', 'band-list')
-    for (const b of c.bands[band]) list.appendChild(badge(b))
-    if (c.bands[band].length === 0) list.appendChild(el('div', 'band-none', '·'))
-    sec.appendChild(list)
-    return sec
-  }
-
-  const columnCard = (c: Column, model: TraceModel): HTMLElement => {
-    const card = el('section', `trace-col outcome-${c.outcome ?? 'open'}`)
-    card.appendChild(caseHead(c, card))
-    for (const band of BANDS) card.appendChild(bandSection(c, band, bandHeight(model, band)))
-    return card
-  }
-
-  const tileCard = (c: Column): HTMLElement => {
-    const isOpen = expanded.has(c.txId)
-    const card = el(
-      'section',
-      `trace-col trace-tile outcome-${c.outcome ?? 'open'}${isOpen ? ' expanded' : ''}`,
-    )
-    const grow = el('button', 'tile-grow', isOpen ? '⤡' : '⤢')
+  /** An empty card for a case in the current layout; its badge lists are filled by syncList. */
+  const makeCard = (c: Column): CardRef => {
+    const lists = {} as Record<Band, HTMLElement>
+    const sections = {} as Record<Band, HTMLElement>
+    const section = (band: Band, cls: string, listCls: string) => {
+      const sec = el('div', `${cls} band-${band}`)
+      sec.appendChild(el('div', 'band-title', BAND_TITLE[band]))
+      const list = el('div', listCls)
+      sec.appendChild(list)
+      lists[band] = list
+      sections[band] = sec
+      return sec
+    }
+    if (layout === 'rows') {
+      const card = el('section', 'trace-col trace-row')
+      const { head, pill } = caseHead(c)
+      const lanes = el('div', 'trace-lanes')
+      for (const band of BANDS) lanes.appendChild(section(band, 'trace-lane', 'lane-list'))
+      card.append(head, lanes)
+      return { col: c, card, pill, lists, sections, segs: [] }
+    }
+    if (layout === 'columns') {
+      const card = el('section', 'trace-col')
+      const { head, pill } = caseHead(c)
+      card.appendChild(head)
+      for (const band of BANDS) card.appendChild(section(band, 'trace-band', 'band-list'))
+      return { col: c, card, pill, lists, sections, segs: [] }
+    }
+    const card = el('section', `trace-col trace-tile${expanded.has(c.txId) ? ' expanded' : ''}`)
+    const grow = el('button', 'tile-grow')
     grow.type = 'button'
-    grow.title = isOpen ? 'Shrink this case back to one tile' : 'Expand this case'
-    grow.setAttribute('aria-label', grow.title)
-    grow.setAttribute('aria-pressed', String(isOpen))
+    const syncGrow = () => {
+      const open = expanded.has(c.txId)
+      card.classList.toggle('expanded', open)
+      grow.textContent = open ? '⤡' : '⤢'
+      grow.title = open ? 'Shrink this case back to one tile' : 'Expand this case'
+      grow.setAttribute('aria-label', grow.title)
+      grow.setAttribute('aria-pressed', String(open))
+    }
+    syncGrow()
     grow.addEventListener('click', () => {
       if (expanded.has(c.txId)) expanded.delete(c.txId)
       else expanded.add(c.txId)
-      render()
+      syncGrow()
     })
-    card.appendChild(caseHead(c, card, grow))
+    const { head, pill } = caseHead(c, grow)
     const strip = progressStrip(c)
-    card.appendChild(strip.el)
-    const refs = caseEls.get(c.txId)
-    if (refs) refs.segs = strip.segs
     const body = el('div', 'trace-tile-body')
     body.dataset.tx = c.txId
     const handsOn = () => touched.set(c.txId, performance.now())
     body.addEventListener('wheel', handsOn, { passive: true })
     body.addEventListener('pointerdown', handsOn)
-    for (const band of BANDS) body.appendChild(bandSection(c, band))
-    card.appendChild(body)
-    return card
+    for (const band of BANDS) body.appendChild(section(band, 'trace-band', 'band-list'))
+    card.append(head, strip.el, body)
+    return { col: c, card, pill, lists, sections, segs: strip.segs }
   }
 
-  const rowCard = (c: Column): HTMLElement => {
-    const card = el('section', `trace-col trace-row outcome-${c.outcome ?? 'open'}`)
-    card.appendChild(caseHead(c, card))
-    const lanes = el('div', 'trace-lanes')
-    for (const band of BANDS) {
-      const lane = el('div', `trace-lane band-${band}`)
-      lane.appendChild(el('div', 'band-title', BAND_TITLE[band]))
-      const list = el('div', 'lane-list')
-      for (const b of c.bands[band]) list.appendChild(badge(b))
-      if (c.bands[band].length === 0) list.appendChild(el('div', 'band-none', '·'))
-      lane.appendChild(list)
-      lanes.appendChild(lane)
-    }
-    card.appendChild(lanes)
-    return card
-  }
-
-  // ---- frame loop: tick the player (contract), re-render when dirty, keep the cursor marked
+  // ---- frame loop: tick the player (contract), merge new events, keep the cursor marked
   let raf = 0
   let last: number | null = null
   const frame = (now: number) => {
     player.tick(now)
-    if (needsRebuild() && performance.now() - lastRender >= RENDER_EVERY_MS) render()
+    if (needsRender() && performance.now() - lastRender >= RENDER_EVERY_MS) render()
     else if (cursorDirty || (player.position.lastEvent?.seq ?? null) !== lastSeq) applyCursor()
     last = now
     raf = requestAnimationFrame(frame)
   }
-  /** Outline the badge of the event the playhead is on; in the grid, scroll its tile to it when stepping. */
+  /** Outline the badge of the event the playhead is on. */
   const markCurrent = (seq: number | null) => {
     if (seq !== lastSeq) {
-      if (lastSeq !== null) badgeEls.get(lastSeq)?.classList.remove('current')
-      const cur = seq !== null ? badgeEls.get(seq) : undefined
+      if (lastSeq !== null) firstBySeq.get(lastSeq)?.classList.remove('current')
+      const cur = seq !== null ? firstBySeq.get(seq) : undefined
       cur?.classList.add('current')
       lastSeq = seq
     }
@@ -543,6 +630,7 @@ export function createGame(
       cancelAnimationFrame(raf)
       if (hiddenTimer !== null) clearTimeout(hiddenTimer)
       unsubscribe()
+      window.removeEventListener('keydown', onKey)
       canvas.removeEventListener('click', onClickCapture, true)
       canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('pointerdown', onDown)
@@ -590,6 +678,11 @@ function summary(m: TraceModel, at: number, atEnd: boolean): string {
   const done = m.columns.filter((c) => c.leftSeq !== null && c.leftSeq <= at)
   const passed = done.filter((c) => c.expectedOutcome && c.outcome === c.expectedOutcome).length
   return `${m.columns.length} ${CASE_NOUN.many} · ${done.length} done · ${passed} matched expectation · ${atEnd ? m.runStatus : 'at the playhead'}`
+}
+
+/** Everything a badge shows: a change in any of it (a result, a latency, a verdict) refills the badge. */
+function signature(b: Badge): string {
+  return `${b.layer}|${b.head}|${b.text}|${b.mark ?? ''}|${b.latencyMs ?? ''}|${b.detail ?? ''}|${b.atMs}|${b.indent ? 1 : 0}`
 }
 
 function markGlyph(m: Badge['mark']): string {
@@ -646,7 +739,12 @@ function buildBar(
     s.prepend(el('i', ''))
     legend.appendChild(s)
   }
-  bar.append(title, layouts, tiles, camera, hint, legend, status)
+  const focus = el('span', 'trace-focus')
+  focus.hidden = true
+  const focusText = el('span', '', '')
+  const focusClear = btn('show all', 'Clear the isolate (Esc)')
+  focus.append(focusText, focusClear)
+  bar.append(title, layouts, tiles, camera, hint, legend, focus, status)
   const sync = () => {
     const l = getLayout()
     for (const [id, b] of layoutBtns) {
@@ -659,7 +757,20 @@ function buildBar(
     }
     tiles.hidden = l !== 'grid'
   }
-  return { el: bar, status, hint, zoom, zoomIn, zoomOut, fit, reset, sync }
+  return {
+    el: bar,
+    status,
+    hint,
+    zoom,
+    zoomIn,
+    zoomOut,
+    fit,
+    reset,
+    sync,
+    focus,
+    focusText,
+    focusClear,
+  }
 }
 
 function clampGrid(z: number): number {

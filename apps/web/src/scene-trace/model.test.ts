@@ -189,6 +189,55 @@ describe('trace model', () => {
     expect(work[4]?.mark).toBe('ok')
     expect(c?.bands.eval[0]).toMatchObject({ head: 'review', mark: 'warn' })
   })
+  it('gives every badge a stable unique key and names the tools a step called', () => {
+    const evs = stream([
+      [
+        0,
+        {
+          type: 'customer.arrived',
+          txId: 't',
+          customerId: 'c',
+          name: 'x',
+          scenarioId: 's',
+          sprite: 'customer_a',
+          utterance: 'hi',
+          expected: { outcome: 'served', cashierTools: [], baristaTools: [], tags: [] },
+        },
+      ],
+      [1, { type: 'agent.thinking', txId: 't', ...ref, step: 1 }],
+      [
+        2,
+        {
+          type: 'agent.tool_called',
+          txId: 't',
+          ...ref,
+          callId: 'a',
+          tool: 'menu.lookup',
+          args: {},
+        },
+      ],
+      [
+        3,
+        {
+          type: 'agent.tool_called',
+          txId: 't',
+          ...ref,
+          callId: 'b',
+          tool: 'orders.create',
+          args: {},
+        },
+      ],
+    ])
+    const m = buildTrace(evs)
+    const all = [...m.shift, ...(m.columns[0] ? Object.values(m.columns[0].bands).flat() : [])]
+    // the arrival yields two badges (input and expectations) from one event
+    expect(new Set(all.map((b) => b.key)).size).toBe(all.length)
+    expect(m.columns[0]?.bands.work[0]?.text).toBe('step 1 → menu.lookup, orders.create')
+    // and a rebuild keys them the same way
+    expect(buildTrace(evs).columns[0]?.bands.input.map((b) => b.key)).toEqual(
+      m.columns[0]?.bands.input.map((b) => b.key),
+    )
+  })
   it('marks tools unknown when the item carries no expectations (older runs)', () => {
     const evs = stream([
       [
