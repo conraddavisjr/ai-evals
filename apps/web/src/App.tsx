@@ -14,7 +14,14 @@ import { usePanelWidth } from './components/usePanelWidth.js'
 import { ExperimentPage } from './experiment/ExperimentPage.js'
 import { initialSuiteDraft, type SuiteDraft } from './experiment/suite-draft.js'
 import { fmtUsd } from './format.js'
-import { type ModelsInfo, type RunRow, useExperimentApi, useHarness } from './harness/index.js'
+import {
+  type DomainInfo,
+  type ModelsInfo,
+  type RunRow,
+  useExperimentApi,
+  useHarness,
+} from './harness/index.js'
+import { outcomeLabel, roleCount, setActiveDomain, words } from './lib/nomenclature.js'
 import { TimelinePlayer } from './playback/TimelinePlayer.js'
 import { usePlayer } from './playback/usePlayer.js'
 import { DEFAULT_VIEW_ID, findView, SCENE_VIEWS, type SceneHandle } from './views/index.js'
@@ -34,6 +41,7 @@ export function App() {
   const gameRef = useRef<SceneHandle | null>(null)
   const [models, setModels] = useState<ModelsInfo | null>(null)
   const [scenarios, setScenarios] = useState<Scenario[]>([])
+  const [domains, setDomains] = useState<DomainInfo[]>([])
   const [draft, setDraft] = useState<RunDraft | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
   const [startError, setStartError] = useState<string | null>(null)
@@ -80,13 +88,42 @@ export function App() {
           `Cannot reach the server: ${e instanceof Error ? e.message : e}. Is \`pnpm dev\` running?`,
         ),
       )
+    api
+      .domains?.()
+      .then(setDomains)
+      .catch(() => setDomains([]))
   }, [api, experiment])
+
+  /** Switch the draft to another business: its golden cases, and its mocks for any role still on a mock. */
+  const changeDomain = useCallback(
+    async (id: string) => {
+      const d = domains.find((x) => x.id === id)
+      if (!d || !draft) return
+      const list = await api.scenarios(id)
+      setScenarios(list)
+      const roles = { ...draft.roles }
+      for (const role of ['cashier', 'barista', 'manager', 'judge'] as const)
+        if (roles[role].startsWith('mock:')) roles[role] = d.defaultRoles[role]
+      setDraft({ ...draft, domain: id, roles, scenarioIds: list.map((s) => s.id) })
+    },
+    [api, domains, draft],
+  )
+
+  // Every label follows the loaded run's domain, else the one being drafted.
+  const domainId =
+    page === 'experiment'
+      ? (suiteDraft?.domain ?? 'cafe')
+      : (player.state.config?.domain ?? draft?.domain ?? 'cafe')
+  setActiveDomain(domainId)
+  const vocab = words()
+  // The Village and Pixel scenes draw the cafe; any other business plays on the Trace board.
+  const shownSceneId = !vocab.hasScene && findView(sceneId).cafeArt ? 'trace' : sceneId
 
   // Mount the chosen view; switching tears the old one down and the new one snaps to player.state.
   useEffect(() => {
     const parent = mountRef.current
     if (!parent) return
-    const view = findView(sceneId)
+    const view = findView(shownSceneId)
     let handle: SceneHandle | null = null
     let cancelled = false
     void view.mount(parent, player, { onSelect }).then((h) => {
@@ -102,7 +139,7 @@ export function App() {
       handle?.destroy()
       gameRef.current = null
     }
-  }, [onSelect, sceneId])
+  }, [onSelect, shownSceneId])
 
   const chooseScene = useCallback((id: string) => {
     setSceneId(id)
@@ -139,7 +176,7 @@ export function App() {
     [api],
   )
 
-  /** Start the drafted shift. The one entry point behind every "Open the cafe" button. */
+  /** Start the drafted run. The one entry point behind every "Start run" button. */
   const openCafe = useCallback(async () => {
     if (!draft) return
     setStartError(null)
@@ -234,7 +271,7 @@ export function App() {
 
   const state = player.state
   const agentsList = Object.values(state.agents)
-  const staffSummary = `${agentsList.filter((x) => x.role === 'cashier').length} cashiers · ${agentsList.filter((x) => x.role === 'barista').length} baristas`
+  const staffSummary = `${roleCount('cashier', agentsList.filter((x) => x.role === 'cashier').length)} · ${roleCount('barista', agentsList.filter((x) => x.role === 'barista').length)}`
 
   return (
     <div className="app">
@@ -290,24 +327,32 @@ export function App() {
         <div className="brand">
           <LanternMark />
           <div className="brand-text">
-            <span className="title">Stardust Cafe</span>
-            <span className="subtitle">agentic eval harness</span>
+            <span className="title">Stardust</span>
+            <span className="subtitle">agentic eval · {vocab.business}</span>
           </div>
         </div>
         <div className="segmented view-switch" role="tablist" aria-label="Scene style">
-          {SCENE_VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={sceneId === v.id}
-              className={sceneId === v.id ? 'on' : ''}
-              title={v.blurb}
-              onClick={() => chooseScene(v.id)}
-            >
-              {v.label}
-            </button>
-          ))}
+          {SCENE_VIEWS.map((v) => {
+            const unavailable = !vocab.hasScene && v.cafeArt
+            return (
+              <button
+                key={v.id}
+                type="button"
+                role="tab"
+                aria-selected={shownSceneId === v.id}
+                className={shownSceneId === v.id ? 'on' : ''}
+                disabled={unavailable}
+                title={
+                  unavailable
+                    ? `${v.label} draws the cafe; ${vocab.business} plays on the Trace board.`
+                    : v.blurb
+                }
+                onClick={() => chooseScene(v.id)}
+              >
+                {v.label}
+              </button>
+            )
+          })}
         </div>
         <div className="status">
           {runId ? (
@@ -316,7 +361,8 @@ export function App() {
               <span className="muted mono runid">{runId.slice(-8)}</span>
               <span className="muted staff">{staffSummary}</span>
               <span className="muted">
-                {Object.values(state.customers).filter((c) => c.outcome === 'served').length} served
+                {Object.values(state.customers).filter((c) => c.outcome === 'served').length}{' '}
+                {outcomeLabel('served')}
               </span>
               <span className="cost" title="Spend so far">
                 {fmtUsd(state.costUsd)}
@@ -328,7 +374,7 @@ export function App() {
               )}
             </>
           ) : (
-            <span className="muted">no shift loaded</span>
+            <span className="muted">no run loaded</span>
           )}
           {!isLive && (
             <button
@@ -339,12 +385,12 @@ export function App() {
                 !draft
                   ? 'Waiting for the server'
                   : draft.scenarioIds.length === 0
-                    ? 'Pick at least one customer in the Shift tab'
-                    : 'Start a shift with the settings in the Shift tab'
+                    ? 'Pick at least one golden case in the Run tab'
+                    : 'Start a run with the settings in the Run tab'
               }
               onClick={() => void openCafe().catch(() => {})}
             >
-              Open the cafe
+              Start run
             </button>
           )}
         </div>
@@ -358,6 +404,7 @@ export function App() {
         {page === 'experiment' && models && suiteDraft && (
           <ExperimentPage
             models={models}
+            domains={domains}
             draft={suiteDraft}
             onDraftChange={setSuiteDraft}
             onOpenRun={(id) => {
@@ -393,7 +440,7 @@ export function App() {
           <nav className="tabs">
             {(
               [
-                ['run', 'Shift'],
+                ['run', 'Run'],
                 ['cases', 'Cases'],
                 ['queue', 'Queue'],
                 ['inspector', 'Inspector'],
@@ -416,6 +463,8 @@ export function App() {
             {tab === 'run' && models && draft && (
               <RunConfigPanel
                 models={models}
+                domains={domains}
+                onDomainChange={(id) => void changeDomain(id).catch(() => {})}
                 scenarios={scenarios}
                 draft={draft}
                 onDraftChange={setDraft}

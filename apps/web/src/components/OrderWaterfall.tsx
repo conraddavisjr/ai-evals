@@ -1,5 +1,6 @@
 import type { Beat, TransactionTimeline } from '@cafe/protocol'
 import { fmtMs } from '../format.js'
+import { words } from '../lib/nomenclature.js'
 
 export const BEAT_COLORS: Record<Beat, string> = {
   arrive: '#5f7a8a',
@@ -10,15 +11,8 @@ export const BEAT_COLORS: Record<Beat, string> = {
   left: '#5f7a8a',
   judged: '#b79bea',
 }
-export const BEAT_LABELS: Record<Beat, string> = {
-  arrive: 'arrive',
-  order_taken: 'cashier',
-  queued: 'queue wait',
-  making: 'barista',
-  called_out: 'pickup',
-  left: 'leave',
-  judged: 'judge',
-}
+/** The active domain's word for a beat: "barista" in the cafe, "fulfilment" at the support desk. */
+export const beatLabel = (b: string): string => (words().beats as Record<string, string>)[b] ?? b
 
 /** A tiny flame-chart of one visit: where did the time go? */
 export function OrderWaterfall({
@@ -42,7 +36,7 @@ export function OrderWaterfall({
               key={b.beat}
               className={`seg ${b.endT === null ? 'open' : ''}`}
               style={{ width: `${w}%`, background: BEAT_COLORS[b.beat] }}
-              title={`${BEAT_LABELS[b.beat]}: ${fmtMs(dur)} (${w.toFixed(0)}%)`}
+              title={`${beatLabel(b.beat)}: ${fmtMs(dur)} (${w.toFixed(0)}%)`}
             />
           )
         })}
@@ -54,7 +48,7 @@ export function OrderWaterfall({
             const p = (dur / total) * 100
             return (
               <span key={b.beat}>
-                <i style={{ background: BEAT_COLORS[b.beat] }} /> {BEAT_LABELS[b.beat]} {fmtMs(dur)}{' '}
+                <i style={{ background: BEAT_COLORS[b.beat] }} /> {beatLabel(b.beat)} {fmtMs(dur)}{' '}
                 <em>({p.toFixed(0)}%)</em>
               </span>
             )

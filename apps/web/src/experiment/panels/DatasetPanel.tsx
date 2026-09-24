@@ -7,8 +7,8 @@ import {
   shortScenarioId,
 } from '@cafe/protocol'
 import { useCallback, useEffect, useState } from 'react'
-import { type ToolInfo, useExperimentApi } from '../../harness/index.js'
-import type { SuiteDraft } from '../suite-draft.js'
+import { type DomainInfo, type ToolInfo, useExperimentApi } from '../../harness/index.js'
+import { type SuiteDraft, withDomain } from '../suite-draft.js'
 import { ScenarioForm } from './ScenarioForm.js'
 
 /**
@@ -21,11 +21,13 @@ export function DatasetPanel({
   onChange,
   datasets,
   onDatasetsChanged,
+  domains,
 }: {
   draft: SuiteDraft
   onChange: (d: SuiteDraft) => void
   datasets: DatasetSummary[]
   onDatasetsChanged: () => void
+  domains: DomainInfo[]
 }) {
   const api = useExperimentApi()
   const [detail, setDetail] = useState<DatasetDetail | null>(null)
@@ -51,10 +53,10 @@ export function DatasetPanel({
   }, [reload])
   useEffect(() => {
     api
-      ?.tools()
+      ?.tools(draft.domain)
       .then(setTools)
       .catch(() => {})
-  }, [api])
+  }, [api, draft.domain])
 
   const builtin = isBuiltinDatasetId(draft.datasetId)
   const selected = draft.itemIds
@@ -121,7 +123,7 @@ export function DatasetPanel({
     <div className="node-panel">
       <h3>Golden dataset</h3>
       <p className="muted small">
-        Each item is one customer visit: the input (who they are, what they say) and the expected
+        Each item is one golden case: the input (who they are, what they say) and the expected
         output (outcome, items, total, which tools each role should use, a rubric for the judge).
         Every variant of the suite plays every selected item.
       </p>
@@ -129,7 +131,12 @@ export function DatasetPanel({
         <span className="cap">dataset</span>
         <select
           value={draft.datasetId}
-          onChange={(e) => onChange({ ...draft, datasetId: e.target.value, itemIds: null })}
+          onChange={(e) => {
+            const ds = datasets.find((d) => d.id === e.target.value)
+            const pack = domains.find((d) => d.id === ds?.domain)
+            const next = { ...draft, datasetId: e.target.value, itemIds: null }
+            onChange(pack ? withDomain(next, pack) : next)
+          }}
         >
           {datasets.map((d) => (
             <option key={d.id} value={d.id}>
@@ -138,6 +145,31 @@ export function DatasetPanel({
           ))}
         </select>
       </label>
+      {domains.length > 1 && (
+        <label className="row">
+          <span className="cap">domain</span>
+          <select
+            value={draft.domain}
+            // a built-in dataset belongs to its pack; a saved one can be played in any domain
+            disabled={builtin}
+            title={
+              builtin
+                ? 'A built-in dataset plays in its own domain'
+                : 'The business that plays this dataset'
+            }
+            onChange={(e) => {
+              const pack = domains.find((d) => d.id === e.target.value)
+              if (pack) onChange(withDomain(draft, pack))
+            }}
+          >
+            {domains.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="row">
         <span className="cap">new</span>
         <input placeholder="name" value={newName} onChange={(e) => setNewName(e.target.value)} />

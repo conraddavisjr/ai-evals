@@ -1,6 +1,6 @@
 import { allTimelines, shortScenarioId } from '@cafe/protocol'
 import { fmtCents, fmtMs } from '../format.js'
-import { CASE_NOUN, caseLabel } from '../lib/nomenclature.js'
+import { CASE_NOUN, caseLabel, outcomeLabel } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { OrderWaterfall } from './OrderWaterfall.js'
 
@@ -49,7 +49,7 @@ export function TransactionList({
                 {(arrived?.type === 'customer.arrived' && arrived.title) ||
                   (tl.scenarioId ? shortScenarioId(tl.scenarioId) : '')}
               </span>
-              <span className={`pill ${tl.outcome ?? 'open'}`}>{tl.outcome ?? 'in progress'}</span>
+              <span className={`pill ${tl.outcome ?? 'open'}`}>{outcomeLabel(tl.outcome)}</span>
               <span className="muted">{fmtMs(tl.totalMs ?? now - tl.startT)}</span>
               {order && <span className="muted">{fmtCents(order.totalCents)}</span>}
               {review && (

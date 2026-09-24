@@ -61,12 +61,12 @@ export function TelemetryPanel({
   }, [api, runId, live])
 
   if (!api) return <p className="muted">This harness does not expose telemetry.</p>
-  if (!runId) return <p className="muted">Start or load a shift.</p>
+  if (!runId) return <p className="muted">Start or load a run.</p>
   if (err) return <p className="bad">{err}</p>
   if (!data) return <p className="muted">Loading spans…</p>
   if (data.spanCount === 0)
     return (
-      <p className="muted">No spans yet. Spans land as each tool call, step and visit finishes.</p>
+      <p className="muted">No spans yet. Spans land as each tool call, step and case finishes.</p>
     )
   return <TelemetryCharts data={data} api={api} runId={runId} player={player} />
 }
@@ -192,13 +192,13 @@ export function TelemetryCharts({
       </section>
 
       <section className="chart-block">
-        <h4>Cost over the shift</h4>
-        <p className="sub">Cumulative spend after each visit, in arrival order.</p>
+        <h4>Cost over the run</h4>
+        <p className="sub">Cumulative spend after each case, in arrival order.</p>
         {data.costTrajectory.length === 0 ? (
-          <div className="chart-empty">No visits yet.</div>
+          <div className="chart-empty">No cases yet.</div>
         ) : !anyCost ? (
           <div className="chart-empty">
-            {fmtUsd(0)} across {data.costTrajectory.length} visits: mock models are free.
+            {fmtUsd(0)} across {data.costTrajectory.length} cases: mock models are free.
           </div>
         ) : (
           <>
@@ -218,7 +218,7 @@ export function TelemetryCharts({
               ]}
               formatY={fmtUsd}
               formatX={(v) => `#${v}`}
-              xLabel="visit"
+              xLabel="case"
             />
             {roles.length > 0 && anyCost && (
               <>
@@ -270,7 +270,7 @@ export function TelemetryCharts({
                 <thead>
                   <tr>
                     <th>when</th>
-                    <th>visit</th>
+                    <th>case</th>
                     <th>layer</th>
                     <th>where</th>
                     <th>kind</th>
@@ -297,7 +297,7 @@ export function TelemetryCharts({
 
       {!compact && (
         <section className="chart-block">
-          <h4>Per visit</h4>
+          <h4>Per case</h4>
           <p className="sub">One row per golden item: the per-iteration view.</p>
           <div className="table-scroll">
             <table className="grid small">

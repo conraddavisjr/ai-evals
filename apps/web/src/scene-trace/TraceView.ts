@@ -1,5 +1,5 @@
 import { AGENT_GLYPH_SVG } from '../lib/agent-glyph.js'
-import { CASE_NOUN, caseLabel, isAgentId } from '../lib/nomenclature.js'
+import { CASE_NOUN, caseLabel, isAgentId, outcomeLabel } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { SceneCallbacks, SceneHandle } from '../views/types.js'
 import {
@@ -362,7 +362,7 @@ export function createGame(
     head.append(
       el('span', 'idx', caseLabel(c.index)),
       name,
-      el('span', `pill ${c.outcome ?? 'open'}`, c.outcome ?? 'in progress'),
+      el('span', `pill ${c.outcome ?? 'open'}`, outcomeLabel(c.outcome)),
     )
     if (extra) head.append(extra)
     return head

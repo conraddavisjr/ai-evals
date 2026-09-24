@@ -1,5 +1,5 @@
 import type { CafeEvent } from '@cafe/protocol'
-import { agentLabel, lineText, roleShort } from '../lib/nomenclature.js'
+import { agentLabel, lineText, outcomeLabel, roleShort, words } from '../lib/nomenclature.js'
 
 /** Which layer of the pipeline a badge belongs to; decides its colour. */
 export type Layer = 'input' | 'orch' | 'agent' | 'tool' | 'eval' | 'error'
@@ -115,7 +115,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
             atMs: 0,
             layer: 'input',
             head: 'expect',
-            text: `${e.expected.outcome}${e.expected.cashierTools.length ? ` · cashier: ${e.expected.cashierTools.map(short).join(' ')}` : ''}${e.expected.baristaTools.length ? ` · barista: ${e.expected.baristaTools.map(short).join(' ')}` : ''}`,
+            text: `${e.expected.outcome}${e.expected.cashierTools.length ? ` · agent 1: ${e.expected.cashierTools.map(short).join(' ')}` : ''}${e.expected.baristaTools.length ? ` · agent 2: ${e.expected.baristaTools.map(short).join(' ')}` : ''}`,
             customerId: e.customerId,
           })
         break
@@ -260,7 +260,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'order',
+          head: words().workItem,
           text: e.items.length
             ? itemsText(e.items, e.totalCents)
             : `opened by ${agentLabel(e.cashierId)}`,
@@ -273,7 +273,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'order',
+          head: words().workItem,
           text: itemsText(e.items, e.totalCents),
         })
         break
@@ -283,7 +283,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
+          head: 'queue',
           text: `queued at position ${e.position}`,
         })
         break
@@ -293,7 +293,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
+          head: 'queue',
           text: `claimed by ${agentLabel(e.baristaId)} after ${fmt(e.waitedMs)}`,
           agentId: e.baristaId,
         })
@@ -304,7 +304,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
+          head: 'queue',
           text: `requeued: ${e.reason}`,
           mark: 'warn',
         })
@@ -315,7 +315,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
+          head: 'queue',
           text: `ready (${agentLabel(e.baristaId)})`,
           agentId: e.baristaId,
         })
@@ -326,7 +326,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'pickup',
+          head: words().beats.called_out,
           text: `called ${e.customerName}`,
           agentId: e.baristaId,
         })
@@ -337,7 +337,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'pickup',
+          head: words().beats.called_out,
           text: 'delivered',
           mark: 'ok',
         })
@@ -348,7 +348,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'error',
-          head: 'order',
+          head: words().workItem,
           text: `failed: ${clip(e.reason)}`,
           mark: 'bad',
         })
@@ -374,7 +374,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: e.outcome === 'failed' || e.outcome === 'abandoned' ? 'error' : 'orch',
           head: 'left',
-          text: `${e.outcome}${c.expectedOutcome ? ` (expected ${c.expectedOutcome})` : ''} · ${fmt(rel)}`,
+          text: `${outcomeLabel(e.outcome)}${c.expectedOutcome ? ` (expected ${outcomeLabel(c.expectedOutcome)})` : ''} · ${fmt(rel)}`,
           mark: ok,
           customerId: e.customerId,
         })

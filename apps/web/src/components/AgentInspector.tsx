@@ -15,7 +15,12 @@ export function AgentInspector({
   const s = player.state
   const now = player.clockEpoch()
   if (!selectedId)
-    return <p className="muted">Click a character in the cafe, or a red “!” to read a failure.</p>
+    return (
+      <p className="muted">
+        Click an agent or a case (a character in the cafe scenes, a badge on the Trace board), or a
+        red “!” to read a failure.
+      </p>
+    )
   const agent = s.agents[selectedId]
   const customer = s.customers[selectedId]
   if (agent) {

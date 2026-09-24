@@ -162,7 +162,7 @@ describe('trace model', () => {
       ],
     ])
     const m = buildTrace(evs)
-    expect(m.shift.map((b) => b.head)).toEqual(['agent 2 (barista-1)'])
+    expect(m.shift.map((b) => b.head)).toEqual(['agent 2 (barista 1)'])
     expect(m.columns.length).toBe(1)
     const c = m.columns[0]
     expect(c?.name).toBe('Priya')
@@ -175,10 +175,10 @@ describe('trace model', () => {
     ])
     const work = c?.bands.work ?? []
     expect(work.map((b) => b.head)).toEqual([
-      'agent 1 (cashier-1)',
+      'agent 1 (cashier 1)',
       'menu.lookup',
       'payments.charge',
-      'agent 2 (barista-1)',
+      'agent 2 (barista 1)',
       'orders.claim_next',
     ])
     // expected tool: ok; not expected: warn; failed: bad; step carries model latency

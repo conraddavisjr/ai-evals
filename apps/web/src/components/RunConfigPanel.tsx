@@ -1,12 +1,15 @@
 import type { Scenario } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fmtMs, fmtUsd, shortModel } from '../format.js'
-import { type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
-import { describeSpec, roleCount, roleLabel } from '../lib/nomenclature.js'
+import { type DomainInfo, type ModelsInfo, type RunRow, useHarness } from '../harness/index.js'
+import { CASE_NOUN, describeSpec, roleCount, roleLabel, words } from '../lib/nomenclature.js'
 import { estimateRunUsd, ROLES, type RoleKey, type RunDraft, toggleGroup } from './run-draft.js'
 
 export interface RunConfigPanelProps {
   models: ModelsInfo
+  /** The business domains on offer; the picker hides when there is only one. */
+  domains: DomainInfo[]
+  onDomainChange: (id: string) => void
   scenarios: Scenario[]
   draft: RunDraft
   onDraftChange: (next: RunDraft) => void
@@ -15,12 +18,14 @@ export interface RunConfigPanelProps {
   onLoadRun: (run: RunRow) => void
   currentRunId: string | null
   busy: boolean
-  /** The last failure to start a shift, wherever it was attempted from. */
+  /** The last failure to start a run, wherever it was attempted from. */
   startError: string | null
 }
 
 export function RunConfigPanel({
   models,
+  domains,
+  onDomainChange,
   scenarios,
   draft,
   onDraftChange,
@@ -93,7 +98,8 @@ export function RunConfigPanel({
           est. {fmtUsd(estimate)} {anyLive ? '' : '(all mock)'}
         </div>
         <div className="muted small">
-          {n} customer{n === 1 ? '' : 's'} · {roleCount('cashier', draft.staffing?.cashiers ?? 2)} ·{' '}
+          {n} {n === 1 ? CASE_NOUN.one : CASE_NOUN.many} ·{' '}
+          {roleCount('cashier', draft.staffing?.cashiers ?? 2)} ·{' '}
           {roleCount('barista', draft.staffing?.baristas ?? 1)}
         </div>
         {anyLive && !models.allowLive && (
@@ -103,7 +109,7 @@ export function RunConfigPanel({
         )}
       </div>
       <button type="button" className="primary big" disabled={busy || n === 0} onClick={submit}>
-        {busy ? 'Running…' : 'Open the cafe'}
+        {busy ? 'Running…' : 'Start run'}
       </button>
     </div>
   )
@@ -112,6 +118,30 @@ export function RunConfigPanel({
     <div className="run-config">
       {startRow}
       {startError && <div className="error-box">{startError}</div>}
+
+      {domains.length > 1 && (
+        <section>
+          <h3>Business domain</h3>
+          <label className="row">
+            <span>plays</span>
+            <select
+              value={draft.domain ?? 'cafe'}
+              disabled={busy}
+              onChange={(e) => onDomainChange(e.target.value)}
+            >
+              {domains.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="muted small">
+            {domains.find((d) => d.id === (draft.domain ?? 'cafe'))?.blurb} The harness is the same
+            for every domain; the pack brings the tools, prompts, golden cases and judge wording.
+          </p>
+        </section>
+      )}
 
       <section>
         <h3>Agent models</h3>
@@ -150,7 +180,7 @@ export function RunConfigPanel({
 
       <section>
         <h3>
-          Customers <span className="muted">({n})</span>
+          Golden cases <span className="muted">({n})</span>
           <button
             type="button"
             className="link"
@@ -170,9 +200,7 @@ export function RunConfigPanel({
                 type="button"
                 className={`tag ${tag} ${picked === 0 ? 'off' : ''}`}
                 title={
-                  picked === list.length
-                    ? `Deselect all ${tag} customers`
-                    : `Select all ${tag} customers`
+                  picked === list.length ? `Deselect all ${tag} cases` : `Select all ${tag} cases`
                 }
                 aria-pressed={picked === list.length}
                 onClick={() =>
@@ -211,7 +239,7 @@ export function RunConfigPanel({
       </section>
 
       <section>
-        <h3>Shift</h3>
+        <h3>Staffing and pacing</h3>
         <label className="row">
           <span>{roleLabel('cashier')}</span>
           <input
@@ -253,7 +281,9 @@ export function RunConfigPanel({
             onChange={(e) => patch({ pacing: e.target.value as RunDraft['pacing'] })}
           >
             <option value="realistic">realistic (0.8–2.5s per model step)</option>
-            <option value="hang">realistic + agent 2 (barista) hangs on order #2</option>
+            <option value="hang">
+              realistic + agent 2 ({words().roles.barista}) hangs on the second {words().workItem}
+            </option>
             <option value="instant">instant (tests)</option>
           </select>
         </label>
@@ -263,7 +293,7 @@ export function RunConfigPanel({
             checked={draft.triageEnabled ?? true}
             onChange={(e) => patch({ triageEnabled: e.target.checked })}
           />{' '}
-          door triage by the orchestrator (manager)
+          door triage by the {roleLabel('manager')}
         </label>
         <label className="check">
           <input
@@ -271,7 +301,7 @@ export function RunConfigPanel({
             checked={draft.reviewEnabled ?? true}
             onChange={(e) => patch({ reviewEnabled: e.target.checked })}
           />{' '}
-          orchestrator (manager) reviews every visit
+          {roleLabel('manager')} reviews every {CASE_NOUN.one}
         </label>
         <label className="check">
           <input
@@ -279,7 +309,7 @@ export function RunConfigPanel({
             checked={draft.judgeEnabled ?? true}
             onChange={(e) => patch({ judgeEnabled: e.target.checked })}
           />{' '}
-          judge every visit
+          judge every {CASE_NOUN.one}
         </label>
       </section>
 
@@ -350,8 +380,8 @@ export function RunConfigPanel({
                 }
               >
                 <option value="cashier,barista,manager">everyone</option>
-                <option value="barista">agent 2 (baristas) only</option>
-                <option value="cashier">agent 1 (cashiers) only</option>
+                <option value="barista">{roleLabel('barista')} only</option>
+                <option value="cashier">{roleLabel('cashier')} only</option>
               </select>
             </label>
             <label className="row">
@@ -390,11 +420,11 @@ export function RunConfigPanel({
       </section>
 
       <section>
-        <h3>Recent shifts</h3>
+        <h3>Recent runs</h3>
         <p className="muted small">
-          Every shift is persisted. Click one to load it: a finished shift replays from the start, a
-          shift that is still running attaches live. Shifts the server lost track of (a restart
-          mid-run) are shown as interrupted.
+          Every run is persisted. Click one to load it: a finished run replays from the start, a run
+          that is still going attaches live. Runs the server lost track of (a restart mid-run) are
+          shown as interrupted.
         </p>
         {runs.length === 0 ? (
           <p className="muted">None yet.</p>
@@ -411,7 +441,8 @@ export function RunConfigPanel({
                 <li key={r.id} className={r.id === currentRunId ? 'current' : ''}>
                   <button type="button" className="link" onClick={() => onLoadRun(r)}>
                     {new Date(r.createdAt).toLocaleTimeString()} · {r.config.name} ·{' '}
-                    {r.config.scenarioIds.length} customers
+                    {r.config.scenarioIds.length} {CASE_NOUN.many}
+                    {r.config.domain && r.config.domain !== 'cafe' ? ` · ${r.config.domain}` : ''}
                   </button>
                   <span className={`pill ${status}`} title={r.error ?? undefined}>
                     {status}

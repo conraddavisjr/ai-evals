@@ -1,51 +1,80 @@
+import { type DomainVocabulary, vocabularyFor } from '@cafe/protocol'
+
 /**
- * The words the UI uses for the moving parts. Underneath the cafe metaphor these
- * are sub-agents with tool slices, an orchestration layer and a judge, and that is
- * how they are labelled now; the cafe role stays in parentheses so the events,
- * the scenes and the docs (which still say cashier and barista) line up.
+ * The words the UI uses for the moving parts. Underneath any business these are
+ * sub-agents with tool slices, an orchestration layer and a judge, and that is how
+ * they are labelled; the domain's own word for the role (cashier, support rep)
+ * stays in parentheses so the transcript and the domain's docs line up.
  *
- * Every label the UI prints for a role or an agent id goes through here. Change
- * the mapping, change every panel.
+ * Every label the UI prints for a role, an agent id, an outcome or a beat goes
+ * through here, and follows the active domain (the loaded run's, else the draft's).
  */
 
 export type RoleKey = 'cashier' | 'barista' | 'manager' | 'judge' | 'customer'
 
-const ROLE: Record<RoleKey, { short: string; legacy: string | null }> = {
-  cashier: { short: 'agent 1', legacy: 'cashier' },
-  barista: { short: 'agent 2', legacy: 'barista' },
-  manager: { short: 'orchestrator', legacy: 'manager' },
-  judge: { short: 'judge', legacy: null },
-  customer: { short: 'customer', legacy: null },
+const SHORT: Record<RoleKey, string> = {
+  cashier: 'agent 1',
+  barista: 'agent 2',
+  manager: 'orchestrator',
+  judge: 'judge',
+  customer: 'customer',
 }
 
-/** "agent 1 (cashier)", "orchestrator (manager)", "judge". */
+let active: DomainVocabulary = vocabularyFor('cafe')
+let activeId = 'cafe'
+
+/** Point every label at a domain's words. The app calls this when the run or the draft changes domain. */
+export function setActiveDomain(id: string | null | undefined): void {
+  activeId = id ?? 'cafe'
+  active = vocabularyFor(activeId)
+}
+
+/** The active domain's words: business name, work item, outcomes, beats. */
+export function words(): DomainVocabulary {
+  return active
+}
+
+export function activeDomainId(): string {
+  return activeId
+}
+
+const domainRole = (role: string): string | null =>
+  role === 'cashier' || role === 'barista' || role === 'manager' ? active.roles[role] : null
+
+/** "agent 1 (cashier)", "orchestrator (team lead)", "judge". */
 export function roleLabel(role: string): string {
-  const r = ROLE[role as RoleKey]
-  if (!r) return role
-  return r.legacy ? `${r.short} (${r.legacy})` : r.short
+  const short = SHORT[role as RoleKey]
+  if (!short) return role
+  const own = domainRole(role)
+  return own ? `${short} (${own})` : short
 }
 
 /** "agent 1", "orchestrator": for tight spots like chart rows and legends. */
 export function roleShort(role: string): string {
-  return ROLE[role as RoleKey]?.short ?? role
+  return SHORT[role as RoleKey] ?? role
 }
 
-/** "agent 1 (cashier-1)": the class in front, the instance id in parentheses. */
+/** "agent 1 (cashier 2)", "agent 2 (fulfilment 1)": the class in front, the domain's name and instance in parentheses. */
 export function agentLabel(agentId: string): string {
   const m = /^(cashier|barista|manager|judge)-(\d+)$/.exec(agentId)
   if (!m) return agentId
-  const r = ROLE[m[1] as RoleKey]
-  return `${r.short} (${agentId})`
+  const role = m[1] as RoleKey
+  return `${SHORT[role]} (${domainRole(role) ?? role} ${m[2]})`
 }
 
 export function isAgentId(id: string | null | undefined): boolean {
   return !!id && /^(cashier|barista|manager|judge)-\d+$/.test(id)
 }
 
-/** Plural counts: "2 × agent 1 (cashiers)". */
+/** Counts: "2 × agent 1 (cashier)". */
 export function roleCount(role: 'cashier' | 'barista', n: number): string {
-  const r = ROLE[role]
-  return `${n} × ${r.short} (${r.legacy}${n === 1 ? '' : 's'})`
+  return `${n} × ${SHORT[role]} (${active.roles[role]})`
+}
+
+/** "served" in the cafe, "resolved" at the support desk. */
+export function outcomeLabel(outcome: string | null | undefined): string {
+  if (!outcome) return 'in progress'
+  return (active.outcomes as Record<string, string>)[outcome] ?? outcome
 }
 
 /**

@@ -184,7 +184,7 @@ export function SuiteResults({
       </section>
 
       <section className="chart-block">
-        <h4>Cost over the shift, per variant</h4>
+        <h4>Cost over the run, per variant</h4>
         {t.variants.every(
           (v) => !v.result || v.result.costTrajectory.every((c) => c.cumulativeUsd === 0),
         ) ? (
@@ -207,7 +207,7 @@ export function SuiteResults({
                 }))}
               formatY={fmtUsd}
               formatX={(v) => `#${v}`}
-              xLabel="visit"
+              xLabel="case"
             />
           </>
         )}

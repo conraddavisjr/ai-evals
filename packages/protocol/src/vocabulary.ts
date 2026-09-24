@@ -24,6 +24,8 @@ export interface DomainVocabulary {
   queue: string
   /** Agent roles, by internal key. */
   roles: { cashier: string; barista: string; manager: string }
+  /** One line on what each agent does, for the pipeline diagram and its panels. */
+  agentBlurbs: { cashier: string; barista: string }
   /** Outcome labels, by internal key. */
   outcomes: { served: string; refused: string; failed: string; abandoned: string }
   /** Waterfall and beat labels, by beat. */
@@ -42,6 +44,12 @@ export const DOMAIN_VOCABULARY: Record<string, DomainVocabulary> = {
     line: 'item',
     queue: 'the rail',
     roles: { cashier: 'cashier', barista: 'barista', manager: 'manager' },
+    agentBlurbs: {
+      cashier:
+        'Takes the order: menu lookup, customer lookup, create and fill the order, charge, put the ticket on the rail. Refuses what it should.',
+      barista:
+        'Pulls the next ticket, fetches the recipe, consumes inventory, logs the drink, marks it ready and calls the customer.',
+    },
     outcomes: { served: 'served', refused: 'refused', failed: 'failed', abandoned: 'abandoned' },
     beats: {
       arrive: 'arrive',
@@ -62,6 +70,12 @@ export const DOMAIN_VOCABULARY: Record<string, DomainVocabulary> = {
     line: 'action',
     queue: 'the fulfilment queue',
     roles: { cashier: 'support rep', barista: 'fulfilment', manager: 'team lead' },
+    agentBlurbs: {
+      cashier:
+        'Handles the conversation: looks up the account and purchase, checks the returns policy, opens a ticket with the right action and submits it. Declines what it should.',
+      barista:
+        'Claims the next approved ticket, pays out refunds and store credit or ships replacements, resolves the ticket and notifies the customer.',
+    },
     outcomes: {
       served: 'resolved',
       refused: 'declined',

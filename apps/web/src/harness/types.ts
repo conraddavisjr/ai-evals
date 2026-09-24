@@ -4,6 +4,8 @@ import type {
   DatasetInput,
   DatasetPatch,
   DatasetSummary,
+  DomainVocabulary,
+  RoleModels,
   RunConfig,
   RunConfigInput,
   RunMetrics,
@@ -37,6 +39,16 @@ export interface ModelsInfo {
   defaults: RunConfig
 }
 
+/** A business domain the harness can play (GET /api/domains). */
+export interface DomainInfo {
+  id: string
+  label: string
+  blurb: string
+  vocabulary: DomainVocabulary
+  datasetId: string
+  defaultRoles: RoleModels
+}
+
 export interface StreamHandlers {
   onEvent: (e: CafeEvent) => void
   onDone: (status: string) => void
@@ -51,7 +63,10 @@ export interface StreamHandlers {
  */
 export interface HarnessClient {
   models(): Promise<ModelsInfo>
-  scenarios(): Promise<Scenario[]>
+  /** The golden cases that ship with a domain (the cafe's when omitted). */
+  scenarios(domain?: string): Promise<Scenario[]>
+  /** The business domains on offer. Optional: a harness with one domain can leave it out. */
+  domains?(): Promise<DomainInfo[]>
   runs(): Promise<RunRow[]>
   run(id: string): Promise<RunRow>
   startRun(config: RunConfigInput): Promise<{ runId: string }>
@@ -97,7 +112,9 @@ export interface ExperimentClient {
   deleteItem(datasetId: string, itemId: string): Promise<{ deleted: boolean }>
   reorderItems(datasetId: string, ids: string[]): Promise<DatasetDetail>
   /** The tool catalogue with scopes, for the expected-tools pickers. */
-  tools(): Promise<{ tools: ToolInfo[]; roleScopes: Record<string, readonly string[]> }>
+  tools(
+    domain?: string,
+  ): Promise<{ tools: ToolInfo[]; roleScopes: Record<string, readonly string[]> }>
   /** Engines that can drive a shift. */
   orchestrators(): Promise<OrchestratorInfo[]>
   /** Suites: variants x repeats over one dataset. */

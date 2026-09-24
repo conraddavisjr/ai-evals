@@ -61,7 +61,7 @@ export function PlaybackControls({ player }: { player: TimelinePlayer }) {
               onClick={() => (player.playing ? player.pause() : player.play())}
               title={
                 idle
-                  ? 'Open the cafe or load a recent shift first'
+                  ? 'Start a run or load a recent one first'
                   : player.mode === 'live-raw'
                     ? 'Raw applies events as they arrive; nothing to pause'
                     : 'Play / pause (space)'

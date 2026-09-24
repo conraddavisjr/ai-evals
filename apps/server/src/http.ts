@@ -1,7 +1,7 @@
 import type { CafeStore } from '@cafe/db'
 import { DOMAIN_PACKS, domainPack } from '@cafe/domains'
 import { runTelemetry } from '@cafe/evals'
-import { ALL_TOOLS, createMcpServer, Gateway, ROLE_SCOPES } from '@cafe/mcp-gateway'
+import { createMcpServer, Gateway, ROLE_SCOPES } from '@cafe/mcp-gateway'
 import { PERSONAS } from '@cafe/models'
 import {
   DatasetInput,
@@ -145,12 +145,18 @@ export function createApp(deps: HttpDeps) {
   // ---------- golden datasets ----------
 
   /** Tool catalogue for the item editor's "expected tools" pickers and the MCP node. */
-  app.get('/api/tools', (c) =>
-    c.json({
-      tools: ALL_TOOLS.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
-      roleScopes: ROLE_SCOPES,
-    }),
-  )
+  app.get('/api/tools', (c) => {
+    let pack: ReturnType<typeof domainPack>
+    try {
+      pack = domainPack(c.req.query('domain'))
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 404)
+    }
+    return c.json({
+      tools: pack.tools.map((t) => ({ name: t.name, scope: t.scope, description: t.description })),
+      roleScopes: pack.roleScopes,
+    })
+  })
   /** Engines that can drive a shift; RunConfig.orchestrator names one. */
   app.get('/api/orchestrators', (c) => c.json(listOrchestrators()))
   app.get('/api/datasets', async (c) => c.json(await listDatasets(store)))
@@ -446,7 +452,7 @@ export function createApp(deps: HttpDeps) {
   /**
    * Real MCP over streamable HTTP, one endpoint per role and run, e.g.
    *   POST /mcp/<runId>/barista
-   * Point an MCP client at it and it sees exactly the barista's tool slice.
+   * Point an MCP client at it and it sees exactly that role's tool slice in the run's domain.
    */
   app.all('/mcp/:runId/:role', async (c) => {
     const role = c.req.param('role') as Role
@@ -456,7 +462,14 @@ export function createApp(deps: HttpDeps) {
     const run = await store.runs.get(runId)
     if (!run) return c.json({ error: 'run not found' }, 404)
     const events: unknown[] = []
-    const gateway = new Gateway({ store, emit: (e) => events.push(e) })
+    // the run's own domain decides which tools and scopes the external client sees
+    const pack = domainPack(run.config.domain)
+    const gateway = new Gateway({
+      store,
+      emit: (e) => events.push(e),
+      tools: pack.tools,
+      roleScopes: pack.roleScopes,
+    })
     const cap = gateway.capability({ agentId: `external-${role}`, role, runId })
     const server = createMcpServer(gateway, cap)
     const transport = new WebStandardStreamableHTTPServerTransport({})

@@ -1,5 +1,5 @@
 import { fmtMs } from '../format.js'
-import { lineText, roleCount } from '../lib/nomenclature.js'
+import { lineText, roleCount, words } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 export function QueuePanel({ player }: { player: TimelinePlayer }) {
@@ -11,7 +11,9 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
   const baristas = Object.values(s.agents).filter((a) => a.role === 'barista')
   return (
     <div className="queue">
-      <h3>On the rail ({s.queue.length})</h3>
+      <h3>
+        Queued {words().workItem}s ({s.queue.length})
+      </h3>
       {s.queue.length === 0 ? (
         <p className="muted">Empty.</p>
       ) : (
@@ -30,9 +32,9 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
           })}
         </ol>
       )}
-      <h3>Being made</h3>
+      <h3>In progress with agent 2 ({words().roles.barista})</h3>
       {inProgress.length === 0 ? (
-        <p className="muted">Nobody at the machines.</p>
+        <p className="muted">Nothing in progress.</p>
       ) : (
         <ul>
           {inProgress.map((o) => (

@@ -7,6 +7,7 @@ import type {
   SpanSummary,
 } from '@cafe/protocol'
 import type {
+  DomainInfo,
   ExperimentClient,
   HarnessClient,
   ModelsInfo,
@@ -36,7 +37,9 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
   }
 
   return {
-    scenarios: () => json<Scenario[]>('/api/scenarios'),
+    scenarios: (domain) =>
+      json<Scenario[]>(`/api/scenarios${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`),
+    domains: () => json<DomainInfo[]>('/api/domains'),
     models: () => json<ModelsInfo>('/api/models'),
     runs: () => json<RunRow[]>('/api/runs'),
     run: (id) => json<RunRow>(`/api/runs/${id}`),
@@ -62,7 +65,7 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
     deleteItem: (id, itemId) => json(`/api/datasets/${id}/items/${itemId}`, { method: 'DELETE' }),
     reorderItems: (id, ids) =>
       json(`/api/datasets/${id}/items/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
-    tools: () => json('/api/tools'),
+    tools: (domain) => json(`/api/tools${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`),
     orchestrators: () => json('/api/orchestrators'),
     suites: () => json('/api/suites'),
     suite: (id) => json(`/api/suites/${id}`),

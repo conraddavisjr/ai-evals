@@ -6,7 +6,7 @@ import { roleLabel, roleShort } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { useDrawer } from './Drawer.js'
 import { JUDGE_EXPLAIN, JudgeDrill } from './drilldowns.js'
-import { BEAT_COLORS, BEAT_LABELS } from './OrderWaterfall.js'
+import { BEAT_COLORS, beatLabel } from './OrderWaterfall.js'
 import { TelemetryPanel } from './TelemetryPanel.js'
 
 /** Summary (the roll-up once a shift closes) or Telemetry (span-based, live). */
@@ -93,11 +93,11 @@ function MetricsSummary({
       <button
         type="button"
         className="link metric-link"
-        title="See the visits behind this figure"
+        title="See the cases behind this figure"
         onClick={() =>
           drawer.open({
             title: JUDGE_EXPLAIN[metric]?.title ?? metric,
-            subtitle: 'where the gaps are, visit by visit',
+            subtitle: 'where the gaps are, case by case',
             body: <JudgeDrill metrics={metrics} metric={metric} player={player} />,
           })
         }
@@ -110,10 +110,10 @@ function MetricsSummary({
 
   return (
     <div>
-      {!runId && <p className="muted">Start or load a shift.</p>}
+      {!runId && <p className="muted">Start or load a run.</p>}
       {runId && status !== 'finished' && (
         <p className="muted">
-          Metrics land when the shift closes. Watch the transactions tab for live waterfalls.
+          Metrics land when the run closes. Watch the Cases tab for live waterfalls.
         </p>
       )}
       {err && <p className="bad">{err}</p>}
@@ -157,8 +157,8 @@ function MetricsSummary({
             <>
               <h4>Judge (blinded)</h4>
               <p className="muted small">
-                Means over the visits. The probabilities are the judge's confidence, not a share:
-                click a figure to see which visits it doubted and why.
+                Means over the cases. The probabilities are the judge's confidence, not a share:
+                click a figure to see which cases it doubted and why.
               </p>
               <table className="grid">
                 <tbody>
@@ -203,7 +203,7 @@ function MetricsSummary({
                 <th>p50</th>
                 <th>p95</th>
                 <th>max</th>
-                <th>mean steps / visit</th>
+                <th>mean steps / case</th>
               </tr>
             </thead>
             <tbody>
@@ -238,7 +238,7 @@ function MetricsSummary({
                       className="swatch"
                       style={{ background: BEAT_COLORS[b as keyof typeof BEAT_COLORS] }}
                     />{' '}
-                    {BEAT_LABELS[b as keyof typeof BEAT_LABELS] ?? b}
+                    {beatLabel(b)}
                   </td>
                   <td>{fmtMs(st.p50)}</td>
                   <td>{fmtMs(st.p95)}</td>
@@ -248,7 +248,7 @@ function MetricsSummary({
             </tbody>
           </table>
 
-          <h4>Per visit</h4>
+          <h4>Per case</h4>
           <div className="table-scroll">
             <table className="grid small">
               <thead>
@@ -291,7 +291,7 @@ function MetricsSummary({
 
       {compare.length > 1 && (
         <>
-          <h4>Compare shifts</h4>
+          <h4>Compare runs</h4>
           <div className="table-scroll">
             <table className="grid small">
               <thead>

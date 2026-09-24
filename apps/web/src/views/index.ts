@@ -2,11 +2,12 @@ import type { SceneView } from './types.js'
 
 export type { SceneCallbacks, SceneHandle, SceneView } from './types.js'
 
-/** Every registered way of drawing the cafe, in switcher order. Add a view here to make it available. */
+/** Every registered way of drawing a run, in switcher order. Add a view here to make it available. */
 export const SCENE_VIEWS: readonly SceneView[] = [
   {
     id: 'painterly',
     label: 'Village',
+    cafeArt: true,
     blurb: 'Painterly top-down 3D village square. Drag to orbit, scroll to zoom.',
     mount: async (parent, player, callbacks) =>
       (await import('../scene3d/game.js')).createGame(parent, player, callbacks),
@@ -14,6 +15,7 @@ export const SCENE_VIEWS: readonly SceneView[] = [
   {
     id: 'pixel',
     label: 'Pixel',
+    cafeArt: true,
     blurb: 'The original Stardew-style pixel cafe, drawn in Phaser.',
     mount: async (parent, player, callbacks) =>
       (await import('../scene2d/game.js')).createGame(parent, player, callbacks),
@@ -22,7 +24,7 @@ export const SCENE_VIEWS: readonly SceneView[] = [
     id: 'trace',
     label: 'Trace',
     blurb:
-      'The shift as a board: one column per golden item, every step a badge, no characters. For the engineering meeting.',
+      'The run as a board: every golden case a card, every step a badge, no characters. Works for every domain.',
     mount: async (parent, player, callbacks) =>
       (await import('../scene-trace/TraceView.js')).createGame(parent, player, callbacks),
   },

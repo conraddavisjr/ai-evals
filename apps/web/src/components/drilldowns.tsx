@@ -104,7 +104,7 @@ export function LatencyDrill({
             <thead>
               <tr>
                 <th>latency</th>
-                <th>visit</th>
+                <th>case</th>
                 <th>agent</th>
                 <th>{kind === 'tool' ? 'result' : 'tokens'}</th>
                 <th />
@@ -162,23 +162,23 @@ export function LatencyDrill({
 const JUDGE_EXPLAIN: Record<string, { title: string; text: string }> = {
   correct: {
     title: 'P(correct)',
-    text: 'The judge answers "was this visit handled correctly?" with a probability, not a tally. 95% means it is confident but not certain; the missing 5% is its own doubt, not a share that went anywhere. The run figure is the mean over visits, so the gaps are the visits it doubted most.',
+    text: 'The judge answers "was this case handled correctly?" with a probability, not a tally. 95% means it is confident but not certain; the missing 5% is its own doubt, not a share that went anywhere. The run figure is the mean over visits, so the gaps are the visits it doubted most.',
   },
   refusalAppropriate: {
     title: 'P(refusal appropriate)',
-    text: 'For every visit the judge estimates whether refusing (or serving) was the right call. It is asked even when nothing was refused, so a served visit scores on "was it right not to refuse". The mean hides which visits it was unsure about; they are listed here.',
+    text: 'For every case the judge estimates whether refusing (or serving) was the right call. It is asked even when nothing was refused, so a served visit scores on "was it right not to refuse". The mean hides which visits it was unsure about; they are listed here.',
   },
   helpfulness: {
     title: 'Helpfulness',
-    text: 'A 1 to 5 score per visit (very poor to excellent). The run figure is the mean; the distribution and the lowest-scored visits are here.',
+    text: 'A 1 to 5 score per case (very poor to excellent). The run figure is the mean; the distribution and the lowest-scored visits are here.',
   },
   tone: {
     title: 'Tone',
-    text: 'A 1 to 5 score per visit for how the staff spoke to the customer. Mean over visits.',
+    text: 'A 1 to 5 score per case for how the agents spoke to the customer. Mean over cases.',
   },
   toolUseQuality: {
     title: 'Tool use quality',
-    text: 'A 1 to 5 score per visit for whether the staff used the right tools in a sensible order. Mean over visits; scope violations and errors pull it down.',
+    text: 'A 1 to 5 score per case for whether the agents used the right tools in a sensible order. Mean over cases; scope violations and errors pull it down.',
   },
 }
 
@@ -218,7 +218,7 @@ export function JudgeDrill({
       <p className="explain">{info?.text}</p>
       <div className="stat-row">
         <span>
-          visits judged <b>{rows.length}</b>
+          cases judged <b>{rows.length}</b>
         </span>
         <span>
           mean <b>{mean === null ? '–' : isProb ? pct(mean) : `${mean.toFixed(2)}/5`}</b>
@@ -238,13 +238,13 @@ export function JudgeDrill({
           ))}
         </div>
       )}
-      <h4>Visits, lowest first</h4>
+      <h4>Cases, lowest first</h4>
       <div className="table-scroll">
         <table className="grid small">
           <thead>
             <tr>
               <th>{isProb ? 'p' : 'score'}</th>
-              <th>visit</th>
+              <th>case</th>
               <th>outcome</th>
               <th>ground truth</th>
               <th>review</th>

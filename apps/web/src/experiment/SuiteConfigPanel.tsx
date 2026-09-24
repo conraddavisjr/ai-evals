@@ -187,7 +187,7 @@ export function SuiteConfigPanel({
           </div>
           <div className="muted small">
             {total} run{total === 1 ? '' : 's'} × {itemCount} item{itemCount === 1 ? '' : 's'} ={' '}
-            {total * itemCount} visits
+            {total * itemCount} cases
             {draft.concurrency > 1 ? ` · ${draft.concurrency} at a time` : ' · one run at a time'}
           </div>
           {live && !models.allowLive && (
