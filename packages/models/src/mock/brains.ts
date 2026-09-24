@@ -401,10 +401,19 @@ export const managerBrain = (): MockBrain => (c) => {
   return { kind: 'text', text: 'Floor looks fine.' }
 }
 
+/**
+ * Every scripted persona `mock:<name>` resolves to. The cafe's are built in; a
+ * domain pack adds its own with registerPersona() when it loads.
+ */
 export const PERSONAS: Record<string, () => MockBrain> = {
   cashier: () => cashierBrain(),
   'cashier-naive': () => cashierBrain({ naive: true }),
   barista: () => baristaBrain(),
   'barista-forgetful': () => baristaBrain({ forgetful: true }),
   manager: () => managerBrain(),
+}
+
+/** Make `mock:<name>` resolve to this brain. Domain packs call it for their agents. */
+export function registerPersona(name: string, factory: () => MockBrain): void {
+  PERSONAS[name] = factory
 }

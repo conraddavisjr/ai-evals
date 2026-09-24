@@ -1,4 +1,5 @@
 import type { CafeEvent } from '@cafe/protocol'
+import { agentLabel, lineText, outcomeLabel, roleShort, words } from '../lib/nomenclature.js'
 
 /** Which layer of the pipeline a badge belongs to; decides its colour. */
 export type Layer = 'input' | 'orch' | 'agent' | 'tool' | 'eval' | 'error'
@@ -6,7 +7,7 @@ export type Layer = 'input' | 'orch' | 'agent' | 'tool' | 'eval' | 'error'
 export type Band = 'input' | 'orch' | 'work' | 'eval'
 export const BANDS: Band[] = ['input', 'orch', 'work', 'eval']
 export const BAND_TITLE: Record<Band, string> = {
-  input: 'Golden item',
+  input: 'Case input',
   orch: 'Orchestration',
   work: 'Sub-agents + MCP tools',
   eval: 'Evaluation',
@@ -15,6 +16,11 @@ export const BAND_TITLE: Record<Band, string> = {
 export type Mark = 'ok' | 'bad' | 'warn' | 'unknown'
 
 export interface Badge {
+  /**
+   * Stable identity across rebuilds: one event can yield two badges (an arrival's
+   * input and its expectations). Assigned by buildTrace once the board is laid out.
+   */
+  key?: string
   seq: number
   t: number
   layer: Layer
@@ -30,6 +36,8 @@ export interface Badge {
   latencyMs?: number | undefined
   agentId?: string | undefined
   customerId?: string | undefined
+  /** The case the badge belongs to; unset for run-level badges. */
+  txId?: string | undefined
   /** Tool badges sit under their step. */
   indent?: boolean | undefined
 }
@@ -38,9 +46,16 @@ export interface Column {
   txId: string
   index: number
   scenarioId: string
+  /** The golden case's title when the stream carries it (older runs do not). */
+  title: string
+  /** The persona inside the case (a customer name); data, not the label. */
   name: string
   expectedOutcome: string | null
   outcome: string | null
+  /** Seq of the case's first event: before it, the case has not arrived. */
+  startSeq: number
+  /** Seq of customer.left: from it on, the outcome is known. */
+  leftSeq: number | null
   bands: Record<Band, Badge[]>
 }
 
@@ -74,7 +89,10 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
   const startOf = new Map<string, number>()
 
   const col = (txId: string) => byTx.get(txId)
-  const place = (c: Column, band: Band, b: Badge) => c.bands[band].push(b)
+  const place = (c: Column, band: Band, b: Badge) => {
+    b.txId = c.txId
+    c.bands[band].push(b)
+  }
   const atMs = (c: Column, t: number) => t - (startOf.get(c.txId) ?? t)
 
   const handle = (e: CafeEvent, c: Column) => {
@@ -82,6 +100,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
     switch (e.type) {
       case 'customer.arrived': {
         c.name = e.name
+        c.title = e.title ?? ''
         c.scenarioId = e.scenarioId
         c.expectedOutcome = e.expected?.outcome ?? null
         expected.set(
@@ -110,7 +129,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
             atMs: 0,
             layer: 'input',
             head: 'expect',
-            text: `${e.expected.outcome}${e.expected.cashierTools.length ? ` · cashier: ${e.expected.cashierTools.map(short).join(' ')}` : ''}${e.expected.baristaTools.length ? ` · barista: ${e.expected.baristaTools.map(short).join(' ')}` : ''}`,
+            text: `${e.expected.outcome}${e.expected.cashierTools.length ? ` · agent 1: ${e.expected.cashierTools.map(short).join(' ')}` : ''}${e.expected.baristaTools.length ? ` · agent 2: ${e.expected.baristaTools.map(short).join(' ')}` : ''}`,
             customerId: e.customerId,
           })
         break
@@ -121,11 +140,28 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'triage',
-          text: `${e.intent}${e.escalate ? ' · escalate' : ''} · ${Math.round(e.escalateProbability * 100)}%`,
+          head: 'router',
+          text: `${e.intent}${e.escalate ? ' · escalate' : ''} · ${Math.round(e.escalateProbability * 100)}%${e.routed ? ' · routed away' : ''}`,
+          detail: e.modelSpec,
           latencyMs: e.latencyMs,
-          mark: e.escalate ? 'warn' : undefined,
+          mark: e.routed || e.escalate ? 'warn' : undefined,
           customerId: e.customerId,
+        })
+        break
+      case 'guard.decided':
+        // sits in the work band, right under the call it approved or blocked
+        place(c, 'work', {
+          seq: e.seq,
+          t: e.t,
+          atMs: rel,
+          layer: 'eval',
+          head: 'gate',
+          text: `${short(e.tool)} · approve ${Math.round(e.approveProbability * 100)}% · ${e.allowed ? 'allowed' : 'blocked'}`,
+          detail: `${e.modelSpec} · ${JSON.stringify(e.args)}`,
+          latencyMs: e.latencyMs,
+          mark: e.allowed ? 'ok' : 'bad',
+          agentId: e.agentId,
+          indent: true,
         })
         break
       case 'customer.moved':
@@ -157,7 +193,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'agent',
-          head: e.agentId,
+          head: agentLabel(e.agentId),
           text: `step ${e.step}`,
           agentId: e.agentId,
         }
@@ -179,7 +215,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'agent',
-          head: e.agentId,
+          head: agentLabel(e.agentId),
           text: `“${clip(e.text)}”`,
           agentId: e.agentId,
           indent: true,
@@ -209,6 +245,9 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         }
         openCalls.set(e.callId, b)
         place(c, 'work', b)
+        // the step that made the call names it, so the actor row says what it did
+        const step = openSteps.get(e.agentId)
+        if (step) step.text = `${step.text}${step.text.includes('→') ? ',' : ' →'} ${e.tool}`
         break
       }
       case 'agent.tool_returned': {
@@ -230,7 +269,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'error',
           head: 'scope',
-          text: `${e.agentId} tried ${e.tool}`,
+          text: `${agentLabel(e.agentId)} tried ${e.tool}`,
           mark: 'bad',
           agentId: e.agentId,
           indent: true,
@@ -243,7 +282,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'error',
           head: e.kind,
-          text: `${e.agentId}: ${clip(e.message)}`,
+          text: `${agentLabel(e.agentId)}: ${clip(e.message)}`,
           detail: e.message,
           mark: 'bad',
           agentId: e.agentId,
@@ -255,8 +294,10 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'order',
-          text: e.items.length ? itemsText(e.items, e.totalCents) : `opened by ${e.cashierId}`,
+          head: words().workItem,
+          text: e.items.length
+            ? itemsText(e.items, e.totalCents)
+            : `opened by ${agentLabel(e.cashierId)}`,
           agentId: e.cashierId,
         })
         break
@@ -266,7 +307,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'order',
+          head: words().workItem,
           text: itemsText(e.items, e.totalCents),
         })
         break
@@ -276,7 +317,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
+          head: 'queue',
           text: `queued at position ${e.position}`,
         })
         break
@@ -286,8 +327,8 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
-          text: `claimed by ${e.baristaId} after ${fmt(e.waitedMs)}`,
+          head: 'queue',
+          text: `claimed by ${agentLabel(e.baristaId)} after ${fmt(e.waitedMs)}`,
           agentId: e.baristaId,
         })
         break
@@ -297,7 +338,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
+          head: 'queue',
           text: `requeued: ${e.reason}`,
           mark: 'warn',
         })
@@ -308,8 +349,8 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'rail',
-          text: `ready (${e.baristaId})`,
+          head: 'queue',
+          text: `ready (${agentLabel(e.baristaId)})`,
           agentId: e.baristaId,
         })
         break
@@ -319,7 +360,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'pickup',
+          head: words().beats.called_out,
           text: `called ${e.customerName}`,
           agentId: e.baristaId,
         })
@@ -330,7 +371,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'orch',
-          head: 'pickup',
+          head: words().beats.called_out,
           text: 'delivered',
           mark: 'ok',
         })
@@ -341,7 +382,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: rel,
           layer: 'error',
-          head: 'order',
+          head: words().workItem,
           text: `failed: ${clip(e.reason)}`,
           mark: 'bad',
         })
@@ -359,6 +400,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         break
       case 'customer.left': {
         c.outcome = e.outcome
+        c.leftSeq = e.seq
         const ok =
           c.expectedOutcome === null ? 'unknown' : c.expectedOutcome === e.outcome ? 'ok' : 'bad'
         place(c, 'orch', {
@@ -367,7 +409,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: e.outcome === 'failed' || e.outcome === 'abandoned' ? 'error' : 'orch',
           head: 'left',
-          text: `${e.outcome}${c.expectedOutcome ? ` (expected ${c.expectedOutcome})` : ''} · ${fmt(rel)}`,
+          text: `${outcomeLabel(e.outcome)}${c.expectedOutcome ? ` (expected ${outcomeLabel(c.expectedOutcome)})` : ''} · ${fmt(rel)}`,
           mark: ok,
           customerId: e.customerId,
         })
@@ -424,8 +466,8 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           t: e.t,
           atMs: 0,
           layer: 'agent',
-          head: e.agentId,
-          text: `${e.name} · ${e.role} · ${e.modelSpec}`,
+          head: agentLabel(e.agentId),
+          text: `${e.name} · ${roleShort(e.role)} · ${e.modelSpec}`,
           agentId: e.agentId,
         })
       } else if (e.type === 'run.started') {
@@ -465,9 +507,12 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         txId: e.txId,
         index: columns.length,
         scenarioId: '',
+        title: '',
         name: '',
         expectedOutcome: null,
         outcome: null,
+        startSeq: e.seq,
+        leftSeq: null,
         bands: { input: [], orch: [], work: [], eval: [] },
       }
       columns.push(c)
@@ -493,19 +538,24 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: 0,
           layer: 'tool',
           head: e.tool,
-          text: `${agentId} (no visit)`,
+          text: `${agentLabel(agentId)} (no visit)`,
           agentId,
           indent: true,
         })
+  const seen = new Map<number, number>()
+  const keyed = (b: Badge) => {
+    const n = seen.get(b.seq) ?? 0
+    seen.set(b.seq, n + 1)
+    b.key = `${b.seq}.${n}`
+  }
+  for (const b of shift) keyed(b)
+  for (const c of columns) for (const band of BANDS) for (const b of c.bands[band]) keyed(b)
   return { columns, shift, runStatus }
 }
 
 const short = (tool: string) => tool.replace(/^[a-z]+\./, '')
-const itemsText = (
-  items: Array<{ quantity: number; size: string; name: string }>,
-  totalCents: number,
-) =>
-  `${items.map((i) => `${i.quantity}× ${i.size} ${i.name}`).join(', ')} · $${(totalCents / 100).toFixed(2)}`
+const itemsText = (items: Parameters<typeof lineText>[0][], totalCents: number) =>
+  `${items.map(lineText).join(', ')} · $${(totalCents / 100).toFixed(2)}`
 export const fmt = (ms: number) =>
   ms < 1000
     ? `${Math.round(ms)}ms`

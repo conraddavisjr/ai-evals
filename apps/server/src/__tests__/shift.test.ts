@@ -47,6 +47,7 @@ describe('a full mock shift', () => {
       roles: MOCK_ROLES,
       staffing: { cashiers: 2, baristas: 1 },
       arrivalGapMs: 0,
+      triageEnabled: true,
       mockPacing: INSTANT,
     })
     const run = await store.runs.create(config)

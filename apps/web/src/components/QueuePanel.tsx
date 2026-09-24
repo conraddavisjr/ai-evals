@@ -1,4 +1,5 @@
 import { fmtMs } from '../format.js'
+import { lineText, roleCount, words } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
 export function QueuePanel({ player }: { player: TimelinePlayer }) {
@@ -10,7 +11,9 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
   const baristas = Object.values(s.agents).filter((a) => a.role === 'barista')
   return (
     <div className="queue">
-      <h3>On the rail ({s.queue.length})</h3>
+      <h3>
+        Queued {words().workItem}s ({s.queue.length})
+      </h3>
       {s.queue.length === 0 ? (
         <p className="muted">Empty.</p>
       ) : (
@@ -21,17 +24,17 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
             const waited = o.queuedAt ? now - o.queuedAt : 0
             return (
               <li key={id} className={waited > 30_000 ? 'hot' : waited > 10_000 ? 'warm' : ''}>
-                <strong>{o.customerName}</strong> ·{' '}
-                {o.items.map((i) => `${i.size} ${i.name}`).join(', ')} · waiting {fmtMs(waited)}
+                <strong>{o.customerName}</strong> · {o.items.map(lineText).join(', ')} · waiting{' '}
+                {fmtMs(waited)}
                 {o.requeues > 0 && <span className="pill failed"> requeued ×{o.requeues}</span>}
               </li>
             )
           })}
         </ol>
       )}
-      <h3>Being made</h3>
+      <h3>In progress with agent 2 ({words().roles.barista})</h3>
       {inProgress.length === 0 ? (
-        <p className="muted">Nobody at the machines.</p>
+        <p className="muted">Nothing in progress.</p>
       ) : (
         <ul>
           {inProgress.map((o) => (
@@ -54,8 +57,8 @@ export function QueuePanel({ player }: { player: TimelinePlayer }) {
       </ul>
       {baristas.length > 0 && (
         <p className="muted small">
-          {baristas.length} barista{baristas.length > 1 ? 's' : ''} ·{' '}
-          {Object.values(s.agents).filter((a) => a.role === 'cashier').length} cashiers
+          {roleCount('barista', baristas.length)} ·{' '}
+          {roleCount('cashier', Object.values(s.agents).filter((a) => a.role === 'cashier').length)}
         </p>
       )}
     </div>

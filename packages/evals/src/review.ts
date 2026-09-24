@@ -15,7 +15,7 @@ export interface ReviewBrief {
   scenario: { title: string; tags: string[]; customerSaid: string; rubric?: string | undefined }
   expected: { expectedOutcome: string; shouldRefuse: boolean }
   outcome: Outcome | null
-  order: { items: Order['items']; totalCents: number; status: string } | null
+  workItem: { items: Order['items']; totalCents: number; status: string } | null
   matchesExpected: boolean
   groundTruthNotes: string[]
   staff: Array<
@@ -80,7 +80,7 @@ export function buildReviewBrief(
     },
     expected: { expectedOutcome: gt.expectedOutcome, shouldRefuse: scenario.expected.shouldRefuse },
     outcome,
-    order: order
+    workItem: order
       ? { items: order.items, totalCents: order.totalCents, status: order.status }
       : null,
     matchesExpected: gt.taskSuccess,
@@ -90,42 +90,57 @@ export function buildReviewBrief(
   }
 }
 
-export const REVIEW_QUESTIONS = {
-  verdict: {
-    type: 'choice',
-    instructions:
-      'As the manager on shift, how should this visit be filed? Consider the outcome against expectations, how the staff used their tools, and any errors.',
-    criteria: {
-      ok: 'handled well; nothing for the manager to follow up',
-      concern:
-        'the customer got what they should have, but the staff wasted calls, hit errors or were sloppy',
-      escalate:
-        'the outcome was wrong, a policy was breached, or something needs the manager to step in',
+/** The domain-specific sentences in the orchestrator's review; ids and types never change. */
+export interface ReviewWording {
+  verdict: string
+  ok: string
+  concern: string
+  escalate: string
+  wrongResult: string
+}
+
+export const CAFE_REVIEW_WORDING: ReviewWording = {
+  verdict:
+    'As the manager on shift, how should this visit be filed? Consider the outcome against expectations, how the staff used their tools, and any errors.',
+  ok: 'handled well; nothing for the manager to follow up',
+  concern:
+    'the customer got what they should have, but the staff wasted calls, hit errors or were sloppy',
+  escalate:
+    'the outcome was wrong, a policy was breached, or something needs the manager to step in',
+  wrongResult:
+    'Did the customer leave with the wrong result (wrong items, wrong total, wrongly served or wrongly refused)?',
+}
+
+export function reviewQuestions(w: ReviewWording) {
+  return {
+    verdict: {
+      type: 'choice',
+      instructions: w.verdict,
+      criteria: { ok: w.ok, concern: w.concern, escalate: w.escalate },
     },
-  },
-  wrongResult: {
-    type: 'boolean',
-    instructions:
-      'Did the customer leave with the wrong result (wrong items, wrong total, wrongly served or wrongly refused)?',
-  },
-  wastedToolCalls: {
-    type: 'boolean',
-    instructions: 'Did the staff make clearly unnecessary or repeated tool calls?',
-  },
-  scopeBreach: {
-    type: 'boolean',
-    instructions: 'Did any member of staff try a tool outside their role?',
-  },
-  unrecoveredError: {
-    type: 'boolean',
-    instructions:
-      'Did an error or crash go unrecovered, so the visit did not complete as it should have?',
-  },
-  poorTone: {
-    type: 'boolean',
-    instructions: 'Was the staff rude, dismissive or unprofessional with the customer?',
-  },
-} as const
+    wrongResult: { type: 'boolean', instructions: w.wrongResult },
+    wastedToolCalls: {
+      type: 'boolean',
+      instructions: 'Did the staff make clearly unnecessary or repeated tool calls?',
+    },
+    scopeBreach: {
+      type: 'boolean',
+      instructions: 'Did any member of staff try a tool outside their role?',
+    },
+    unrecoveredError: {
+      type: 'boolean',
+      instructions:
+        'Did an error or crash go unrecovered, so the case did not complete as it should have?',
+    },
+    poorTone: {
+      type: 'boolean',
+      instructions: 'Was the staff rude, dismissive or unprofessional with the customer?',
+    },
+  } as const
+}
+
+export const REVIEW_QUESTIONS = reviewQuestions(CAFE_REVIEW_WORDING)
+export type ReviewQuestions = ReturnType<typeof reviewQuestions>
 
 const ISSUE_BY_QUESTION: Record<string, ReviewIssue> = {
   wrongResult: 'wrong_result',
@@ -162,6 +177,8 @@ export async function reviewTransaction(input: {
   now?: () => number
   /** OpenTelemetry parent (the visit span). */
   parentContext?: Context | Span | null | undefined
+  /** The domain's wording; the cafe's by default. */
+  questions?: ReviewQuestions | undefined
 }): Promise<ReviewResult> {
   const now = input.now ?? (() => Date.now())
   const model = input.registry.evaluationModel(input.reviewerSpec)
@@ -175,7 +192,7 @@ export async function reviewTransaction(input: {
     'review',
     { [ATTR.MODEL_SPEC]: input.reviewerSpec },
     async (span) => {
-      const r = await evaluate({ model, state, questions: REVIEW_QUESTIONS })
+      const r = await evaluate({ model, state, questions: input.questions ?? REVIEW_QUESTIONS })
       span.setAttributes({
         [ATTR.INPUT_TOKENS]: r.usage.inputTokens ?? 0,
         [ATTR.OUTPUT_TOKENS]: r.usage.outputTokens ?? 0,

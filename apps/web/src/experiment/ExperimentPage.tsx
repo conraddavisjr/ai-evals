@@ -1,7 +1,13 @@
 import type { DatasetSummary, SuiteDetail } from '@cafe/protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { shortModel } from '../format.js'
-import { type ModelsInfo, type OrchestratorInfo, useExperimentApi } from '../harness/index.js'
+import {
+  type DomainInfo,
+  type ModelsInfo,
+  type OrchestratorInfo,
+  useExperimentApi,
+} from '../harness/index.js'
+import { describeSpec } from '../lib/nomenclature.js'
 import { PipelineDiagram } from './PipelineDiagram.js'
 import { AgentPanel } from './panels/AgentPanel.js'
 import { DatasetPanel } from './panels/DatasetPanel.js'
@@ -24,11 +30,13 @@ type Tab = 'config' | 'suites' | 'results'
  */
 export function ExperimentPage({
   models,
+  domains,
   draft,
   onDraftChange,
   onOpenRun,
 }: {
   models: ModelsInfo
+  domains: DomainInfo[]
   draft: SuiteDraft
   onDraftChange: (d: SuiteDraft) => void
   onOpenRun: (runId: string) => void
@@ -77,18 +85,16 @@ export function ExperimentPage({
       dataset: dataset
         ? `${dataset.name} · ${itemCount} item${itemCount === 1 ? '' : 's'}`
         : 'Pick a dataset',
-      orchestrator: `${orchestrators.find((o) => o.id === draft.orchestrator)?.label ?? draft.orchestrator} · manager ${shortModel(draft.roles.manager)}`,
-      cashier: `${shortModel(draft.roles.cashier)} · ${draft.staffing.cashiers} on shift`,
-      barista: `${shortModel(draft.roles.barista)} · ${draft.staffing.baristas} on shift`,
+      orchestrator: `${orchestrators.find((o) => o.id === draft.orchestrator)?.label ?? draft.orchestrator} · ${shortModel(draft.roles.manager)} (${describeSpec(draft.roles.manager)})`,
+      cashier: `${shortModel(draft.roles.cashier)} · ${draft.staffing.cashiers} running`,
+      barista: `${shortModel(draft.roles.barista)} · ${draft.staffing.baristas} running`,
       mcp:
         draft.chaos.toolErrorRate > 0 ||
         draft.chaos.agentCrashRate > 0 ||
         draft.chaos.toolLatencyMs > 0
           ? `chaos: ${Math.round(draft.chaos.toolErrorRate * 100)}% tool errors · ${Math.round(draft.chaos.agentCrashRate * 100)}% crashes · +${draft.chaos.toolLatencyMs}ms`
           : 'no chaos · scoped tool slices',
-      review: draft.reviewEnabled
-        ? `${shortModel(draft.roles.manager)} reviews every visit`
-        : 'off',
+      review: draft.reviewEnabled ? `${shortModel(draft.roles.manager)} reviews every case` : 'off',
       judge: draft.judgeEnabled ? shortModel(draft.roles.judge) : 'off',
       telemetry: `${draft.variants.length} variant${draft.variants.length === 1 ? '' : 's'} × ${itemCount} items`,
     }),
@@ -148,7 +154,12 @@ export function ExperimentPage({
       <div className="exp-body">
         <div className="exp-left">
           <div className="exp-diagram">
-            <PipelineDiagram selected={selected} onSelect={setSelected} summaries={summaries} />
+            <PipelineDiagram
+              domain={draft.domain}
+              selected={selected}
+              onSelect={setSelected}
+              summaries={summaries}
+            />
           </div>
           <div className="exp-node">
             {selected === null && (
@@ -156,6 +167,7 @@ export function ExperimentPage({
             )}
             {selected === 'dataset' && (
               <DatasetPanel
+                domains={domains}
                 draft={draft}
                 onChange={onDraftChange}
                 datasets={datasets}
@@ -189,7 +201,7 @@ export function ExperimentPage({
               <div className="node-panel">
                 <h3>Spans + metrics</h3>
                 <p className="muted small">
-                  Every run is traced (visit, turn, step, tool call, review, judge) and rolled up. A
+                  Every run is traced (case, turn, step, tool call, review, judge) and rolled up. A
                   suite compares its variants side by side: pass rate, refusals, tool precision,
                   latency, judge and review verdicts, cost, and an item × variant grid.
                 </p>

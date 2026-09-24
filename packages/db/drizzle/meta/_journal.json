@@ -43,6 +43,13 @@
       "when": 1789932871491,
       "tag": "0005_melted_lord_hawal",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790208653431,
+      "tag": "0006_aromatic_the_stranger",
+      "breakpoints": true
     }
   ]
 }

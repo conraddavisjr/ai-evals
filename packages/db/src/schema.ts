@@ -109,6 +109,20 @@ export const suites = pgTable('suites', {
   error: text('error'),
 })
 
+/**
+ * A decision-bench run: the same labelled decisions asked of several evaluation
+ * models. Config and report are the evals package's shapes, stored as JSON.
+ */
+export const benches = pgTable('benches', {
+  id: text('id').primaryKey(),
+  status: text('status').$type<'running' | 'finished' | 'failed'>().notNull(),
+  config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+  report: jsonb('report').$type<unknown>(),
+  error: text('error'),
+  createdAt: ms('created_at').notNull(),
+  finishedAt: ms('finished_at'),
+})
+
 export const runs = pgTable(
   'runs',
   {

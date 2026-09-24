@@ -187,6 +187,9 @@ importers:
       '@cafe/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@cafe/domains':
+        specifier: workspace:*
+        version: link:../../packages/domains
       '@cafe/evals':
         specifier: workspace:*
         version: link:../../packages/evals
@@ -328,6 +331,30 @@ importers:
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
+
+  packages/domains:
+    dependencies:
+      '@cafe/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@cafe/db':
+        specifier: workspace:*
+        version: link:../db
+      '@cafe/evals':
+        specifier: workspace:*
+        version: link:../evals
+      '@cafe/mcp-gateway':
+        specifier: workspace:*
+        version: link:../mcp-gateway
+      '@cafe/models':
+        specifier: workspace:*
+        version: link:../models
+      '@cafe/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   packages/evals:
     dependencies:

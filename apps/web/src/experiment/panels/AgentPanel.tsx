@@ -1,25 +1,14 @@
 import type { ModelsInfo } from '../../harness/index.js'
+import { roleLabel, words } from '../../lib/nomenclature.js'
 import type { SuiteDraft } from '../suite-draft.js'
 import { ModelPicker } from './ModelPicker.js'
 
 const COPY = {
-  cashier: {
-    title: 'Cashier',
-    blurb:
-      'Takes the order: menu lookup, customer lookup, create and fill the order, charge, put the ticket on the rail. Refuses what it should.',
-    countKey: 'cashiers' as const,
-    max: 2,
-  },
-  barista: {
-    title: 'Barista',
-    blurb:
-      'Pulls the next ticket, fetches the recipe, consumes inventory, logs the drink, marks it ready and calls the customer.',
-    countKey: 'baristas' as const,
-    max: 4,
-  },
+  cashier: { countKey: 'cashiers' as const, max: 2 },
+  barista: { countKey: 'baristas' as const, max: 4 },
 }
 
-/** A sub-agent role: its model and how many are on shift. */
+/** A sub-agent role: its model and how many instances run in parallel. */
 export function AgentPanel({
   role,
   draft,
@@ -34,8 +23,12 @@ export function AgentPanel({
   const c = COPY[role]
   return (
     <div className="node-panel">
-      <h3>{c.title}</h3>
-      <p className="muted small">{c.blurb}</p>
+      <h3>{roleLabel(role)}</h3>
+      <p className="muted small">
+        A sub-agent: its own model, its own tool slice. {words().business} calls it the{' '}
+        {words().roles[role]}.
+      </p>
+      <p className="muted small">{words().agentBlurbs[role]}</p>
       <ModelPicker
         label="model"
         value={draft.roles[role]}
@@ -44,7 +37,9 @@ export function AgentPanel({
         hint="a chat model with tool use"
       />
       <label className="row">
-        <span className="cap">on shift</span>
+        <span className="cap" title="How many copies of this agent work cases in parallel">
+          instances
+        </span>
         <input
           type="number"
           min={1}

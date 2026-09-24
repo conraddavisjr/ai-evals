@@ -307,3 +307,10 @@
     max-height: 50%;
   }
 }
+/* the dataset's items, grouped by first tag; the tag header toggles its group */
+.dataset-group {
+  margin: 8px 0 12px;
+}
+.dataset-group > button.tag {
+  margin-bottom: 4px;
+}

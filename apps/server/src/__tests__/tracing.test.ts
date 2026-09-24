@@ -42,6 +42,7 @@ describe('OpenTelemetry spans', () => {
       },
       staffing: { cashiers: 1, baristas: 1 },
       arrivalGapMs: 0,
+      triageEnabled: true,
       mockPacing: INSTANT,
     })
     const run = await store.runs.create(config)

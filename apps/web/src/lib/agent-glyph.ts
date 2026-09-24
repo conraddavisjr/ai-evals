@@ -11,16 +11,4 @@ export const AGENT_GLYPH_SVG =
   '<path d="M6 11.6h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
   '</svg>'
 
-/**
- * The nomenclature seam. The cafe names its sub-agents by station (cashier,
- * barista, manager); what they are underneath is sub-agents with a tool slice.
- * Every place that prints an agent id goes through here, so moving the language
- * to "agent" (or anything less cafe-shaped) is one change in one file.
- */
-export function agentLabel(agentId: string): string {
-  return agentId
-}
-
-export function isAgentId(id: string | null | undefined): boolean {
-  return !!id && /^(cashier|barista|manager|judge)-\d+$/.test(id)
-}
+export { agentLabel, isAgentId } from './nomenclature.js'

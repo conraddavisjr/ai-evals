@@ -1,7 +1,14 @@
 import { runAgent } from '@cafe/agents'
 import type { CafeStore } from '@cafe/db'
-import { type Outcome, runMetrics, scenariosFor, TRIAGE_QUESTIONS } from '@cafe/evals'
-import { createChaos, Gateway } from '@cafe/mcp-gateway'
+import { BUILTIN_SCENARIOS, type DomainPack, domainPack } from '@cafe/domains'
+import { type Outcome, runMetrics } from '@cafe/evals'
+import {
+  type ActionGuard,
+  connectRemoteTools,
+  createChaos,
+  Gateway,
+  type RemoteToolSource,
+} from '@cafe/mcp-gateway'
 import { ModelRegistry } from '@cafe/models'
 import type { RunConfig, Scenario, TransactionMetrics } from '@cafe/protocol'
 import {
@@ -13,6 +20,7 @@ import {
   startSpan,
   withSpan,
 } from '@cafe/telemetry'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { experimental_evaluate as evaluate } from 'ai'
 import { ulid } from 'ulid'
 import type { EventBus } from './event-bus.js'
@@ -52,10 +60,12 @@ const defaultSleep = (ms: number, signal?: AbortSignal) =>
   })
 
 /**
- * Runs one shift: customers arrive on a schedule, cashiers take them in FIFO order,
- * tickets land on the rail, baristas pull them FIFO, the judge scores each visit,
- * and metrics are rolled up at close. Deterministic glue; the models only live
- * inside runAgent and the triage/judge evaluate() calls.
+ * Runs one shift: cases arrive on a schedule, agent 1 (intake) takes them in FIFO
+ * order, work items land on the queue, agent 2 (fulfilment) pulls them FIFO, the
+ * orchestrator reviews and the judge scores each case, and metrics are rolled up at
+ * close. The run's domain pack supplies the tools, prompts, triage and judge
+ * wording; this engine is the same for every business. Deterministic glue; the
+ * models only live inside runAgent and the triage/review/judge evaluate() calls.
  */
 export class ShiftOrchestrator {
   readonly runId: string
@@ -66,7 +76,8 @@ export class ShiftOrchestrator {
   private readonly now: () => number
   private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>
   private readonly abort = new AbortController()
-  private readonly gateway: Gateway
+  private gateway: Gateway
+  private remoteTools: RemoteToolSource | null = null
   private readonly staff: StaffPool
   private readonly chaos
   private spentUsd = 0
@@ -79,10 +90,20 @@ export class ShiftOrchestrator {
   private visitIndex = 0
   private readonly scenarios: Scenario[]
   private readonly suite: { suiteId: string; variant: string } | null
+  private readonly pack: DomainPack
+  /** The case behind each txId, for the action gate's view of who is asking. */
+  private readonly cases = new Map<string, { scenario: Scenario; utterance: string }>()
 
   constructor(deps: OrchestratorDeps) {
     this.parentContext = deps.parentContext ?? null
-    this.scenarios = deps.scenarios ?? scenariosFor(deps.config.scenarioIds)
+    this.pack = domainPack(deps.config.domain)
+    this.scenarios =
+      deps.scenarios ??
+      deps.config.scenarioIds.map((id) => {
+        const s = BUILTIN_SCENARIOS.get(id)
+        if (!s) throw new Error(`Unknown scenario id: ${id}`)
+        return s
+      })
     this.suite = deps.suite ?? null
     this.store = deps.store
     this.bus = deps.bus
@@ -96,9 +117,9 @@ export class ShiftOrchestrator {
         mockPacing: deps.config.mockPacing,
         mockSeed: deps.config.chaos.seed,
         mockBeforeStep: async ({ persona, step }) => {
-          // Make the Nth barista pickup hang right after it claims the ticket.
+          // Make the Nth fulfilment pickup hang right after it claims the work item.
           if (
-            persona.startsWith('barista') &&
+            this.config.roles.barista === `mock:${persona}` &&
             step === 2 &&
             this.config.mockPacing.hangOrders.includes(this.claimedOrders - 1)
           ) {
@@ -107,13 +128,16 @@ export class ShiftOrchestrator {
         },
       })
     this.chaos = createChaos(deps.config.chaos)
-    this.staff = new StaffPool(this.bus, deps.config.roles)
+    this.staff = new StaffPool(this.bus, deps.config.roles, this.pack.staff)
     this.gateway = new Gateway({
       store: this.store,
       emit: this.bus.emit,
       chaos: deps.config.chaos,
       now: this.now,
       services: { staffing: this.staff },
+      tools: this.pack.tools,
+      roleScopes: this.pack.roleScopes,
+      guard: this.actionGuard(),
     })
     this.bus.subscribe((e) => {
       if (e.type === 'model.usage') this.spentUsd += e.costUsd
@@ -127,8 +151,40 @@ export class ShiftOrchestrator {
 
   private overBudget = () => this.spentUsd >= this.config.budget.maxUsdPerRun
 
+  /**
+   * Swap the gateway's catalogue for a remote MCP server's before the shift
+   * starts. Each remote tool's scope is `tool:<name>`; a role holds the scopes of
+   * the tools the config lists for it.
+   */
+  private async attachToolSource(): Promise<void> {
+    const src = this.config.tools
+    if (src.kind !== 'mcp') return
+    const transport = new StreamableHTTPClientTransport(new URL(src.url), {
+      requestInit: { headers: src.headers },
+    })
+    this.remoteTools = await connectRemoteTools({
+      // the SDK's transport classes declare optional fields without `undefined`; the cast bridges exactOptionalPropertyTypes
+      transport: transport as unknown as Parameters<typeof connectRemoteTools>[0]['transport'],
+      scopeOf: (name) => `tool:${name}`,
+    })
+    const roleScopes = Object.fromEntries(
+      Object.entries(src.roleTools).map(([role, tools]) => [role, tools.map((t) => `tool:${t}`)]),
+    )
+    this.gateway = new Gateway({
+      store: this.store,
+      emit: this.bus.emit,
+      chaos: this.config.chaos,
+      now: this.now,
+      services: { staffing: this.staff },
+      tools: this.remoteTools.tools,
+      roleScopes,
+      guard: this.actionGuard(),
+    })
+  }
+
   async run(): Promise<void> {
     const scenarios = this.scenarios
+    await this.attachToolSource()
     this.runSpan = startSpan(
       'run',
       `run ${this.config.name}`,
@@ -138,6 +194,7 @@ export class ShiftOrchestrator {
           ? { [ATTR.SUITE_ID]: this.suite.suiteId, [ATTR.VARIANT]: this.suite.variant }
           : {}),
         'cafe.scenarios': scenarios.length,
+        'cafe.domain': this.pack.id,
         'cafe.roles.cashier': this.config.roles.cashier,
         'cafe.roles.barista': this.config.roles.barista,
         'cafe.roles.manager': this.config.roles.manager,
@@ -146,7 +203,7 @@ export class ShiftOrchestrator {
       this.parentContext,
     )
     await this.store.runs.setStatus(this.runId, 'running', { startedAt: this.now() })
-    await this.store.inventory.initForRun(this.runId)
+    await this.pack.initForRun?.(this.store, this.runId)
     this.bus.emit({ type: 'run.started', config: this.config })
     this.staff.hire(this.config.staffing)
     this.staff.whenSpawned((m) => {
@@ -205,6 +262,7 @@ export class ShiftOrchestrator {
     } finally {
       this.customersDone = true
       this.runSpan.end()
+      await this.remoteTools?.close().catch(() => {})
       await this.bus.flush()
     }
   }
@@ -241,6 +299,7 @@ export class ShiftOrchestrator {
       customerId,
       name: scenario.customer.name,
       scenarioId: scenario.id,
+      title: scenario.title,
       sprite: scenario.customer.sprite,
       utterance,
       expected: {
@@ -250,46 +309,49 @@ export class ShiftOrchestrator {
         cashierTools: scenario.expected.cashierTools,
         baristaTools: scenario.expected.baristaTools,
         tags: scenario.tags,
+        items: scenario.expected.items,
+        ...(scenario.expected.totalCents !== undefined
+          ? { totalCents: scenario.expected.totalCents }
+          : {}),
+        shouldRefuse: scenario.expected.shouldRefuse,
+        ...(scenario.expected.rubric ? { rubric: scenario.expected.rubric } : {}),
       },
     })
     emit({ type: 'customer.moved', txId, customerId, to: 'waiting' })
 
-    if (this.config.triageEnabled)
-      await this.triage(txId, customerId, utterance).catch((err) =>
-        console.warn('[triage] skipped:', err instanceof Error ? err.message : err),
-      )
+    this.cases.set(txId, { scenario, utterance })
+    const routed = this.config.triageEnabled
+      ? await this.triage(txId, customerId, utterance).catch((err) => {
+          const message = err instanceof Error ? err.message : String(err)
+          console.warn('[triage] skipped:', message)
+          emit({
+            type: 'agent.error',
+            txId,
+            agentId: 'manager-1',
+            role: 'manager',
+            kind: 'model',
+            message: `triage: ${message}`,
+            retryable: false,
+          })
+          return false
+        })
+      : false
 
-    const cashier = await this.staff.acquire('cashier')
-    let cashierResult: Awaited<ReturnType<typeof runAgent>> | null = null
-    try {
-      emit({ type: 'customer.moved', txId, customerId, to: cashier.station })
-      emit({ type: 'customer.spoke', txId, customerId, text: utterance })
-      cashierResult = await runAgent({
-        agent: cashier.spec,
-        task: utterance,
-        context: {
-          customerId,
-          customerName: scenario.customer.name,
-          ...(scenario.customer.loyaltyId ? { loyaltyId: scenario.customer.loyaltyId } : {}),
-          txId,
-        },
-        runId: this.runId,
+    // triage routing: the decision model turned the case away at the door; agent 1 never runs
+    if (routed)
+      emit({
+        type: 'order.refused',
         txId,
-        gateway: this.gateway,
-        registry: this.registry,
-        store: this.store,
-        emit,
-        budget: this.config.budget,
-        chaos: this.chaos,
-        overBudget: this.overBudget,
-        now: this.now,
-        parentContext: visitSpan,
+        customerId,
+        cashierId: 'manager-1',
+        reason: 'Declined at triage: the request reads as an attempt to manipulate the agents',
       })
-    } finally {
-      this.staff.release(cashier)
-    }
+    const cashierResult = routed
+      ? null
+      : await this.intake(visitSpan, txId, customerId, scenario, utterance)
 
     const refused = this.bus.buffer.some((e) => e.txId === txId && e.type === 'order.refused')
+
     let order = await this.store.orders.byTx(this.runId, txId)
 
     if (refused) {
@@ -322,7 +384,9 @@ export class ShiftOrchestrator {
     } else {
       // Cashier never got the ticket onto the rail: crash, timeout, budget, or gave up.
       if (order && order.status !== 'failed' && order.status !== 'refused') {
-        const reason = cashierResult?.error ?? `cashier stopped with order ${order.status}`
+        const reason =
+          cashierResult?.error ??
+          `${this.pack.vocabulary.roles.cashier} stopped with the ${this.pack.vocabulary.workItem} ${order.status}`
         await this.store.orders.fail(order.id, reason)
         emit({ type: 'order.failed', txId, orderId: order.id, reason })
         outcome = 'failed'
@@ -350,6 +414,40 @@ export class ShiftOrchestrator {
     })
   }
 
+  /** Agent 1 takes the case: the domain's intake with its tools, ending in a queued work item or a decline. */
+  private async intake(
+    visitSpan: Span,
+    txId: string,
+    customerId: string,
+    scenario: Scenario,
+    utterance: string,
+  ): Promise<Awaited<ReturnType<typeof runAgent>>> {
+    const emit = this.bus.emit
+    const cashier = await this.staff.acquire('cashier')
+    try {
+      emit({ type: 'customer.moved', txId, customerId, to: cashier.station })
+      emit({ type: 'customer.spoke', txId, customerId, text: utterance })
+      return await runAgent({
+        agent: cashier.spec,
+        task: utterance,
+        context: { ...this.pack.intakeContext(scenario, customerId), txId },
+        runId: this.runId,
+        txId,
+        gateway: this.gateway,
+        registry: this.registry,
+        store: this.store,
+        emit,
+        budget: this.config.budget,
+        chaos: this.chaos,
+        overBudget: this.overBudget,
+        now: this.now,
+        parentContext: visitSpan,
+      })
+    } finally {
+      this.staff.release(cashier)
+    }
+  }
+
   /** The shared post-visit pipeline (review, judge, metrics), bound to this run. */
   private get pipeline() {
     return {
@@ -359,10 +457,93 @@ export class ShiftOrchestrator {
       registry: this.registry,
       now: this.now,
       overBudget: this.overBudget,
+      questions: { judge: this.pack.judgeQuestions, review: this.pack.reviewQuestions },
     }
   }
 
-  private async triage(txId: string, customerId: string, utterance: string): Promise<void> {
+  /**
+   * The action gate: when the run turns it on and the domain names gated tools,
+   * a decision model approves or blocks each such call before it executes. Fails
+   * closed: a gate that cannot answer blocks, because the calls it guards move money.
+   */
+  private actionGuard(): ActionGuard | undefined {
+    const gate = this.pack.gate
+    if (!this.config.gate.enabled || !gate) return undefined
+    const spec = this.config.gate.modelSpec ?? this.config.roles.manager
+    const threshold = this.config.gate.threshold
+    return async ({ cap, tool, args }) => {
+      if (!gate.tools.includes(tool)) return null
+      const c = cap.txId ? this.cases.get(cap.txId) : undefined
+      const started = this.now()
+      try {
+        const raw = await gate.state({
+          store: this.store,
+          runId: this.runId,
+          customerSaid: c?.utterance ?? '',
+          requester: {
+            name: c?.scenario.customer.name ?? 'unknown',
+            accountId: c?.scenario.customer.loyaltyId,
+          },
+          tool,
+          args,
+        })
+        const res = await withSpan('gate', `gate ${tool}`, { [ATTR.MODEL_SPEC]: spec }, () =>
+          evaluate({
+            model: this.registry.evaluationModel(spec),
+            // evaluate() takes strictly JSON state: the round trip drops undefined fields
+            state: JSON.parse(JSON.stringify(raw)) as Parameters<typeof evaluate>[0]['state'],
+            questions: { approve: { type: 'boolean', instructions: gate.instructions } },
+          }),
+        )
+        const p = res.answers.approve.probability
+        const latencyMs = this.now() - started
+        const allowed = p >= threshold
+        this.bus.emit({
+          type: 'guard.decided',
+          txId: cap.txId,
+          agentId: cap.agentId,
+          tool,
+          args,
+          approveProbability: p,
+          allowed,
+          modelSpec: spec,
+          latencyMs,
+        })
+        if (cap.txId)
+          recordUsage(this.pipeline, {
+            txId: cap.txId,
+            agentId: 'manager-1',
+            role: 'manager',
+            modelSpec: spec,
+            step: 1,
+            inputTokens: res.usage.inputTokens ?? 0,
+            outputTokens: res.usage.outputTokens ?? 0,
+            latencyMs,
+          })
+        return {
+          allow: allowed,
+          reason: allowed
+            ? 'approved'
+            : `the reviewer put the chance this is appropriate at ${Math.round(p * 100)}%. Do not retry it; tell the customer what you can do instead.`,
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        this.bus.emit({
+          type: 'agent.error',
+          txId: cap.txId,
+          agentId: 'manager-1',
+          role: 'manager',
+          kind: 'model',
+          message: `gate: ${message}`,
+          retryable: false,
+        })
+        return { allow: false, reason: 'the approval check is unavailable right now' }
+      }
+    }
+  }
+
+  /** Door triage; true when routing is on and the case was turned away. */
+  private async triage(txId: string, customerId: string, utterance: string): Promise<boolean> {
     const modelSpec = this.config.roles.manager
     const model = this.registry.evaluationModel(modelSpec)
     const started = this.now()
@@ -373,8 +554,8 @@ export class ShiftOrchestrator {
       async (span) => {
         const r = await evaluate({
           model,
-          state: `Customer at the door said: ${JSON.stringify(utterance)}`,
-          questions: TRIAGE_QUESTIONS,
+          state: this.pack.triage.state(utterance),
+          questions: this.pack.triage.questions,
         })
         span.setAttributes({
           [ATTR.INPUT_TOKENS]: r.usage.inputTokens ?? 0,
@@ -386,6 +567,7 @@ export class ShiftOrchestrator {
       },
     )
     const latencyMs = this.now() - started
+    const routed = this.config.triageRoutes && res.answers.intent.choice === 'adversarial'
     this.bus.emit({
       type: 'triage.decided',
       txId,
@@ -395,6 +577,7 @@ export class ShiftOrchestrator {
       escalateProbability: res.answers.escalate.probability,
       modelSpec,
       latencyMs,
+      ...(routed ? { routed } : {}),
     })
     const inTok = res.usage.inputTokens ?? 0
     const outTok = res.usage.outputTokens ?? 0
@@ -408,6 +591,7 @@ export class ShiftOrchestrator {
       outputTokens: outTok,
       latencyMs,
     })
+    return routed
   }
 
   // ---------- baristas ----------
@@ -445,7 +629,7 @@ export class ShiftOrchestrator {
       this.staff.moveTo(barista, home)
       const result = await runAgent({
         agent: barista.spec,
-        task: 'There is a ticket on the rail. Make it and call it out.',
+        task: this.pack.fulfilTask,
         context: { station: home },
         runId: this.runId,
         gateway: this.gateway,
@@ -487,7 +671,7 @@ export class ShiftOrchestrator {
         }
       }
       // call_out already walked them to the counter; bring them back to the machine.
-      if (result.toolCalls.some((t) => t.tool === 'orders.call_out' && t.ok))
+      if (result.toolCalls.some((t) => t.tool === this.pack.handoffTool && t.ok))
         barista.station = 'pickup'
       this.staff.moveTo(barista, home)
       barista.busy = false

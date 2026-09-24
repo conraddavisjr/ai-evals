@@ -134,15 +134,19 @@ export const ARCH = {
       title: 'React panels',
       nick: 'the menu board',
       summary:
-        'Shift config, Visits (waterfalls), Queue, Inspector, Metrics, Log, playback controls.',
+        'Run config (with the business domain), Cases (waterfalls), Queue, Inspector, Metrics, Log, playback controls; the Experiment and Decision bench pages.',
       details: [
         'Run config with per-role model specs, scenarios, staffing, chaos, budget and a pre-run cost estimate; the draft lives in App so the header, the empty stage and the Shift tab all start the same run.',
         'Playback controls carry their own help: two sentences per mode, expandable to the long form (playback/mode-docs.ts).',
         'The Log opens a nested inspector pane beside the trace instead of switching tabs; the side panel is resizable up to half the viewport (components/usePanelWidth.ts).',
         'Metrics has a Telemetry view: hand-rolled SVG charts (charts/) over the span aggregate: tool latency and reasoning latency per step as dot strips, cumulative cost, errors by layer and kind, one row per visit. Polls while the run is live.',
         'The Experiment page (experiment/) is a clickable pipeline diagram (the architecture engine in select mode) whose nodes open that layer’s controls: dataset editor, engine + manager, staff models, chaos, judge. Variants beside it each loop the dataset; results show per-variant metrics, an item x variant grid and overlaid telemetry.',
-        'Visits tab renders one waterfall per customer with beat percentages.',
-        'Inspector shows an agent’s model, latency, usage, tool trail and last words; clicking a red “!” lands here.',
+        'Cases tab: one entry per golden case ("Case 3 · <title>") with its verdict, the orchestrator review and why, the judge, and a timing table (router, each agent with its tool calls, the wait for agent 2, gate, review, judge; lib/case-timing.ts). Opening a case shows its details in the panel with the list as a column to its left.',
+        'Every themed word goes through lib/nomenclature.ts, which follows the active domain (the loaded run’s, else the draft’s, or the suite’s on the Experiment page): "agent 1 (support rep 2)", resolved/declined, beat labels.',
+        'The Run tab has a Business domain picker and a Decision points section: triage routing and the action gate with its own model and threshold.',
+        'Themes (menu, Settings · Theme; themes/theme.ts): Refined (default, themes/refined.css, an override layer scoped under :root[data-theme="refined"]) and Stardust (the base stylesheets, the game look). The Village and Pixel canvases keep their look in both. Spec: docs/design/REFINED-THEME.md.',
+        'The Decision bench page (bench/) runs the same labelled decisions (door, gate, judge) against up to five evaluation models and shows accuracy vs latency per decision point, a scores table and every decision a model got wrong.',
+        'Inspector: linked views of a case (its full golden expectation, the expected tools per agent marked called / missing / unexpected, and what happened), a tool (description, scope, holders, input schema, every call in the run) an agent (persona with Read more, tool slice, model, latency, usage, tool trail), and a case’s judge verdict or orchestrator review (every answer, agreement with ground truth, model, cost, the brief it read). Drilling in opens the next view in the panel and moves the previous ones into columns to its left (InspectorTrail), folding the oldest into strips when the stage would get too narrow. Case pills are verdicts: green when the outcome matches the expectation, red with a red case header when it deviates.',
         'Metrics tab reads /api/runs/:id/metrics and compares recent shifts.',
       ],
       files: [
@@ -153,6 +157,9 @@ export const ARCH = {
         'apps/web/src/components/TelemetryPanel.tsx',
         'apps/web/src/charts/*.tsx',
         'apps/web/src/experiment/*.tsx',
+        'apps/web/src/bench/BenchPage.tsx',
+        'apps/web/src/lib/nomenclature.ts',
+        'apps/web/src/themes/*',
       ],
     },
     {
@@ -312,7 +319,7 @@ export const ARCH = {
       summary:
         'Jev answers typed questions with calibrated probabilities; the only current route to it.',
       details: [
-        'Jev is a decision model, not a chat model: it cannot run a tool loop, so it is a judge or triage model, never a barista.',
+        'Jev is a decision model, not a chat model: it cannot run a tool loop, so it sits at the decision points (triage and routing, the action gate, the orchestrator review, the judge), never in an agent’s chair.',
         'Model id on the gateway: typesafe-ai/jev-latest; spec in this repo: gateway:typesafe-ai/jev.',
         'Any other gateway model works too (gateway:anthropic/…, gateway:openai/…).',
       ],
@@ -478,10 +485,12 @@ export const ARCH = {
       title: 'Orchestrator (stardust engine)',
       nick: 'the floor manager',
       summary:
-        'The built-in engine: arrivals, registers, rail, baristas; one entry in a registry so other engines (Mastra, LangChain) can drive a shift.',
+        'The built-in engine: cases arrive, agent 1 takes them, work items queue, agent 2 fulfils. The run’s domain pack supplies the business.',
       details: [
+        'Domain-neutral: RunConfig.domain picks the DomainPack that supplies tools, prompts, triage and judge wording; one registry entry, so other engines (Mastra, LangChain) can drive a run.',
         'RunConfig.orchestrator names an entry in orchestrators/index.ts; the contract (run(), cancel(), which events to emit) is in docs/ORCHESTRATORS.md.',
-        'Customers arrive on a schedule; each visit acquires a free cashier FIFO.',
+        'Cases arrive on a schedule; each acquires a free agent 1 FIFO (intake()), unless triage routing turned it away at the door.',
+        'Builds the action gate from the pack (actionGuard()): gated tool calls are approved or blocked by an evaluation model before they run; fails closed.',
         'Closes out half-opened orders on refusal; fails what a crashed cashier left behind.',
         'The post-visit pipeline (manager review, judge, visit metrics) is shared in orchestrators/visit-pipeline.ts, so every engine is evaluated the same way.',
         'At close: metrics roll-up, run.finished, status persisted.',
@@ -526,12 +535,13 @@ export const ARCH = {
       seg: 'orch',
       x: 1040,
       y: 770,
-      title: 'Triage, manager review + judge',
+      title: 'Router, action gate, review + judge',
       nick: 'the maître d’, the floor manager and the inspector',
       summary:
-        'Three experimental_evaluate() calls per visit: intent/escalate at the door, the manager’s review of the staff’s trail, the judge’s verdict.',
+        'evaluate() at four decision points: the router (off by default), the action gate, the orchestrator’s review, the judge.',
       details: [
-        'All three use an evaluation model (manager’s or judge’s), so Jev and LLMs are interchangeable here.',
+        'All use an evaluation model (the orchestrator’s, the gate’s own or the judge’s), so Jev and LLMs are interchangeable here; the wording of each question comes from the domain pack, the ids and types never change.',
+        'triage.decided carries routed when routing turned the case away; guard.decided carries P(approve), allowed, spec and latency.',
         'The review is the orchestration layer reasoning over its sub-agents: unblinded tool trail with timings, transcript, errors; emits manager.reviewed (ok / concern / escalate + issues) and is stored with the brief.',
         'Verdicts are emitted as judge.verdict and stored with the blinded transcript for audit.',
         'Usage rows are recorded for every one of these calls, not only for staff turns.',
@@ -577,11 +587,22 @@ export const ARCH = {
       seg: 'agents',
       x: 1450,
       y: 770,
-      title: 'Personas',
-      nick: 'the name tags',
-      summary: 'System prompts, names and sprites for cashier, barista, manager.',
-      details: ['Prompts spell out the tool order and what each role must refuse.'],
-      files: ['packages/agents/src/personas.ts'],
+      title: 'Domain packs',
+      nick: 'the franchise binders',
+      summary:
+        'One business per pack: words, tools, prompts, mocks, golden dataset, question wording, gate.',
+      details: [
+        'cafe (Stardust Cafe, the original, with the animated scenes) and support (Brightside Goods support desk: refunds, replacements and store credit against a returns policy).',
+        'Registered in packages/domains; its mocks register as mock:<persona> with the model registry. Add a pack there plus its vocabulary in protocol.',
+        'The harness keeps stable internal keys (roles cashier/barista/manager, order.* events) so stored runs replay; every label comes from the pack’s vocabulary.',
+        'See docs/DOMAIN-PACKS.md.',
+      ],
+      files: [
+        'packages/domains/src/*.ts',
+        'packages/domains/src/support/*.ts',
+        'packages/agents/src/personas.ts',
+        'docs/DOMAIN-PACKS.md',
+      ],
     },
     {
       id: 'crash',
@@ -611,8 +632,15 @@ export const ARCH = {
         'A capability names agent, role, run, visit and scopes; the model may be told about a slice, but the token decides.',
         'Out-of-scope calls are rejected and emitted as agent.scope_violation.',
         'Tool results and errors are handed back as data so the model can recover.',
+        'An optional guard (the action gate) runs after scope and validation and before the handler; a block fails the call with code "blocked" and a reason the agent reads.',
+        'The catalogue is injectable: RunConfig.tools = { kind: "mcp", url, roleTools } lists another MCP server’s tools at run start and forwards every call over the wire (connectRemoteTools); scope, timing, chaos, events and spans stay here. See docs/TOOL-SOURCES.md.',
       ],
-      files: ['packages/mcp-gateway/src/gateway.ts', 'packages/mcp-gateway/src/roles.ts'],
+      files: [
+        'packages/mcp-gateway/src/gateway.ts',
+        'packages/mcp-gateway/src/roles.ts',
+        'packages/mcp-gateway/src/remote.ts',
+        'docs/TOOL-SOURCES.md',
+      ],
     },
     {
       id: 'tools',
@@ -620,16 +648,17 @@ export const ARCH = {
       x: 2050,
       y: 770,
       w: 235,
-      title: 'Tool slices',
+      title: 'Tool slices (per domain pack)',
       nick: 'the stations',
       summary:
-        'Cashier (menu, orders, payments), barista (rail, recipes, inventory), manager (staffing, requeue).',
+        'Each pack brings its catalogue and role scopes: cafe menu, orders, rail; support accounts, policy, cases, refunds.',
       details: [
         'cashier: menu.lookup, customers.lookup, orders.create/add_item/refuse, payments.charge, orders.enqueue',
         'barista: orders.claim_next (FOR UPDATE SKIP LOCKED), recipes.get, inventory.consume, drinks.log_made, orders.mark_ready/call_out',
         'manager: orders.queue_status/requeue, staffing.list/spawn_barista, inventory.restock, incidents.log',
+        'support rep: accounts.lookup, purchases.get, policy.get/check, cases.open/add_action/approve/submit/decline; fulfilment: cases.claim_next, refunds.issue, replacements.ship, cases.resolve/notify; both packs write work items to the same orders queue.',
       ],
-      files: ['packages/mcp-gateway/src/tools/*.ts'],
+      files: ['packages/mcp-gateway/src/tools/*.ts', 'packages/domains/src/support/tools.ts'],
     },
     {
       id: 'mcpserver',
@@ -686,7 +715,8 @@ export const ARCH = {
       summary:
         'Scripted personas drive the real tools; a mock evaluation model answers the judge questions.',
       details: [
-        'cashier, cashier-naive, barista, barista-forgetful, manager; realistic pacing and an optional hang.',
+        'cashier, cashier-naive, barista, barista-forgetful, manager; packs add their own (support-rep, support-rep-naive, support-fulfil, support-fulfil-forgetful, support-lead) with registerPersona().',
+        'The mock evaluator answers every question id the harness asks (including approve and block) from keyword rules, with a per-persona adversarial pattern: the floor a decision model has to beat.',
         'Zero cost, deterministic, exercises gateway, DB, events, scene and metrics for real.',
       ],
       files: ['packages/models/src/mock/*.ts'],
@@ -714,8 +744,9 @@ export const ARCH = {
       title: 'Scenarios + golden datasets',
       nick: 'the regulars',
       summary:
-        '14 built-in scripted customers (happy, edge, adversarial) plus user-defined golden datasets stored in Postgres.',
+        'A read-only golden dataset per domain pack, plus user-defined datasets in Postgres.',
       details: [
+        'builtin:stardust and builtin:support ship 14 cases each.',
         'A scenario is a golden item: the customer’s input (name, utterance, loyalty id) and the expected output (items, total, tools per role, refusal, rubric).',
         'Datasets: the built-in one is virtual (builtin:stardust, read-only); saved ones live in datasets / dataset_items and their items are ds:<datasetId>:<slug>.',
         'resolveScenarios() turns a run config’s ids into scenarios (built-ins + dataset items, in order) before a run row exists, so a bad id is a 400.',
@@ -750,7 +781,7 @@ export const ARCH = {
       nick: 'Inspector Wren',
       summary: 'Strips model names, agent ids and staff names; one question set for every judge.',
       details: [
-        'Questions: correct, refusalAppropriate (boolean), helpfulness, tone, toolUseQuality (5-level scores).',
+        'Questions: correct, refusalAppropriate (boolean), helpfulness, tone, toolUseQuality (5-level scores); judgeQuestions() takes the pack’s wording.',
         'Same call for Jev, Claude, GPT, Gemini or an open-weights model.',
       ],
       files: ['packages/evals/src/judge.ts'],
@@ -760,7 +791,7 @@ export const ARCH = {
       seg: 'evals',
       x: 1010,
       y: 1200,
-      w: 805,
+      w: 400,
       h: 70,
       title: 'Metrics roll-up',
       nick: 'the end-of-day report',
@@ -768,6 +799,29 @@ export const ARCH = {
         'Task success, refusal accuracy, tool P/R, scope violations, retries, latency percentiles per role and per beat, tokens, USD, judge means.',
       details: ['Per visit and per run; persisted to run_metrics and shown in the Metrics tab.'],
       files: ['packages/evals/src/metrics.ts'],
+    },
+    {
+      id: 'bench',
+      seg: 'evals',
+      x: 1430,
+      y: 1200,
+      w: 385,
+      h: 70,
+      title: 'Decision bench',
+      nick: 'the blind tasting',
+      summary:
+        'Labelled decisions (door, gate, judge) asked of up to five evaluation models side by side.',
+      details: [
+        'Items come from the pack: the door from its golden cases, the gate from its rules (gateBench()), the judge from a finished run’s transcripts with matchesExpected removed.',
+        'POST /api/bench runs in the background (BenchRunner) and stores the report in the benches table; pnpm eval --bench prints the tables.',
+        'Where Jev is compared with LLMs on the work a decision model is built for. See docs/DECISION-MODELS.md.',
+      ],
+      files: [
+        'packages/evals/src/bench.ts',
+        'packages/protocol/src/bench.ts',
+        'apps/server/src/bench.ts',
+        'apps/web/src/bench/BenchPage.tsx',
+      ],
     },
     // data
     {
@@ -793,7 +847,8 @@ export const ARCH = {
       w: 310,
       title: 'Drizzle schema + seed',
       nick: 'the shelves',
-      summary: '14 tables; catalog seeded with menu, recipes, ingredients, loyalty customers.',
+      summary:
+        '15 tables; catalog seeded with menu, recipes, ingredients, loyalty customers; benches holds decision-bench reports.',
       details: ['Migrations generated with drizzle-kit; pnpm db:migrate / db:seed / db:reset.'],
       files: ['packages/db/src/schema.ts', 'packages/db/src/seed-data.ts'],
     },
@@ -836,9 +891,12 @@ export const ARCH = {
       title: 'Domain + RunConfig',
       nick: 'the rulebook',
       summary:
-        'Order, Scenario, RunConfig (roles, staffing, chaos, budget, mockPacing), Station, Role.',
-      details: ['Defaults via .prefault so a partial config is enough.'],
-      files: ['packages/protocol/src/domain.ts'],
+        'Order, Scenario, RunConfig (domain, roles, staffing, chaos, budget, triageRoutes, gate, mockPacing), Station, Role; DomainVocabulary per domain.',
+      details: [
+        'Defaults via .prefault so a partial config is enough.',
+        'vocabulary.ts holds every themed word by domain (business, work item, role and outcome names, beats), read by the web without a round trip.',
+      ],
+      files: ['packages/protocol/src/domain.ts', 'packages/protocol/src/vocabulary.ts'],
     },
     {
       id: 'beats',
@@ -895,6 +953,11 @@ export const ARCH = {
     { from: 'layout', to: 'scene3d', label: 'tiles → world' },
     { from: 'routes', to: 'runmanager', label: 'start / cancel' },
     { from: 'routes', to: 'suiterunner', label: 'POST /api/suites' },
+    { from: 'routes', to: 'bench', label: 'POST /api/bench' },
+    { from: 'bench', to: 'registry', label: 'evaluationModel()' },
+    { from: 'cli', to: 'bench', label: '--bench' },
+    { from: 'personas', to: 'shift', label: 'DomainPack' },
+    { from: 'gw', to: 'triage', label: 'guard (action gate)' },
     { from: 'suiterunner', to: 'runmanager', label: 'start() per variant' },
     { from: 'runmanager', to: 'eventbus', label: 'one per run' },
     { from: 'runmanager', to: 'shift', label: 'run()' },
@@ -912,7 +975,8 @@ export const ARCH = {
     { from: 'runagent', to: 'budget', label: '' },
     { from: 'personas', to: 'runagent', label: 'system prompt' },
     { from: 'crash', to: 'eventbus', label: 'agent.*, model.usage' },
-    { from: 'gw', to: 'tools', label: 'dispatch' },
+    { from: 'gw', to: 'tools', label: 'dispatch (builtin)' },
+    { from: 'gw', to: 'mcpclient', label: 'forward (remote MCP)' },
     { from: 'gw', to: 'mcpserver', label: 'expose slice' },
     { from: 'tools', to: 'store', label: 'reads / writes' },
     { from: 'gw', to: 'eventbus', label: 'tool_called / returned' },

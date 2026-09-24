@@ -222,6 +222,15 @@
   flex-direction: column;
   gap: 6px;
 }
+/* A node's foreignObject is 400px taller than its card, room for the card to
+   expand. Only the card takes the pointer: otherwise a selected node, which is
+   raised to the top, swallows clicks meant for the node drawn below it. */
+.archv .node foreignObject {
+  pointer-events: none;
+}
+.archv .node .card {
+  pointer-events: auto;
+}
 .archv .card:hover {
   box-shadow: var(--card-shadow-hover);
   transform: translateY(-1px);
