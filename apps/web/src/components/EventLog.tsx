@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { fmtMs } from '../format.js'
+import { AgentGlyph } from '../lib/AgentGlyph.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import { VISIBLE_EVENTS } from '../playback/TimelinePlayer.js'
 import { AgentInspector } from './AgentInspector.js'
@@ -82,7 +83,10 @@ export function EventLog({
             >
               <span className="t">{fmtMs(e.t - t0)}</span>
               <span className="ty">{e.type}</span>
-              <span className="who">{who}</span>
+              <span className="who">
+                {'agentId' in e && <AgentGlyph />}
+                {who}
+              </span>
               <span className="d">{detail}</span>
             </button>
           )

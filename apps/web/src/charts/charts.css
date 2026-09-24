@@ -52,6 +52,14 @@
   stroke-width: 1.5;
   stroke-dasharray: 2 2;
 }
+.chart .tick-p99 {
+  stroke-width: 1;
+  stroke-dasharray: 1 2;
+  opacity: 0.8;
+}
+.chart .hit.pickable {
+  cursor: pointer;
+}
 .chart .bar {
   stroke: var(--panel);
   stroke-width: 1;

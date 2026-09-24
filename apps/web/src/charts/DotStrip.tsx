@@ -10,6 +10,7 @@ export interface DotStripGroup {
   samples: number[]
   p50: number
   p95: number
+  p99?: number | undefined
   color: string
   /** Extra detail for the tooltip and the right-hand annotation (e.g. "2 errors"). */
   note?: string | undefined
@@ -26,11 +27,14 @@ export function DotStrip({
   format = fmtMs,
   scale = 'log',
   rowHeight = 22,
+  onPick,
 }: {
   groups: DotStripGroup[]
   format?: (v: number) => string
   scale?: 'log' | 'linear'
   rowHeight?: number
+  /** A row was clicked: drill into it. */
+  onPick?: ((group: DotStripGroup, index: number) => void) | undefined
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const width = useWidth(ref)
@@ -96,6 +100,16 @@ export function DotStrip({
                 y2={cy + 8}
                 stroke={g.color}
               />
+              {g.p99 !== undefined && g.p99 > g.p95 && (
+                <line
+                  className="tick-p99"
+                  x1={x(g.p99)}
+                  x2={x(g.p99)}
+                  y1={cy - 6}
+                  y2={cy + 6}
+                  stroke={g.color}
+                />
+              )}
               {g.note && (
                 <text
                   className={`row-note ${g.noteBad ? 'bad' : ''}`}
@@ -108,18 +122,21 @@ export function DotStrip({
                 </text>
               )}
               <rect
-                className="hit"
+                className={`hit ${onPick ? 'pickable' : ''}`}
                 x={m.left}
                 y={cy - rowHeight / 2}
                 width={plotW}
                 height={rowHeight}
+                onClick={() => onPick?.(g, i)}
                 onMouseEnter={(e) =>
                   show(
                     e,
                     <span>
                       <b>{g.label}</b> · n {g.samples.length} · p50 {format(g.p50)} · p95{' '}
                       {format(g.p95)}
+                      {g.p99 !== undefined ? ` · p99 ${format(g.p99)}` : ''}
                       {g.note ? ` · ${g.note}` : ''}
+                      {onPick ? ' · click to drill in' : ''}
                     </span>,
                   )
                 }
