@@ -215,6 +215,15 @@ html, body { height: 100%; margin: 0; overflow: hidden; } body { background: var
 .archv .node {
   transition: opacity 0.2s;
 }
+/* A node's foreignObject is 400px taller than its card, room for the card to
+   expand. Only the card takes the pointer: otherwise a selected node, which is
+   raised to the top, swallows clicks meant for the node drawn below it. */
+.archv .node foreignObject {
+  pointer-events: none;
+}
+.archv .node .card {
+  pointer-events: auto;
+}
 .archv .node.dim {
   opacity: 0.35;
 }
