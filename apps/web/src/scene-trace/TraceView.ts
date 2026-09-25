@@ -409,12 +409,14 @@ export function createGame(
           !BANDS.some((band) => col.bands[band].some((b) => b.agentId === focusAgent)),
       )
       const known = col.leftSeq !== null && col.leftSeq <= at ? col.outcome : null
-      const v = verdictPill(known, col.expectedOutcome)
+      const scored = col.scoredSeq !== null && col.scoredSeq <= at ? col.passed : null
+      const v = verdictPill(known, col.expectedOutcome, scored)
       pill.className = v.cls
       pill.textContent = notYet ? 'Not arrived' : v.text
       pill.title = v.title
-      card.classList.toggle('verdict-fail', verdictOf(known, col.expectedOutcome) === 'fail')
-      card.classList.toggle('verdict-pass', verdictOf(known, col.expectedOutcome) === 'pass')
+      const verdict = verdictOf(known, col.expectedOutcome, scored)
+      card.classList.toggle('verdict-fail', verdict === 'fail')
+      card.classList.toggle('verdict-pass', verdict === 'pass')
       for (const s of segs) {
         const seen = (xs: number[]) => xs.some((x) => x <= at)
         s.el.classList.toggle('lit', seen(s.seqs))

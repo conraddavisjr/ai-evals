@@ -12,15 +12,28 @@ import { z } from 'zod'
  *   gateway:anthropic/claude-opus-5
  *   ollama/llama3.3                  (any OpenAI-compatible server)
  *   mock:cashier-happy               (deterministic, zero cost)
+ *   app:claude-opus-5                (an app under test reported this model; never called by the harness)
  */
-export const ModelProvider = z.enum(['anthropic', 'openai', 'google', 'gateway', 'ollama', 'mock'])
+export const ModelProvider = z.enum([
+  'anthropic',
+  'openai',
+  'google',
+  'gateway',
+  'ollama',
+  'mock',
+  'app',
+])
 export type ModelProvider = z.infer<typeof ModelProvider>
 
 export const ModelSpec = z
   .string()
-  .regex(/^(anthropic|openai|google|ollama)\/[\w.:-]+$|^gateway:[\w-]+\/[\w.:-]+$|^mock:[\w-]+$/, {
-    message: 'ModelSpec must look like provider/model, gateway:provider/model, or mock:persona',
-  })
+  .regex(
+    /^(anthropic|openai|google|ollama)\/[\w.:-]+$|^gateway:[\w-]+\/[\w.:-]+$|^mock:[\w-]+$|^app:[\w.:/-]+$/,
+    {
+      message:
+        'ModelSpec must look like provider/model, gateway:provider/model, mock:persona or app:model',
+    },
+  )
 export type ModelSpec = z.infer<typeof ModelSpec>
 
 export interface ParsedModelSpec {
@@ -35,6 +48,7 @@ export function parseModelSpec(spec: string): ParsedModelSpec {
   if (raw.startsWith('gateway:'))
     return { provider: 'gateway', model: raw.slice('gateway:'.length), raw }
   if (raw.startsWith('mock:')) return { provider: 'mock', model: raw.slice('mock:'.length), raw }
+  if (raw.startsWith('app:')) return { provider: 'app', model: raw.slice('app:'.length), raw }
   const slash = raw.indexOf('/')
   return { provider: ModelProvider.parse(raw.slice(0, slash)), model: raw.slice(slash + 1), raw }
 }

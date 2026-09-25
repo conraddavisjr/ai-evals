@@ -2187,3 +2187,47 @@ main.with-trail .panel .inspector-back {
   padding: 0;
   white-space: nowrap;
 }
+
+/* ---------- a target run's checks on a case (Inspector) ---------- */
+.inspector .case-checks {
+  list-style: none;
+  margin: 4px 0 10px;
+  padding: 0;
+}
+.inspector .case-checks li {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.inspector .case-checks .check-mark {
+  flex: none;
+  width: 14px;
+  font-weight: 700;
+}
+.inspector .case-checks li.good .check-mark {
+  color: var(--good);
+}
+.inspector .case-checks li.bad .check-mark,
+.inspector .case-checks li.bad .check-label {
+  color: var(--bad);
+}
+.inspector .case-output summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--gold);
+}
+.inspector .case-output pre {
+  max-height: 320px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

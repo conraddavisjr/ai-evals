@@ -1,6 +1,7 @@
 # Evaluating another project's AI: targets, config packs and the recipe builder
 
-Status: design, not built.
+Status: the HTTP target slice of phases 0 and 1 is built as `packages/targets` (headless, no database; see [TARGETS.md](TARGETS.md)).
+The pack/target split inside the server, events for the Trace board, PGlite and the published Action are still design.
 Written 2026-09-24 after studying `../recipe-builder` (Palate) with its agent, which wrote the consumer side in `recipe-builder/docs/evals-integration.md`.
 
 ## The question

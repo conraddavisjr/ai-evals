@@ -1,4 +1,4 @@
-import type { CafeEvent } from '@cafe/protocol'
+import { answersLine, type CafeEvent } from '@cafe/protocol'
 import { agentLabel, roleLabel } from './nomenclature.js'
 
 /**
@@ -97,7 +97,10 @@ export function caseTiming(events: CafeEvent[], txId: string): CaseTiming {
       case 'judge.verdict': {
         const r = row('judge', 'judge', 'judge')
         r.ms += e.latencyMs
-        r.detail = `correct ${Math.round(e.answers.correct.probability * 100)}%`
+        r.detail =
+          'correct' in e.answers
+            ? (answersLine(e.answers).split(' · ')[0] ?? '')
+            : `${Object.keys(e.answers).length} answers`
         break
       }
       default:

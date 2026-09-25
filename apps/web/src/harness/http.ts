@@ -11,6 +11,7 @@ import type {
   ExperimentClient,
   HarnessClient,
   ModelsInfo,
+  ProjectInfo,
   RunRow,
   StreamHandlers,
 } from './types.js'
@@ -41,7 +42,9 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
       json<Scenario[]>(`/api/scenarios${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`),
     domains: () => json<DomainInfo[]>('/api/domains'),
     models: () => json<ModelsInfo>('/api/models'),
-    runs: () => json<RunRow[]>('/api/runs'),
+    runs: (project) =>
+      json<RunRow[]>(`/api/runs${project ? `?project=${encodeURIComponent(project)}` : ''}`),
+    projects: () => json<ProjectInfo[]>('/api/projects'),
     run: (id) => json<RunRow>(`/api/runs/${id}`),
     startRun: (config: RunConfigInput) =>
       json<{ runId: string }>('/api/runs', { method: 'POST', body: JSON.stringify(config) }),

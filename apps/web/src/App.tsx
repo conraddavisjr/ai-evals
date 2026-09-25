@@ -26,6 +26,7 @@ import {
 import { outcomeLabel, roleCount, sentence, setActiveDomain, words } from './lib/nomenclature.js'
 import { TimelinePlayer } from './playback/TimelinePlayer.js'
 import { usePlayer } from './playback/usePlayer.js'
+import { ProjectsPage } from './projects/ProjectsPage.js'
 import { applyTheme, readTheme, THEMES, type ThemeId } from './themes/theme.js'
 import { DEFAULT_VIEW_ID, findView, SCENE_VIEWS, type SceneHandle } from './views/index.js'
 
@@ -53,7 +54,9 @@ export function App() {
   const [isLive, setIsLive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('run')
-  const [page, setPage] = useState<'cafe' | 'experiment' | 'bench' | 'architecture'>('cafe')
+  const [page, setPage] = useState<'cafe' | 'experiment' | 'bench' | 'architecture' | 'projects'>(
+    'cafe',
+  )
   const [suiteDraft, setSuiteDraft] = useState<SuiteDraft | null>(null)
   const experiment = useExperimentApi()
   const [sceneId, setSceneId] = useState<string>(() => {
@@ -154,7 +157,7 @@ export function App() {
     page === 'experiment'
       ? (suiteDraft?.domain ?? 'cafe')
       : (player.state.config?.domain ?? draft?.domain ?? 'cafe')
-  setActiveDomain(domainId)
+  setActiveDomain(domainId, page === 'experiment' ? null : player.state.config?.target?.vocabulary)
   const vocab = words()
   // The Village and Pixel scenes draw the cafe; any other business plays on the Trace board.
   const shownSceneId = !vocab.hasScene && findView(sceneId).cafeArt ? 'trace' : sceneId
@@ -239,6 +242,8 @@ export function App() {
     async (run: RunRow) => {
       closeStream.current?.()
       player.reset()
+      // Views build labels as events arrive: the run's own words must be active first.
+      setActiveDomain(run.config.domain, run.config.target?.vocabulary)
       const events = await api.events(run.id)
       if (run.active) {
         player.setMode('live-buffered')
@@ -255,9 +260,25 @@ export function App() {
         setRunStatus(run.status)
       }
       setTab('cases')
+      // A shareable link to what is on screen: the CLI prints the same form.
+      const url = new URL(window.location.href)
+      url.searchParams.set('run', run.id)
+      window.history.replaceState(null, '', url)
     },
     [api, attach],
   )
+
+  // ?run=<id> opens that run: the link the target CLI prints ("watch it live") and CI posts.
+  const linkedRun = useRef(new URL(window.location.href).searchParams.get('run'))
+  useEffect(() => {
+    const id = linkedRun.current
+    if (!id) return
+    linkedRun.current = null
+    api
+      .run(id)
+      .then((run) => loadRun(run))
+      .catch(() => {})
+  }, [api, loadRun])
 
   const cancel = useCallback(async () => {
     if (runId) await api.cancelRun(runId)
@@ -343,6 +364,16 @@ export function App() {
                 }}
               >
                 Run view
+              </button>
+              <button
+                type="button"
+                className={page === 'projects' ? 'on' : ''}
+                onClick={() => {
+                  setPage('projects')
+                  setMenuOpen(false)
+                }}
+              >
+                Projects
               </button>
               <button
                 type="button"
@@ -476,6 +507,15 @@ export function App() {
         style={{ '--panel-width': `${panel.width}px` } as React.CSSProperties}
       >
         {page === 'architecture' && <ArchitectureView />}
+        {page === 'projects' && (
+          <ProjectsPage
+            onOpenRun={(run) => {
+              void loadRun(run)
+                .then(() => setPage('cafe'))
+                .catch(() => {})
+            }}
+          />
+        )}
         {page === 'bench' && models && <BenchPage models={models} domains={domains} />}
         {page === 'experiment' && models && suiteDraft && (
           <ExperimentPage

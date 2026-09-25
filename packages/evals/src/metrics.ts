@@ -4,10 +4,12 @@ import {
   type JudgeAnswers,
   type LatencyStats,
   type Order,
+  probabilityOf,
   type ReviewVerdict,
   type Role,
   type RunMetrics,
   type Scenario,
+  scoreOf,
   type TransactionMetrics,
 } from '@cafe/protocol'
 import { groundTruth, type Outcome, toolScores } from './ground-truth.js'
@@ -182,11 +184,13 @@ export function runMetrics(
     costUsd: per.reduce((a, t) => a + t.costUsd, 0),
     judgeMeans: judged.length
       ? {
-          correct: mean(judged.map((j) => j.correct.probability)),
-          refusalAppropriate: mean(judged.map((j) => j.refusalAppropriate.probability)),
-          helpfulness: mean(judged.map((j) => j.helpfulness.score)),
-          tone: mean(judged.map((j) => j.tone.score)),
-          toolUseQuality: mean(judged.map((j) => j.toolUseQuality.score)),
+          correct: mean(judged.flatMap((j) => probabilityOf(j, 'correct') ?? [])),
+          refusalAppropriate: mean(
+            judged.flatMap((j) => probabilityOf(j, 'refusalAppropriate') ?? []),
+          ),
+          helpfulness: mean(judged.flatMap((j) => scoreOf(j, 'helpfulness') ?? [])),
+          tone: mean(judged.flatMap((j) => scoreOf(j, 'tone') ?? [])),
+          toolUseQuality: mean(judged.flatMap((j) => scoreOf(j, 'toolUseQuality') ?? [])),
         }
       : null,
     reviewCounts: reviewed.length ? reviewCounts : null,

@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "required": ["contract", "outcome", "recipes"],
+  "properties": {
+    "contract": { "const": 1 },
+    "outcome": { "enum": ["recipes", "declined", "capped", "error"] },
+    "recipes": { "type": "array" }
+  }
+}
