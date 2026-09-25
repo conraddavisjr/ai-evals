@@ -1,0 +1,26 @@
+{
+  "name": "@cafe/targets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cli": "tsx src/cli.ts",
+    "schemas": "tsx src/scripts/write-schemas.ts && biome format --write ../../docs/contracts"
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "^4.0.17",
+    "@cafe/models": "workspace:*",
+    "ai": "^7.0.105",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13"
+  }
+}

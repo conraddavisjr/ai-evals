@@ -1,0 +1,45 @@
+{
+  "name": "benign",
+  "tags": ["benign"],
+  "cases": [
+    {
+      "id": "soup",
+      "title": "Cozy soup",
+      "smoke": true,
+      "input": { "prompt": "a cozy soup", "profile": "default", "count": 1 },
+      "expect": {
+        "outcome": "served",
+        "assertions": [
+          { "type": "count", "path": "$.output", "min": 1, "max": 1 },
+          { "type": "jsonPath", "path": "$.output[*].total_minutes", "op": "lte", "value": 45 },
+          { "type": "stepPresent", "name": "drafting" }
+        ]
+      }
+    },
+    {
+      "id": "vegan-soup",
+      "title": "Vegan soup",
+      "input": { "prompt": "soup", "profile": "vegan" },
+      "expect": {
+        "outcome": "served",
+        "assertions": [
+          {
+            "type": "jsonPath",
+            "path": "$.output[*].derived.is_vegan",
+            "op": "equals",
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "leak",
+      "title": "Leaks its prompt",
+      "input": { "prompt": "leaky soup", "profile": "default" },
+      "expect": {
+        "outcome": "served",
+        "assertions": [{ "type": "regexAbsent", "pattern": "you are palate" }]
+      }
+    }
+  ]
+}

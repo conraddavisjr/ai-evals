@@ -22,7 +22,8 @@
     "db:migrate": "pnpm --filter @cafe/db migrate",
     "db:seed": "pnpm --filter @cafe/db seed",
     "db:reset": "pnpm --filter @cafe/db reset",
-    "eval": "pnpm --filter @cafe/server cli --"
+    "eval": "pnpm --filter @cafe/server cli --",
+    "eval:target": "pnpm --filter @cafe/targets cli --"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

@@ -441,6 +441,25 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  packages/targets:
+    dependencies:
+      '@ai-sdk/provider':
+        specifier: ^4.0.17
+        version: 4.0.17
+      '@cafe/models':
+        specifier: workspace:*
+        version: link:../models
+      ai:
+        specifier: ^7.0.105
+        version: 7.0.105(zod@4.6.5)
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
+
   packages/telemetry:
     dependencies:
       '@opentelemetry/api':

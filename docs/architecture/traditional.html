@@ -572,7 +572,7 @@ const ARCH = {
     {
       id: 'clients-ext',
       title: 'External callers',
-      sub: 'MCP clients and the CLI',
+      sub: 'MCP clients, the CLIs and CI',
       nick: 'Regulars at the Door',
       x: 1300,
       y: 270,
@@ -905,7 +905,7 @@ const ARCH = {
       seg: 'clients-ext',
       x: 1930,
       y: 340,
-      w: 620,
+      w: 300,
       title: 'Eval CLI',
       nick: 'the auditor',
       summary: 'pnpm eval runs shifts headlessly and prints a comparison table.',
@@ -914,6 +914,30 @@ const ARCH = {
         'Config files under runs/ (e.g. compare-models.json, frontier-vs-jev.example.json).',
       ],
       files: ['apps/server/src/cli.ts', 'runs/*.json'],
+    },
+    {
+      id: 'targets',
+      seg: 'clients-ext',
+      x: 2250,
+      y: 340,
+      w: 300,
+      title: 'Target runner',
+      nick: 'the mystery shopper',
+      summary:
+        'pnpm eval:target evaluates another project’s AI over HTTP from its config pack, and gates CI on the result.',
+      details: [
+        'The consumer repo holds evals/stardust.config.json: target URL, body template, response map, datasets, judge questions, thresholds, budget.',
+        'Per case: POST to the app’s eval route, map the answer to served / refused / failed with a reason, run deterministic assertions (JSONPath, count, regex, steps), then ask the judge only if those pass.',
+        'Reports pass rate by tag, false and missed refusals, flaky cases across repeats, and target-reported spend; writes JSON, JUnit and a Markdown summary; exits 1 when a gate fails.',
+        'Headless, no database. First consumer: Palate (recipe-builder). See docs/TARGETS.md.',
+      ],
+      files: [
+        'packages/targets/src/cli.ts',
+        'packages/targets/src/runner.ts',
+        'packages/targets/src/http-target.ts',
+        'packages/targets/src/assertions.ts',
+        'docs/contracts/*.schema.json',
+      ],
     },
     // server
     {
@@ -1501,6 +1525,7 @@ const ARCH = {
     { from: 'routes', to: 'bench', label: 'POST /api/bench' },
     { from: 'bench', to: 'registry', label: 'evaluationModel()' },
     { from: 'cli', to: 'bench', label: '--bench' },
+    { from: 'targets', to: 'registry', label: 'evaluationModel() (judge)' },
     { from: 'personas', to: 'shift', label: 'DomainPack' },
     { from: 'gw', to: 'triage', label: 'guard (action gate)' },
     { from: 'suiterunner', to: 'runmanager', label: 'start() per variant' },
