@@ -244,6 +244,10 @@
               ]
             }
           },
+          "skipJudge": {
+            "default": false,
+            "type": "boolean"
+          },
           "smoke": {
             "default": false,
             "type": "boolean"

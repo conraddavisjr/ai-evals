@@ -49,18 +49,34 @@ export async function judgeCase(input: {
   state: JSONObject
 }): Promise<JudgeRun> {
   const model = input.registry.evaluationModel(input.spec)
-  const questions = Object.fromEntries(
-    input.questions.map((q) =>
-      q.type === 'boolean'
-        ? [q.id, { type: 'boolean' as const, instructions: q.instructions }]
-        : [q.id, { type: 'score' as const, instructions: q.instructions, criteria: q.criteria }],
-    ),
-  )
+  // One call per question type: asked together, LLM adapters answer scores on the
+  // booleans' 0 to 1 scale (0.95 instead of 3.8), which reads as "poor" everywhere.
+  const booleans = input.questions.filter((q) => q.type === 'boolean')
+  const scores = input.questions.filter((q) => q.type === 'score')
   const started = performance.now()
-  const res = await evaluate({ model, state: input.state, questions })
+  const ask = (qs: JudgeQuestion[]) =>
+    qs.length
+      ? evaluate({
+          model,
+          state: input.state,
+          questions: Object.fromEntries(
+            qs.map((q) =>
+              q.type === 'boolean'
+                ? [q.id, { type: 'boolean' as const, instructions: q.instructions }]
+                : [
+                    q.id,
+                    { type: 'score' as const, instructions: q.instructions, criteria: q.criteria },
+                  ],
+            ),
+          ),
+        })
+      : null
+  const results = (await Promise.all([ask(booleans), ask(scores)])).filter((r) => r !== null)
+  const raw: Record<string, { probability?: number; score?: number }> = {}
+  for (const r of results) Object.assign(raw, r.answers)
   const answers: Record<string, JudgeAnswer> = {}
   for (const q of input.questions) {
-    const a = (res.answers as Record<string, { probability?: number; score?: number }>)[q.id]
+    const a = raw[q.id]
     if (!a) continue
     if (q.type === 'boolean') answers[q.id] = { probability: a.probability ?? 0.5 }
     // evaluate() scores levels from 0; reports read 1 to 5 like the rest of the harness.
@@ -69,8 +85,8 @@ export async function judgeCase(input: {
   return {
     answers,
     latencyMs: Math.round(performance.now() - started),
-    inputTokens: res.usage.inputTokens ?? 0,
-    outputTokens: res.usage.outputTokens ?? 0,
+    inputTokens: results.reduce((s, r) => s + (r.usage.inputTokens ?? 0), 0),
+    outputTokens: results.reduce((s, r) => s + (r.usage.outputTokens ?? 0), 0),
   }
 }
 

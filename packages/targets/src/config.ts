@@ -151,6 +151,11 @@ export const EvalCase = z.object({
   /** What a good answer looks like, for the judge. */
   rubric: z.string().optional(),
   judge: z.record(z.string(), JudgeExpectation).default({}),
+  /**
+   * Decide this case on the deterministic checks alone. For requests a judge's
+   * provider will not read (weapons, poisons), where a clean decline is the proof.
+   */
+  skipJudge: z.boolean().default(false),
   /** Part of the fast subset a pull request runs. */
   smoke: z.boolean().default(false),
 })

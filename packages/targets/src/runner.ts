@@ -129,7 +129,7 @@ export async function runPack(o: RunOptions): Promise<Report> {
     const checks = deterministicChecks(c, result)
     let judge: Attempt['judge'] = null
     const expected = { ...defaults, ...c.judge }
-    if (o.judgeSpec && o.config.judge && Object.keys(expected).length) {
+    if (o.judgeSpec && o.config.judge && !c.skipJudge && Object.keys(expected).length) {
       if (checks.some((k) => !k.ok) || result.outcome === 'failed') {
         judge = { answers: {}, latencyMs: 0, skipped: 'deterministic checks already failed' }
       } else {
