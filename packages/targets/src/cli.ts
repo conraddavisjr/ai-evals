@@ -3,7 +3,9 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ModelRegistry } from '@cafe/models'
 import { httpTarget } from './http-target.js'
+import { checkJudge } from './judge.js'
 import { ConfigError, loadPack, selectCases } from './load.js'
+import { replayTarget } from './replay.js'
 import { attemptLine, formatSummary, toJUnit, toMarkdown } from './report.js'
 import { runPack } from './runner.js'
 import { MissingEnvError } from './template.js'
@@ -16,7 +18,9 @@ const USAGE = `Evaluate another project's AI through its config pack.
       [--judge <model spec> | --no-judge]
       [--min-pass 0.9] [--min-pass-tag adversarial=1,benign=0.9]
       [--json out/report.json] [--junit out/junit.xml] [--summary out/summary.md]
-      [--list] [--dry-run]
+      [--list] [--dry-run] [--replay out/report.json]
+
+--replay re-scores the answers saved in an earlier --json report (current assertions and judge, no calls to the app).
 
 Exit codes: 0 every gate passed · 1 a gate failed or the run was cut short · 2 bad config or flags.
 $GITHUB_STEP_SUMMARY, when set, receives a Markdown summary.`
@@ -93,7 +97,10 @@ async function main(): Promise<number> {
   })
   if (!cases.length) throw new ConfigError('No cases selected')
 
-  const target = httpTarget(pack.config.target, { responseSchema: pack.responseSchema })
+  const target =
+    typeof args.replay === 'string'
+      ? replayTarget(at(args.replay))
+      : httpTarget(pack.config.target, { responseSchema: pack.responseSchema })
   const runId = `t-${new Date()
     .toISOString()
     .replace(/[-:.TZ]/g, '')
@@ -130,6 +137,14 @@ async function main(): Promise<number> {
   console.log(
     `${pack.config.name}: ${cases.length} case(s) × ${repeats} against ${target.describe()} · judge ${judgeSpec ?? 'off'} · run ${runId}\n`,
   )
+  const registry = new ModelRegistry({ allowLive: true })
+  if (judgeSpec) {
+    const problem = await checkJudge(registry, judgeSpec)
+    if (problem)
+      throw new ConfigError(
+        `The judge ${judgeSpec} is not answering, so no case was sent: ${problem}\nFix its key, pick another with --judge, or run with --no-judge.`,
+      )
+  }
   const controller = new AbortController()
   process.once('SIGINT', () => {
     console.log('\nStopping: finishing in-flight cases, skipping the rest.')
@@ -140,7 +155,7 @@ async function main(): Promise<number> {
     cases,
     target,
     // The target is live by definition; the judge is whatever the pack or the flag names.
-    registry: new ModelRegistry({ allowLive: true }),
+    registry,
     judgeSpec,
     repeats,
     concurrency,

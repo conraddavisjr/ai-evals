@@ -212,6 +212,26 @@ describe('the CLI', () => {
     expect(smoke.status).toBe(0)
   })
 
+  it('re-scores a saved report without calling the app', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'targets-'))
+    await run([
+      '--config',
+      'fixtures/stardust.config.json',
+      '--no-judge',
+      '--json',
+      join(out, 'r.json'),
+    ])
+    const before = app.calls.length
+    const r = await run(
+      ['--config', 'fixtures/stardust.config.json', '--no-judge', '--replay', join(out, 'r.json')],
+      { FAKE_URL: 'http://127.0.0.1:9/never' },
+    )
+    expect(app.calls.length).toBe(before)
+    expect(r.stdout).toContain('replay of POST')
+    expect(r.stdout).toContain('Pass rate 80.0% (4/5)')
+    expect(r.stdout).toContain('target spend $0.000')
+  })
+
   it('exits 2 on a bad config or a missing secret', async () => {
     const r = await run(['--config', 'fixtures/stardust.config.json'], { FAKE_URL: '' })
     expect(r.stderr).toContain('Missing environment variable: FAKE_URL')

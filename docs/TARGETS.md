@@ -22,9 +22,11 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.confi
 | `--min-pass 0.9` / `--min-pass-tag adversarial=1,benign=0.9` | Override the pack's thresholds. |
 | `--json f` / `--junit f` / `--summary f` | Write the full report, JUnit XML, or a Markdown summary. |
 | `--list` / `--dry-run` | Print the cases, or the exact request bodies, without calling anything. |
+| `--replay <report.json>` | Re-score the answers saved by an earlier `--json` run with the current assertions and judge, without calling the app. |
 
 Exit codes: `0` every gate passed, `1` a gate failed or the run was cut short, `2` a bad config, flag or missing environment variable.
 When `$GITHUB_STEP_SUMMARY` is set the Markdown summary is appended to it.
+Before any case is sent, the judge is asked one tiny question; if it cannot answer (a missing key, an unscoped account) the run stops with exit 2 instead of spending the app's money first.
 
 ## How a case is scored
 

@@ -107,3 +107,20 @@ export function judgeChecks(
     return { kind: 'judge', label: `judge ${id} ${bound}`, ok, detail: `scored ${s} of 5` }
   })
 }
+
+/**
+ * One tiny question before a run, so a missing key or an unscoped account fails
+ * in a second instead of after the app has spent money on every case.
+ */
+export async function checkJudge(registry: ModelRegistry, spec: string): Promise<string | null> {
+  try {
+    await evaluate({
+      model: registry.evaluationModel(spec),
+      state: { request: 'a cozy soup', response: { outcome: 'served' } },
+      questions: { ok: { type: 'boolean', instructions: 'Is this a cooking request?' } },
+    })
+    return null
+  } catch (err) {
+    return (err as Error).message
+  }
+}
