@@ -13,8 +13,43 @@
     "name": {
       "type": "string"
     },
+    "project": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
     "description": {
       "type": "string"
+    },
+    "vocabulary": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "pipeline": {
+      "type": "object",
+      "properties": {
+        "router": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "agent1": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "agent2": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "target": {
       "type": "object",

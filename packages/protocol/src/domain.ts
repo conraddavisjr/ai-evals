@@ -174,6 +174,39 @@ export const ToolSource = z.discriminatedUnion('kind', [
 ])
 export type ToolSource = z.infer<typeof ToolSource>
 
+/**
+ * Set on runs that evaluated another project's AI over HTTP (packages/targets):
+ * which project, where it ran, and the git context, so runs group per project and
+ * link back to their pull request.
+ */
+export const TargetRunInfo = z.object({
+  /** Stable slug the dashboard groups by: "palate". */
+  project: z.string(),
+  /** Display name: "Palate". */
+  projectName: z.string(),
+  /** The config pack's path or name. */
+  pack: z.string(),
+  /** Where the requests went (no secrets). */
+  url: z.string(),
+  source: z.enum(['local', 'ci']),
+  /** Re-scored from an earlier run's saved answers rather than calling the app. */
+  replayOf: z.string().optional(),
+  git: z
+    .object({
+      repo: z.string().optional(),
+      branch: z.string().optional(),
+      commit: z.string().optional(),
+      prNumber: z.number().int().optional(),
+      prUrl: z.string().optional(),
+      /** The CI job that ran it. */
+      runUrl: z.string().optional(),
+    })
+    .default({}),
+  /** Words for this project's moving parts, over the generic target vocabulary. */
+  vocabulary: z.record(z.string(), z.unknown()).default({}),
+})
+export type TargetRunInfo = z.infer<typeof TargetRunInfo>
+
 export const RunConfig = z.object({
   name: z.string().default('shift'),
   /**
@@ -193,6 +226,8 @@ export const RunConfig = z.object({
   arrivalGapMs: z.number().int().nonnegative().default(1500),
   /** Use the judge at all. Off keeps mock-only runs completely free. */
   judgeEnabled: z.boolean().default(true),
+  /** Present when the run evaluated another project over HTTP instead of simulating a domain. */
+  target: TargetRunInfo.optional(),
   /**
    * The router: before agent 1 sees a case, the orchestrator's evaluation model
    * (Jev or an LLM adapter) classifies it (intent, escalate). An input guardrail /

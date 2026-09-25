@@ -11,9 +11,20 @@ export interface Attempt {
   /** Null when the budget ran out before this attempt started. */
   result: TargetResult | null
   checks: Check[]
-  judge: { answers: Record<string, JudgeAnswer>; latencyMs: number; skipped?: string } | null
+  judge: {
+    spec: string
+    answers: Record<string, JudgeAnswer>
+    latencyMs: number
+    /** The wording asked, so a stored verdict keeps its meaning. */
+    questions: Array<{ id: string; type: 'boolean' | 'score'; instructions: string }>
+    skipped?: string
+  } | null
   passed: boolean
   skipped: string | null
+  /** When the request went out (epoch ms), so a recorded run keeps its timeline. */
+  startedAt: number
+  /** Position in the run, from 0, in the order attempts started. */
+  index: number
 }
 
 export interface CaseSummary {
@@ -78,6 +89,8 @@ export interface RunOptions {
   thresholds: { overall?: number | undefined; byTag: Record<string, number> }
   runId: string
   onAttempt?: ((a: Attempt, c: LoadedCase) => void) | undefined
+  /** Called as each attempt's request goes out, before its answer (a live dashboard shows the case arriving). */
+  onStart?: ((c: LoadedCase, attempt: number, index: number, startedAt: number) => void) | undefined
   signal?: AbortSignal | undefined
 }
 
@@ -103,35 +116,44 @@ export async function runPack(o: RunOptions): Promise<Report> {
   let next = 0
   const defaults: Record<string, JudgeExpectation> = o.config.judge?.defaults ?? {}
 
+  let started = 0
   const runOne = async (c: LoadedCase, attempt: number): Promise<Attempt> => {
-    if (o.maxUsd !== null && spent >= o.maxUsd)
-      return {
-        caseId: c.id,
-        attempt,
-        result: null,
-        checks: [],
-        judge: null,
-        passed: false,
-        skipped: `budget of $${o.maxUsd} spent`,
-      }
-    if (o.signal?.aborted)
-      return {
-        caseId: c.id,
-        attempt,
-        result: null,
-        checks: [],
-        judge: null,
-        passed: false,
-        skipped: 'cancelled',
-      }
+    const index = started++
+    const startedAt = Date.now()
+    const skip = (why: string): Attempt => ({
+      caseId: c.id,
+      attempt,
+      result: null,
+      checks: [],
+      judge: null,
+      passed: false,
+      skipped: why,
+      startedAt,
+      index,
+    })
+    if (o.maxUsd !== null && spent >= o.maxUsd) return skip(`budget of $${o.maxUsd} spent`)
+    if (o.signal?.aborted) return skip('cancelled')
+    o.onStart?.(c, attempt, index, startedAt)
     const result = await o.target.invoke(c, { runId: o.runId, attempt, signal: o.signal })
     spent += result.usage?.usd ?? 0
     const checks = deterministicChecks(c, result)
     let judge: Attempt['judge'] = null
     const expected = { ...defaults, ...c.judge }
+    const asked = (o.config.judge?.questions ?? []).map((q) => ({
+      id: q.id,
+      type: q.type,
+      instructions: q.instructions,
+    }))
+    const judged = (patch: Partial<NonNullable<Attempt['judge']>>): Attempt['judge'] => ({
+      spec: o.judgeSpec ?? '',
+      answers: {},
+      latencyMs: 0,
+      questions: asked,
+      ...patch,
+    })
     if (o.judgeSpec && o.config.judge && !c.skipJudge && Object.keys(expected).length) {
       if (checks.some((k) => !k.ok) || result.outcome === 'failed') {
-        judge = { answers: {}, latencyMs: 0, skipped: 'deterministic checks already failed' }
+        judge = judged({ skipped: 'deterministic checks already failed' })
       } else {
         try {
           const state = judgeState(c, result, checks, o.config.judge.maxOutputChars)
@@ -143,10 +165,10 @@ export async function runPack(o: RunOptions): Promise<Report> {
           })
           judgeIn += j.inputTokens
           judgeOut += j.outputTokens
-          judge = { answers: j.answers, latencyMs: j.latencyMs }
+          judge = judged({ answers: j.answers, latencyMs: j.latencyMs })
           checks.push(...judgeChecks(expected, j.answers))
         } catch (err) {
-          judge = { answers: {}, latencyMs: 0, skipped: `judge error: ${(err as Error).message}` }
+          judge = judged({ skipped: `judge error: ${(err as Error).message}` })
           checks.push({
             kind: 'judge',
             label: 'judge answered',
@@ -164,6 +186,8 @@ export async function runPack(o: RunOptions): Promise<Report> {
       judge,
       passed: checks.every((k) => k.ok),
       skipped: null,
+      startedAt,
+      index,
     }
   }
 

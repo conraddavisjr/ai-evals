@@ -96,11 +96,56 @@ export const DOMAIN_VOCABULARY: Record<string, DomainVocabulary> = {
   },
 }
 
+/**
+ * Another project's AI evaluated over HTTP (packages/targets). The app's reported
+ * phases map onto the same pipeline: its pre-classifier is the router, its first
+ * model call is agent 1, and review or repair is agent 2. A run's config pack can
+ * rename any of these (TargetRunInfo.vocabulary).
+ */
+const TARGET_VOCABULARY: DomainVocabulary = {
+  business: 'App under test',
+  requester: 'user',
+  workItem: 'response',
+  line: 'result',
+  queue: 'review',
+  roles: { cashier: 'drafter', barista: 'reviewer', manager: 'router' },
+  agentBlurbs: {
+    cashier: 'The app’s first model call: it drafts the answer to the request.',
+    barista: 'The app’s review and repair: checks the draft and fixes what breaks a rule.',
+  },
+  outcomes: { served: 'served', refused: 'declined', failed: 'failed', abandoned: 'abandoned' },
+  beats: {
+    arrive: 'arrive',
+    order_taken: 'draft',
+    queued: 'hand-off',
+    making: 'review',
+    called_out: 'deliver',
+    left: 'done',
+    judged: 'judge',
+  },
+  moneyLabel: 'cost',
+  hasScene: true,
+}
+DOMAIN_VOCABULARY.target = TARGET_VOCABULARY
+
 export const DEFAULT_DOMAIN = 'cafe'
 
-export function vocabularyFor(domain: string | null | undefined): DomainVocabulary {
-  return (
+/** A domain's words, with a run's own overrides (a config pack's vocabulary) on top. */
+export function vocabularyFor(
+  domain: string | null | undefined,
+  override?: Record<string, unknown> | null,
+): DomainVocabulary {
+  const base =
     DOMAIN_VOCABULARY[domain ?? DEFAULT_DOMAIN] ??
     (DOMAIN_VOCABULARY[DEFAULT_DOMAIN] as DomainVocabulary)
-  )
+  if (!override || !Object.keys(override).length) return base
+  const o = override as Partial<DomainVocabulary>
+  return {
+    ...base,
+    ...o,
+    roles: { ...base.roles, ...(o.roles ?? {}) },
+    agentBlurbs: { ...base.agentBlurbs, ...(o.agentBlurbs ?? {}) },
+    outcomes: { ...base.outcomes, ...(o.outcomes ?? {}) },
+    beats: { ...base.beats, ...(o.beats ?? {}) },
+  }
 }

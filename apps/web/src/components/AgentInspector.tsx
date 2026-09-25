@@ -1,4 +1,10 @@
-import { type CafeEvent, shortScenarioId } from '@cafe/protocol'
+import {
+  type JudgeAnswers as Answers,
+  answersLine,
+  type CafeEvent,
+  probabilityOf,
+  shortScenarioId,
+} from '@cafe/protocol'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { fmtCents, fmtMs, fmtUsd, shortModel } from '../format.js'
 import { type DomainInfo, type ToolInfo, useExperimentApi, useHarness } from '../harness/index.js'
@@ -279,7 +285,11 @@ function CaseDetail({
       <dl>
         <dt>result</dt>
         <dd>
-          <VerdictPill outcome={customer.outcome} expected={exp?.outcome} />{' '}
+          <VerdictPill
+            outcome={customer.outcome}
+            expected={exp?.outcome}
+            scored={customer.scored?.passed}
+          />{' '}
           {!customer.outcome && <span className="muted">at {customer.station}</span>}
         </dd>
       </dl>
@@ -291,7 +301,7 @@ function CaseDetail({
         <dl>
           <dt>outcome</dt>
           <dd>
-            {outcomeLabel(exp.outcome)}
+            {(exp.outcomes ?? [exp.outcome]).map((o) => outcomeLabel(o)).join(' or ')}
             {exp.shouldRefuse ? (
               <span className="muted"> · the right answer is to decline</span>
             ) : null}
@@ -374,6 +384,8 @@ function CaseDetail({
         </>
       )}
 
+      {customer.scored && <CaseChecks scored={customer.scored} />}
+
       {(customer.triage || order || calls.length > 0 || review || verdict) && (
         <h4>What happened</h4>
       )}
@@ -453,16 +465,12 @@ function CaseDetail({
             <dd>
               <code>{shortModel(verdict.judgeSpec)}</code> in {fmtMs(verdict.latencyMs)}
               <ul className="items">
-                <li>correct: {Math.round(verdict.answers.correct.probability * 100)}%</li>
-                <li>
-                  refusal appropriate:{' '}
-                  {Math.round(verdict.answers.refusalAppropriate.probability * 100)}%
-                </li>
-                <li>
-                  helpfulness {verdict.answers.helpfulness.score}/5 · tone{' '}
-                  {verdict.answers.tone.score}
-                  /5 · tool use {verdict.answers.toolUseQuality.score}/5
-                </li>
+                {Object.entries(verdict.answers).map(([id, a]) => (
+                  <li key={id}>
+                    {answerLabel(id)}:{' '}
+                    {'probability' in a ? `${Math.round(a.probability * 100)}%` : `${a.score}/5`}
+                  </li>
+                ))}
               </ul>
             </dd>
           </>
@@ -869,8 +877,9 @@ function JudgeDetail({
   const v = s.verdicts[txId]
   if (!found) return <p className="muted">That case has not arrived at this point in the run.</p>
   const { customer, index } = found
-  const truth = verdictOf(customer.outcome, customer.expected?.outcome)
+  const truth = verdictOf(customer.outcome, customer.expected?.outcome, customer.scored?.passed)
   const usage = evalUsage(player, txId, 'judge')
+  const correct = v ? probabilityOf(v.answers, 'correct') : null
   return (
     <div className="inspector">
       <h3>
@@ -893,27 +902,32 @@ function JudgeDetail({
           <dl>
             <dt>ground truth</dt>
             <dd>
-              <VerdictPill outcome={customer.outcome} expected={customer.expected?.outcome} />
+              <VerdictPill
+                outcome={customer.outcome}
+                expected={customer.expected?.outcome}
+                scored={customer.scored?.passed}
+              />
             </dd>
-            <dt>judge says</dt>
-            <dd>
-              {(() => {
-                const saysRight = v.answers.correct.probability >= 0.5
-                const agrees =
-                  truth === 'pass' || truth === 'fail' ? saysRight === (truth === 'pass') : null
-                return (
-                  <>
-                    {saysRight ? 'right' : 'wrong'} (
-                    {Math.round(v.answers.correct.probability * 100)}%){' '}
-                    {agrees !== null && (
-                      <span className={`pill ${agrees ? 'verdict-pass' : 'verdict-fail'}`}>
-                        {agrees ? '✓ Agrees with ground truth' : '✗ Disagrees with ground truth'}
-                      </span>
-                    )}
-                  </>
-                )
-              })()}
-            </dd>
+            {correct !== null && <dt>judge says</dt>}
+            {correct !== null && (
+              <dd>
+                {(() => {
+                  const saysRight = correct >= 0.5
+                  const agrees =
+                    truth === 'pass' || truth === 'fail' ? saysRight === (truth === 'pass') : null
+                  return (
+                    <>
+                      {saysRight ? 'right' : 'wrong'} ({Math.round(correct * 100)}%){' '}
+                      {agrees !== null && (
+                        <span className={`pill ${agrees ? 'verdict-pass' : 'verdict-fail'}`}>
+                          {agrees ? '✓ Agrees with ground truth' : '✗ Disagrees with ground truth'}
+                        </span>
+                      )}
+                    </>
+                  )
+                })()}
+              </dd>
+            )}
           </dl>
           <h4>Answers</h4>
           <p className="muted small">
@@ -1046,12 +1060,15 @@ function JudgeOverview({
   const rows = Object.entries(s.verdicts)
     .map(([txId, v]) => ({ txId, v, found: caseOfTx(player, txId) }))
     .filter((r) => r.found)
-    .sort((a, b) => a.v.answers.correct.probability - b.v.answers.correct.probability)
+    .sort((a, b) => sortKey(a.v.answers) - sortKey(b.v.answers))
   const disagree = rows.filter((r) => {
-    const t = verdictOf(r.found?.customer.outcome, r.found?.customer.expected?.outcome)
-    return (
-      (t === 'pass' || t === 'fail') && r.v.answers.correct.probability >= 0.5 !== (t === 'pass')
+    const t = verdictOf(
+      r.found?.customer.outcome,
+      r.found?.customer.expected?.outcome,
+      r.found?.customer.scored?.passed,
     )
+    const c = probabilityOf(r.v.answers, 'correct')
+    return c !== null && (t === 'pass' || t === 'fail') && c >= 0.5 !== (t === 'pass')
   }).length
   return (
     <div className="inspector">
@@ -1070,12 +1087,15 @@ function JudgeOverview({
         {rows.map(({ txId, v, found }) => (
           <li key={txId}>
             <button type="button" className="link" onClick={() => onSelect(`judge:${txId}`)}>
-              {caseLabel(found?.index ?? 0)} · correct{' '}
-              {Math.round(v.answers.correct.probability * 100)}%
+              {caseLabel(found?.index ?? 0)} ·{' '}
+              {probabilityOf(v.answers, 'correct') !== null
+                ? `correct ${Math.round((probabilityOf(v.answers, 'correct') ?? 0) * 100)}%`
+                : answersLine(v.answers).split(' · ').slice(0, 2).join(' · ')}
             </button>{' '}
             <VerdictPill
               outcome={found?.customer.outcome}
               expected={found?.customer.expected?.outcome}
+              scored={found?.customer.scored?.passed}
             />
           </li>
         ))}
@@ -1127,6 +1147,87 @@ function useJudgeQuestions(domain: string) {
 type VerdictAnswers = NonNullable<TimelinePlayer['state']['verdicts'][string]>
 
 /**
+ * A target run's verdict on a case: each check in the order it ran (outcome,
+ * reason, contract, assertions, then the judge's expectations), what the app said,
+ * and what it returned.
+ */
+function CaseChecks({ scored }: { scored: NonNullable<CustomerView['scored']> }) {
+  const failed = scored.checks.filter((k) => !k.ok).length
+  const output = scored.output
+  const items = Array.isArray(output) ? output : []
+  return (
+    <>
+      <h4>Checks</h4>
+      <p className="muted small">
+        {failed === 0
+          ? `All ${scored.checks.length} checks pass.`
+          : `${failed} of ${scored.checks.length} checks failed.`}{' '}
+        Deterministic checks run first; the judge is only asked when they pass.
+      </p>
+      <ul className="case-checks">
+        {scored.checks.map((k) => (
+          <li key={`${k.kind}:${k.label}`} className={k.ok ? 'good' : 'bad'}>
+            <span className="check-mark" aria-hidden="true">
+              {k.ok ? '✓' : '✗'}
+            </span>
+            <span>
+              <span className="check-label">{k.label}</span>
+              <span className="muted small"> · {k.kind}</span>
+              {!k.ok || k.detail.startsWith('skipped') ? (
+                <div className="muted small">{k.detail}</div>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {(scored.reason || scored.detail) && (
+        <dl>
+          {scored.reason && (
+            <>
+              <dt>reason</dt>
+              <dd>
+                <code>{scored.reason}</code>
+              </dd>
+            </>
+          )}
+          {scored.detail && (
+            <>
+              <dt>the app said</dt>
+              <dd>{scored.detail}</dd>
+            </>
+          )}
+        </dl>
+      )}
+      {output !== null && output !== undefined && !(Array.isArray(output) && !output.length) && (
+        <details className="case-output">
+          <summary>
+            What the app returned
+            {items.length ? ` · ${items.length} result${items.length === 1 ? '' : 's'}` : ''}
+          </summary>
+          <pre>{JSON.stringify(output, null, 2)}</pre>
+        </details>
+      )}
+    </>
+  )
+}
+
+const isStandard = (id: string): id is AnswerId => id in ANSWER_LABEL
+
+/** "refusal appropriate" for the standard five; "only recipes" for a pack's onlyRecipes. */
+function answerLabel(id: string): string {
+  if (isStandard(id)) return ANSWER_LABEL[id]
+  return id.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
+}
+
+/** Least confident first: the standard "correct", else the lowest yes among the answers. */
+function sortKey(a: Answers): number {
+  const c = probabilityOf(a, 'correct')
+  if (c !== null) return c
+  const ps = Object.values(a).flatMap((x) => ('probability' in x ? [x.probability] : []))
+  return ps.length ? Math.min(...ps) : 1
+}
+
+/**
  * The judge's five answers, each a bar you can hover (the question and how to read
  * the number) and open (the evidence it read, and how this judge decides).
  */
@@ -1139,7 +1240,9 @@ function JudgeAnswers({
   player: TimelinePlayer
   txId: string
 }) {
-  const questions = useJudgeQuestions(player.state.config?.domain ?? 'cafe')
+  const standard = useJudgeQuestions(player.state.config?.domain ?? 'cafe')
+  // A config pack's verdict carries its own wording; the standard five come from the domain.
+  const questions = v.questions ?? standard
   const brief = useBrief('judge', player.state.runId, txId, true)
   const transcript = useMemo(() => {
     if (!brief) return null
@@ -1149,26 +1252,26 @@ function JudgeAnswers({
       return null
     }
   }, [brief])
-  const [open, setOpen] = useState<AnswerId | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
   const mock = v.judgeSpec.startsWith('mock:')
-  const rows: Array<{ id: AnswerId; kind: 'probability' | 'score'; value: number }> = [
-    { id: 'correct', kind: 'probability', value: v.answers.correct.probability },
-    {
-      id: 'refusalAppropriate',
-      kind: 'probability',
-      value: v.answers.refusalAppropriate.probability,
-    },
-    { id: 'helpfulness', kind: 'score', value: v.answers.helpfulness.score },
-    { id: 'tone', kind: 'score', value: v.answers.tone.score },
-    { id: 'toolUseQuality', kind: 'score', value: v.answers.toolUseQuality.score },
-  ]
+  // Stored answers come back in the database's key order; show them in the order asked.
+  const order = (v.questions ?? []).map((q) => q.id)
+  const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length)
+  const rows = Object.entries(v.answers)
+    .sort(([x], [y]) => rank(x) - rank(y))
+    .map(([id, a]) =>
+      'probability' in a
+        ? { id, kind: 'probability' as const, value: a.probability }
+        : { id, kind: 'score' as const, value: a.score },
+    )
   return (
     <div className="judge-answers">
       {rows.map(({ id, kind, value }) => {
         const scale = readScale(kind, value)
         const question = questions?.find((q) => q.id === id)?.instructions
         const isOpen = open === id
-        const evidence = isOpen && transcript ? judgeEvidence(id, transcript) : null
+        const evidence =
+          isOpen && transcript && isStandard(id) ? judgeEvidence(id, transcript) : null
         return (
           <div key={id} className={`answer ${isOpen ? 'open' : ''}`}>
             <button
@@ -1179,7 +1282,7 @@ function JudgeAnswers({
               onClick={() => setOpen(isOpen ? null : id)}
             >
               <Meter
-                label={ANSWER_LABEL[id]}
+                label={answerLabel(id)}
                 value={value}
                 max={kind === 'probability' ? 1 : 5}
                 text={kind === 'probability' ? `${Math.round(value * 100)}%` : `${value}/5`}
@@ -1227,7 +1330,9 @@ function JudgeAnswers({
                   </>
                 )}
                 <h5>How this judge decides</h5>
-                <p>{mock ? `Scripted mock rule: ${MOCK_RULE[id]}` : MODEL_NOTE}</p>
+                <p>
+                  {mock && isStandard(id) ? `Scripted mock rule: ${MOCK_RULE[id]}` : MODEL_NOTE}
+                </p>
               </div>
             )}
           </div>

@@ -92,6 +92,9 @@ export async function judgeCase(input: {
 
 const pct = (p: number) => `${Math.round(p * 100)}%`
 
+/** "refusalAppropriate" -> "refusal appropriate". */
+export const humanize = (id: string) => id.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
+
 /** Turn the judge's answers into checks against what the case expects. */
 export function judgeChecks(
   expected: Record<string, JudgeExpectation>,
@@ -100,27 +103,37 @@ export function judgeChecks(
   return Object.entries(expected).map(([id, want]) => {
     const got = answers[id]
     if (!got)
-      return { kind: 'judge', label: `judge ${id}`, ok: false, detail: 'judge gave no answer' }
+      return {
+        kind: 'judge',
+        label: `${humanize(id)}: answered`,
+        ok: false,
+        detail: 'the judge gave no answer',
+      }
     if (typeof want === 'boolean') {
       const p = 'probability' in got ? got.probability : Number.NaN
       const ok = want ? p >= 0.5 : p < 0.5
       return {
         kind: 'judge',
-        label: `judge ${id} is ${want ? 'yes' : 'no'}`,
+        label: `${humanize(id)}: ${want ? 'yes' : 'no'}`,
         ok,
-        detail: `yes ${pct(p)}`,
+        detail: `judge said yes at ${pct(p)}`,
       }
     }
     const s = 'score' in got ? got.score : Number.NaN
     const ok =
       (want.min === undefined || s >= want.min) && (want.max === undefined || s <= want.max)
     const bound = [
-      want.min !== undefined ? `>= ${want.min}` : '',
-      want.max !== undefined ? `<= ${want.max}` : '',
+      want.min !== undefined ? `≥ ${want.min}` : '',
+      want.max !== undefined ? `≤ ${want.max}` : '',
     ]
       .filter(Boolean)
       .join(' and ')
-    return { kind: 'judge', label: `judge ${id} ${bound}`, ok, detail: `scored ${s} of 5` }
+    return {
+      kind: 'judge',
+      label: `${humanize(id)} ${bound}`,
+      ok,
+      detail: `judge scored ${s} of 5`,
+    }
   })
 }
 

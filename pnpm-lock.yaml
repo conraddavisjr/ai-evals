@@ -242,6 +242,9 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
+      '@cafe/targets':
+        specifier: workspace:*
+        version: link:../../packages/targets
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
@@ -449,6 +452,9 @@ importers:
       '@cafe/models':
         specifier: workspace:*
         version: link:../models
+      '@cafe/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       ai:
         specifier: ^7.0.105
         version: 7.0.105(zod@4.6.5)

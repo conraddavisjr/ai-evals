@@ -50,6 +50,13 @@
       "when": 1790208653431,
       "tag": "0006_aromatic_the_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790370264010,
+      "tag": "0007_crazy_rocket_raccoon",
+      "breakpoints": true
     }
   ]
 }

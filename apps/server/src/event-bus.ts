@@ -22,13 +22,21 @@ export class EventBus {
     private readonly now: () => number = () => Date.now(),
   ) {}
 
-  emit = (input: CafeEventInput): CafeEvent => {
+  emit = (input: CafeEventInput): CafeEvent => this.emitAt(input, this.now())
+
+  /**
+   * Emit with the time the event actually happened, for runs recorded elsewhere
+   * (a target run streaming in from the CLI or CI). Times never go backwards, so
+   * playback stays ordered even when a sender's clock jitters.
+   */
+  emitAt = (input: CafeEventInput, t: number): CafeEvent => {
+    const last = this.buffer.at(-1)?.t ?? 0
     const event = CafeEvent.parse({
       ...input,
       id: ulid(),
       runId: this.runId,
       seq: this.seq++,
-      t: this.now(),
+      t: Math.max(t, last),
     })
     this.buffer.push(event)
     for (const l of this.listeners) {

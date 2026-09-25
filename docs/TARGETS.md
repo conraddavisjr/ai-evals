@@ -22,6 +22,8 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.confi
 | `--min-pass 0.9` / `--min-pass-tag adversarial=1,benign=0.9` | Override the pack's thresholds. |
 | `--json f` / `--junit f` / `--summary f` | Write the full report, JUnit XML, or a Markdown summary. |
 | `--list` / `--dry-run` | Print the cases, or the exact request bodies, without calling anything. |
+| `--record [url]` | Stream the run to a dashboard and store it under its project (see below). |
+| `--import <report.json>` | Store an earlier report in the dashboard as it was. |
 | `--replay <report.json>` | Re-score the answers saved by an earlier `--json` run with the current assertions and judge, without calling the app. |
 
 Exit codes: `0` every gate passed, `1` a gate failed or the run was cut short, `2` a bad config, flag or missing environment variable.
@@ -54,6 +56,24 @@ Paths are JSONPath (`$`, `.key`, `['key']`, `[0]`, `[*]`, `..key`) over `{ outco
 | `stepPresent` | `{ "name": "repairing" }` |
 
 Any assertion takes `"when": ["served"]` to apply only to that outcome, so a case that may either decline or answer can still check the answer when there is one.
+
+## Watching and keeping runs (the dashboard)
+
+`--record` streams a run to a Stardust dashboard as it happens, and stores it under the pack's project:
+
+```sh
+EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.config.json --smoke --record
+# Recording to http://localhost:4747. Watch it live: http://localhost:5180/?run=<id>
+```
+
+- The link opens the run in the Run view while it plays: the Trace board, the Cases tab, the Inspector and the Village and Pixel scenes all work, because each case becomes the same events a simulated case emits.
+- The app's reported phases map onto the pipeline: a pre-classifier (`classify`) is the router at the door, the first model call (`drafting`) is agent 1, and review or repair is agent 2 after a hand-off. A pack can rename them with `pipeline` and relabel the dashboard with `vocabulary`.
+- Every check lands on the case (`case.scored`): the Cases tab and the Trace board colour a case by its checks, and the Inspector lists each one with the app's own reason and output.
+- Menu, **Projects**: every run grouped by project, with the time, pass rate, local or CI, branch and commit, the pull request (or a "No PR" marker for a local run without one) and the app's spend.
+- In GitHub Actions the run carries the repository, branch, commit, pull request and job link from the environment; locally it reads the pack's git checkout and asks `gh` for the branch's open pull request.
+- `--import report.json` stores an earlier `--json` report as it was, with no calls to the app and no judging.
+- `STARDUST_URL` points `--record` at another dashboard; when that dashboard sets `STARDUST_INGEST_TOKEN`, the recorder must send the same token.
+- Recording is an observer: when the dashboard is down the evaluation still runs and still gates, and the CLI says what it could not send.
 
 ## Writing a pack
 

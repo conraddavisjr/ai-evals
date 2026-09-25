@@ -1,13 +1,14 @@
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ModelRegistry } from '@cafe/models'
 import { httpTarget } from './http-target.js'
 import { checkJudge } from './judge.js'
 import { ConfigError, loadPack, selectCases } from './load.js'
+import { gitContext, packPath, Recorder } from './recorder.js'
 import { replayTarget } from './replay.js'
 import { attemptLine, formatSummary, toJUnit, toMarkdown } from './report.js'
-import { runPack } from './runner.js'
+import { type Report, runPack } from './runner.js'
 import { MissingEnvError } from './template.js'
 
 const USAGE = `Evaluate another project's AI through its config pack.
@@ -19,8 +20,12 @@ const USAGE = `Evaluate another project's AI through its config pack.
       [--min-pass 0.9] [--min-pass-tag adversarial=1,benign=0.9]
       [--json out/report.json] [--junit out/junit.xml] [--summary out/summary.md]
       [--list] [--dry-run] [--replay out/report.json]
+      [--record [http://localhost:4747]] [--import out/report.json]
 
 --replay re-scores the answers saved in an earlier --json report (current assertions and judge, no calls to the app).
+
+--record streams the run to a Stardust dashboard (STARDUST_URL, STARDUST_INGEST_TOKEN) and stores it
+under the pack's project, with its branch, commit and pull request. With --replay it imports the run instead.
 
 Exit codes: 0 every gate passed · 1 a gate failed or the run was cut short · 2 bad config or flags.
 $GITHUB_STEP_SUMMARY, when set, receives a Markdown summary.`
@@ -57,6 +62,19 @@ function loadEnv(): void {
   }
   for (const [k, v] of Object.entries(before)) if (v !== undefined) process.env[k] = v
 }
+
+/** The web app for an API URL: the local pair is :4747 and :5180; a hosted dashboard serves both. */
+function dashboardUrl(api: string): string {
+  if (process.env.STARDUST_DASHBOARD_URL)
+    return process.env.STARDUST_DASHBOARD_URL.replace(/\/$/, '')
+  return api.replace(/\/$/, '').replace(/:4747$/, ':5180')
+}
+
+const slug = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'project'
 
 const list = (v: string | true | undefined) =>
   typeof v === 'string'
@@ -96,6 +114,7 @@ async function main(): Promise<number> {
     smoke: args.smoke === true,
   })
   if (!cases.length) throw new ConfigError('No cases selected')
+  if (typeof args.import === 'string') return importReport(at(args.import), pack, cwd, args)
 
   const target =
     typeof args.replay === 'string'
@@ -145,6 +164,49 @@ async function main(): Promise<number> {
         `The judge ${judgeSpec} is not answering, so no case was sent: ${problem}\nFix its key, pick another with --judge, or run with --no-judge.`,
       )
   }
+  // --record streams the run to a dashboard (live, or in one go for a replay) and stores it under the project.
+  const recordUrl =
+    args.record === undefined
+      ? null
+      : typeof args.record === 'string'
+        ? args.record
+        : (process.env.STARDUST_URL ?? 'http://localhost:4747')
+  let recorder: Recorder | null = null
+  if (recordUrl) {
+    const { source, git } = gitContext(pack.dir)
+    const replayOf = typeof args.replay === 'string' ? args.replay : undefined
+    recorder = new Recorder({
+      url: recordUrl,
+      token: process.env.STARDUST_INGEST_TOKEN,
+      meta: {
+        pack: pack.config,
+        cases,
+        judgeSpec,
+        info: {
+          project: pack.config.project ?? slug(pack.config.name),
+          projectName: pack.config.name,
+          pack: packPath(pack.file, pack.dir),
+          url: pack.config.target.url.split('?')[0] ?? pack.config.target.url,
+          source,
+          git,
+          vocabulary: pack.config.vocabulary,
+          ...(replayOf ? { replayOf } : {}),
+        },
+      },
+    })
+    if (!replayOf) {
+      try {
+        const id = await recorder.start()
+        console.log(
+          `Recording to ${recordUrl}. Watch it live: ${dashboardUrl(recordUrl)}/?run=${id}\n`,
+        )
+      } catch (err) {
+        console.log(`Not recording: ${(err as Error).message}\n`)
+        recorder = null
+      }
+    }
+  }
+  const live = recorder && typeof args.replay !== 'string' ? recorder : null
   const controller = new AbortController()
   process.once('SIGINT', () => {
     console.log('\nStopping: finishing in-flight cases, skipping the rest.')
@@ -163,8 +225,25 @@ async function main(): Promise<number> {
     thresholds: { overall: number(args, 'min-pass') ?? pack.config.thresholds.overall, byTag },
     runId,
     signal: controller.signal,
-    onAttempt: (a, c) => console.log(attemptLine(a, c.title)),
+    onStart: (c, attempt, index, startedAt) => live?.caseStarted(c, attempt, index, startedAt),
+    onAttempt: (a, c) => {
+      console.log(attemptLine(a, c.title))
+      live?.caseFinished(c, a)
+    },
   })
+  if (recorder) {
+    try {
+      if (live) await live.finish(report, controller.signal.aborted ? 'cancelled' : 'finished')
+      else await recorder.sendReport(report, cases)
+      console.log(
+        recorder.problems.length
+          ? `\nRecorded with ${recorder.problems.length} problem(s): ${recorder.problems[0]}`
+          : `\nRecorded: ${dashboardUrl(recordUrl ?? '')}/?run=${recorder.id}`,
+      )
+    } catch (err) {
+      console.log(`\nNot recorded: ${(err as Error).message}`)
+    }
+  }
 
   const unreachable = report.cases
     .flatMap((c) => c.attempts)
@@ -185,6 +264,56 @@ async function main(): Promise<number> {
   if (process.env.GITHUB_STEP_SUMMARY)
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, toMarkdown(report))
   return report.ok ? 0 : 1
+}
+
+/** Store an earlier run's report in a dashboard as it is: no calls to the app, no judging. */
+async function importReport(
+  file: string,
+  pack: ReturnType<typeof loadPack>,
+  cwd: string,
+  args: Args,
+): Promise<number> {
+  let report: Report
+  try {
+    report = JSON.parse(readFileSync(file, 'utf8')) as Report
+  } catch (err) {
+    throw new ConfigError(`${file}: ${(err as Error).message}`)
+  }
+  const url =
+    typeof args.record === 'string'
+      ? args.record
+      : (process.env.STARDUST_URL ?? 'http://localhost:4747')
+  const ids = new Set(report.cases.map((c) => c.id))
+  const cases = pack.cases.filter((c) => ids.has(c.id))
+  const { source, git } = gitContext(pack.dir)
+  const recorder = new Recorder({
+    url,
+    token: process.env.STARDUST_INGEST_TOKEN,
+    meta: {
+      pack: pack.config,
+      cases,
+      judgeSpec: report.judge,
+      info: {
+        project: pack.config.project ?? slug(pack.config.name),
+        projectName: pack.config.name,
+        pack: packPath(pack.file, pack.dir),
+        url: report.target,
+        source,
+        git,
+        vocabulary: pack.config.vocabulary,
+        replayOf: relative(cwd, file) || file,
+      },
+    },
+  })
+  await recorder.sendReport(report, cases)
+  if (recorder.problems.length) {
+    console.error(`Imported with problems: ${recorder.problems.join('; ')}`)
+    return 1
+  }
+  console.log(
+    `Imported ${report.totals.attempts} attempt(s): ${dashboardUrl(url)}/?run=${recorder.id}`,
+  )
+  return 0
 }
 
 main().then(

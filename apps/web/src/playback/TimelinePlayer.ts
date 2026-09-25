@@ -400,7 +400,8 @@ export class TimelinePlayer {
 
   /** Current virtual clock as an epoch ms (for "elapsed" rings), consistent across modes. */
   clockEpoch(): number {
-    if (this.mode.startsWith('live')) return this.vclock
+    // Live, the clock is wall time; after a seek it is a visual offset instead, so map it like replay.
+    if (this.mode.startsWith('live') && this.vclock >= (this.events[0]?.t ?? 0)) return this.vclock
     // map visual time back to real time between the last applied event and the next
     const last = this.cursor > 0 ? this.events[this.cursor - 1] : undefined
     const next = this.events[this.cursor]

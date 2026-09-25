@@ -1,5 +1,5 @@
 import type { RunMetrics, RunTelemetry, SpanSummary, TransactionMetrics } from '@cafe/protocol'
-import { shortScenarioId } from '@cafe/protocol'
+import { probabilityOf, scoreOf, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct } from '../format.js'
 import type { ExperimentClient } from '../harness/index.js'
@@ -185,12 +185,7 @@ const JUDGE_EXPLAIN: Record<string, { title: string; text: string }> = {
 const judgeValue = (t: TransactionMetrics, key: string): number | null => {
   const j = t.judge
   if (!j) return null
-  if (key === 'correct') return j.correct.probability
-  if (key === 'refusalAppropriate') return j.refusalAppropriate.probability
-  if (key === 'helpfulness') return j.helpfulness.score
-  if (key === 'tone') return j.tone.score
-  if (key === 'toolUseQuality') return j.toolUseQuality.score
-  return null
+  return probabilityOf(j, key) ?? scoreOf(j, key)
 }
 
 /** Behind a judge mean: where the gaps are, visit by visit. */

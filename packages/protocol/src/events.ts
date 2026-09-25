@@ -31,14 +31,67 @@ export type AgentErrorKind = z.infer<typeof AgentErrorKind>
 export const TriageIntent = z.string().min(1)
 export type TriageIntent = z.infer<typeof TriageIntent>
 
-export const JudgeAnswers = z.object({
-  correct: z.object({ probability: z.number().min(0).max(1) }),
-  refusalAppropriate: z.object({ probability: z.number().min(0).max(1) }),
-  helpfulness: z.object({ score: z.number().int().min(1).max(5) }),
-  tone: z.object({ score: z.number().int().min(1).max(5) }),
-  toolUseQuality: z.object({ score: z.number().int().min(1).max(5) }),
-})
+export const JudgeAnswer = z.union([
+  z.object({ probability: z.number().min(0).max(1) }),
+  z.object({ score: z.number().int().min(1).max(5) }),
+])
+export type JudgeAnswer = z.infer<typeof JudgeAnswer>
+
+/**
+ * A judge's answers by question id. Simulated domains ask the five standard
+ * questions (correct, refusalAppropriate, helpfulness, tone, toolUseQuality);
+ * a config pack asks its own, and names them on the verdict (`questions`).
+ */
+export const JudgeAnswers = z.record(z.string(), JudgeAnswer)
 export type JudgeAnswers = z.infer<typeof JudgeAnswers>
+
+/** The wording a verdict was answered against, so a score never silently changes meaning. */
+export const JudgeQuestionInfo = z.object({
+  id: z.string(),
+  type: z.enum(['boolean', 'score']),
+  instructions: z.string(),
+})
+export type JudgeQuestionInfo = z.infer<typeof JudgeQuestionInfo>
+
+/** P(yes) for a boolean question, or null when it was not asked. */
+export function probabilityOf(answers: JudgeAnswers, id: string): number | null {
+  const a = answers[id]
+  return a && 'probability' in a ? a.probability : null
+}
+
+/** A 1 to 5 score, or null when it was not asked. */
+export function scoreOf(answers: JudgeAnswers, id: string): number | null {
+  const a = answers[id]
+  return a && 'score' in a ? a.score : null
+}
+
+const SHORT_LABEL: Record<string, string> = {
+  correct: 'correct',
+  refusalAppropriate: 'refusal',
+  helpfulness: 'help',
+  tone: 'tone',
+  toolUseQuality: 'tools',
+}
+
+/** "correct 95% · help 4/5 · …" for any question set, standard names shortened. */
+export function answersLine(answers: JudgeAnswers, sep = ' · '): string {
+  return Object.entries(answers)
+    .map(([id, a]) =>
+      'probability' in a
+        ? `${SHORT_LABEL[id] ?? id} ${Math.round(a.probability * 100)}%`
+        : `${SHORT_LABEL[id] ?? id} ${a.score}/5`,
+    )
+    .join(sep)
+}
+
+/** One deterministic check a target run made on a case (outcome, contract, an assertion, a judge expectation). */
+export const CaseCheck = z.object({
+  kind: z.enum(['outcome', 'reason', 'assertion', 'contract', 'judge']),
+  label: z.string(),
+  ok: z.boolean(),
+  detail: z.string(),
+})
+export type CaseCheck = z.infer<typeof CaseCheck>
 
 /** The manager's post-visit verdict on how the staff handled a customer. */
 export const ReviewVerdict = z.enum(['ok', 'concern', 'escalate'])
@@ -52,18 +105,19 @@ export const ReviewIssue = z.enum([
 ])
 export type ReviewIssue = z.infer<typeof ReviewIssue>
 
+/** How a run went, in four numbers: on run.finished, and on the run's row for lists. */
+export const RunSummary = z.object({
+  transactions: z.number(),
+  succeeded: z.number(),
+  failed: z.number(),
+  costUsd: z.number(),
+})
+export type RunSummary = z.infer<typeof RunSummary>
+
 export const CafeEvent = z.discriminatedUnion('type', [
   // run lifecycle
   Base.extend({ type: z.literal('run.started'), config: RunConfig }),
-  Base.extend({
-    type: z.literal('run.finished'),
-    summary: z.object({
-      transactions: z.number(),
-      succeeded: z.number(),
-      failed: z.number(),
-      costUsd: z.number(),
-    }),
-  }),
+  Base.extend({ type: z.literal('run.finished'), summary: RunSummary }),
   Base.extend({ type: z.literal('run.failed'), error: z.string() }),
 
   // customer (scripted in V1, an agent later; same events either way)
@@ -80,6 +134,8 @@ export const CafeEvent = z.discriminatedUnion('type', [
     expected: z
       .object({
         outcome: z.enum(['served', 'refused', 'failed']),
+        /** Every outcome the case accepts, when it is more than one (a decline or a harmless answer). */
+        outcomes: z.array(z.enum(['served', 'refused', 'failed'])).optional(),
         cashierTools: z.array(z.string()),
         baristaTools: z.array(z.string()),
         tags: z.array(z.string()),
@@ -252,6 +308,25 @@ export const CafeEvent = z.discriminatedUnion('type', [
     judgeSpec: ModelSpec,
     answers: JudgeAnswers,
     latencyMs: z.number(),
+    /** The questions asked, when they are a pack's own rather than the standard five. */
+    questions: z.array(JudgeQuestionInfo).optional(),
+  }),
+  /**
+   * A target run's verdict on one case: every check, and whether all passed. For
+   * cases evaluated against a config pack this, not outcome versus expected
+   * outcome, is what makes a case green or red.
+   */
+  Base.extend({
+    type: z.literal('case.scored'),
+    customerId: z.string(),
+    passed: z.boolean(),
+    checks: z.array(CaseCheck),
+    /** The app's own reason code for its outcome (off_topic, harmful, capped, timeout). */
+    reason: z.string().nullable(),
+    /** The app's human explanation, when it gave one. */
+    detail: z.string().nullable(),
+    /** What the app returned, trimmed for the Inspector. */
+    output: z.unknown().optional(),
   }),
   Base.extend({
     type: z.literal('staffing.changed'),

@@ -17,6 +17,7 @@
   "dependencies": {
     "@ai-sdk/provider": "^4.0.17",
     "@cafe/models": "workspace:*",
+    "@cafe/protocol": "workspace:*",
     "ai": "^7.0.105",
     "zod": "^4.6.5"
   },

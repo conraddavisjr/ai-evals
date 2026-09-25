@@ -68,7 +68,25 @@ export const PackConfig = z.object({
   $schema: z.string().optional(),
   contract: z.literal(CONFIG_CONTRACT),
   name: z.string(),
+  /** The slug the dashboard groups this project's runs under; from the name when omitted. */
+  project: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits and dashes')
+    .optional(),
   description: z.string().optional(),
+  /**
+   * Words for the dashboard: what the app is called, what a result is, what its
+   * outcomes and pipeline stages are called (roles.cashier is the drafter, roles.barista the reviewer).
+   */
+  vocabulary: z.record(z.string(), z.unknown()).default({}),
+  /** Which of the app's reported step names are the router, agent 1 and agent 2 on the board. */
+  pipeline: z
+    .object({
+      router: z.array(z.string()).optional(),
+      agent1: z.array(z.string()).optional(),
+      agent2: z.array(z.string()).optional(),
+    })
+    .optional(),
   target: HttpTargetConfig,
   /** Dataset files, relative to the config; `*` globs are allowed. */
   datasets: z.array(z.string()).min(1),
