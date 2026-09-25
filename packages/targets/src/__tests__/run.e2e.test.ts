@@ -59,6 +59,7 @@ describe('a config pack run against an HTTP target', () => {
       contract: 1,
     })
     expect(app.calls.find((b) => b.case_id === 'vegan-soup')).not.toHaveProperty('count')
+    expect(app.calls.find((b) => b.case_id === 'soup')).toMatchObject({ persist: true })
     expect(report.totals).toMatchObject({
       attempts: 5,
       passed: 4,

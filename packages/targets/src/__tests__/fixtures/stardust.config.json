@@ -10,7 +10,8 @@
       "case_id": "{{case.id}}",
       "prompt": "{{input.prompt}}",
       "profile_fixture": "{{input.profile}}",
-      "count": "{{input.count}}"
+      "count": "{{input.count}}",
+      "persist": "{{run.firstAttempt}}"
     },
     "responseMap": {
       "outcome": "$.outcome",

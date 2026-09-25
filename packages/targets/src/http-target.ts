@@ -96,7 +96,8 @@ export function httpTarget(
   const ctxOf = (c: EvalCase, ctx: InvokeContext) => ({
     input: c.input,
     case: { id: c.id, title: c.title, tags: c.tags },
-    run: { id: ctx.runId, attempt: ctx.attempt },
+    // firstAttempt lets a pack keep side effects (saved output) to one repeat of a case.
+    run: { id: ctx.runId, attempt: ctx.attempt, firstAttempt: ctx.attempt === 1 },
   })
   return {
     kind: 'http',
