@@ -15,6 +15,7 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/evals-cafe.con
 | --- | --- |
 | `--config <file>` | The config pack (required). |
 | `--cases a,b` / `--tags x,y` / `--smoke` | Run a subset: by id, by any of the tags, or the cases marked `smoke`. |
+| `--expect refused` | Only cases whose one acceptable outcome is this: `refused` is the decline-only set, which costs pennies because the app turns them away before drafting. |
 | `--repeats n` | Run every case n times; flaky cases are named in the report. |
 | `--concurrency n` | Cases in flight at once (the pack's `target.concurrency` by default). |
 | `--judge <spec>` / `--no-judge` | Swap or skip the judge model (any ModelSpec, including `gateway:typesafe-ai/jev`). |

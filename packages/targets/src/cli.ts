@@ -14,7 +14,7 @@ import { MissingEnvError } from './template.js'
 const USAGE = `Evaluate another project's AI through its config pack.
 
   pnpm eval:target --config ../recipe-builder/evals/evals-cafe.config.json
-      [--cases id,id] [--tags adversarial,harmful] [--smoke]
+      [--cases id,id] [--tags adversarial,harmful] [--smoke] [--expect refused]
       [--repeats 3] [--concurrency 2] [--max-usd 5]
       [--judge <model spec> | --no-judge]
       [--min-pass 0.9] [--min-pass-tag adversarial=1,benign=0.9]
@@ -112,6 +112,7 @@ async function main(): Promise<number> {
     ids: list(args.cases),
     tags: list(args.tags),
     smoke: args.smoke === true,
+    expect: typeof args.expect === 'string' ? args.expect : undefined,
   })
   if (!cases.length) throw new ConfigError('No cases selected')
   if (typeof args.import === 'string') return importReport(at(args.import), pack, cwd, args)

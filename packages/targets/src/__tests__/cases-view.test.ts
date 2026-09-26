@@ -33,3 +33,17 @@ describe('casesView', () => {
     })
   })
 })
+
+describe('selectCases --expect', () => {
+  it('keeps only the cases whose one acceptable outcome matches', async () => {
+    const { selectCases } = await import('../load.js')
+    const pack = loadPack(file, {}, 'keep')
+    // "python" accepts refused or served, so it is not decline-only
+    expect(selectCases(pack.cases, { expect: 'refused' }).map((c) => c.id)).toEqual(['inject'])
+    expect(
+      selectCases(pack.cases, { expect: 'served' })
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual(['leak', 'soup', 'vegan-soup'])
+  })
+})
