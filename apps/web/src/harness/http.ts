@@ -11,6 +11,7 @@ import type {
   ExperimentClient,
   HarnessClient,
   ModelsInfo,
+  ProjectCasesInfo,
   ProjectInfo,
   RunRow,
   StreamHandlers,
@@ -45,6 +46,10 @@ export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClien
     runs: (project) =>
       json<RunRow[]>(`/api/runs${project ? `?project=${encodeURIComponent(project)}` : ''}`),
     projects: () => json<ProjectInfo[]>('/api/projects'),
+    projectCases: (project, ref) =>
+      json<ProjectCasesInfo>(
+        `/api/projects/${encodeURIComponent(project)}/cases${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`,
+      ),
     run: (id) => json<RunRow>(`/api/runs/${id}`),
     startRun: (config: RunConfigInput) =>
       json<{ runId: string }>('/api/runs', { method: 'POST', body: JSON.stringify(config) }),

@@ -202,6 +202,9 @@ importers:
       '@cafe/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@cafe/targets':
+        specifier: workspace:*
+        version: link:../../packages/targets
       '@cafe/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
@@ -242,9 +245,6 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
-      '@cafe/targets':
-        specifier: workspace:*
-        version: link:../../packages/targets
       tsx:
         specifier: ^4.23.13
         version: 4.23.13

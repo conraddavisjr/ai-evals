@@ -1,4 +1,5 @@
 export * from './assertions.js'
+export * from './cases-view.js'
 export * from './config.js'
 export * from './events.js'
 export * from './http-target.js'

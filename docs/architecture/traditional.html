@@ -687,6 +687,7 @@ const ARCH = {
         'Metrics has a Telemetry view: hand-rolled SVG charts (charts/) over the span aggregate: tool latency and reasoning latency per step as dot strips, cumulative cost, errors by layer and kind, one row per visit. Polls while the run is live.',
         'The Experiment page (experiment/) is a clickable pipeline diagram (the architecture engine in select mode) whose nodes open that layer’s controls: dataset editor, engine + manager, staff models, chaos, judge. Variants beside it each loop the dataset; results show per-variant metrics, an item x variant grid and overlaid telemetry.',
         'Inspector timing: a case step by step (when each step started, who, how long: router, model steps, tool calls, the queue wait, review, judge; a live row for a step still running) and an agent’s time per case (lib/step-timeline.ts). Metrics for a target run come from its events (lib/target-metrics.ts): pass rate, refusals, by tag, failing checks, judge means, per case.',
+        'Projects page, Test cases tab: every golden case of the project (count, the smoke subset, datasets), searchable and filterable, each opening to what it sends, every check and what the judge must say; a branch picker shows open pull requests that change the set.',
         'Projects page (menu): every run grouped by project, with time, pass rate, local or CI, branch and commit, and the pull request; opening one plays it in the Run view. ?run=<id> opens a run directly (the link the target CLI prints).',
         'Cases tab: one entry per golden case ("Case 3 · <title>") with its verdict, the orchestrator review and why, the judge, and a timing table (router, each agent with its tool calls, the wait for agent 2, gate, review, judge; lib/case-timing.ts). Opening a case shows its details in the panel with the list as a column to its left.',
         'Every themed word goes through lib/nomenclature.ts, which follows the active domain (the loaded run’s, else the draft’s, or the suite’s on the Experiment page): "agent 1 (support rep 2)", resolved/declined, beat labels.',
@@ -698,6 +699,7 @@ const ARCH = {
       ],
       files: [
         'apps/web/src/projects/ProjectsPage.tsx',
+        'apps/web/src/projects/CasesTab.tsx',
         'apps/web/src/lib/step-timeline.ts',
         'apps/web/src/lib/target-metrics.ts',
         'apps/web/src/App.tsx',
@@ -963,6 +965,7 @@ const ARCH = {
         'POST /api/runs validates the RunConfig and refuses live specs unless CAFE_ALLOW_LIVE_MODELS=true.',
         'GET /api/runs/:id/events serves the persisted stream for replay.',
         'POST /api/ingest/runs (+ /:id/events, /:id/finish) takes a run recorded elsewhere (the target CLI, a CI job) as a live run: RunManager.startRecorded keeps an EventBus open so SSE viewers watch it, and the run is stored like any other. STARDUST_INGEST_TOKEN guards it on a hosted dashboard.',
+        'GET /api/projects/:id/cases lists a project’s golden cases read-only: from a local checkout (projects.local.json) or the project’s repo on GitHub through gh, at main, an open pull request or a run’s branch, with each branch’s case count (apps/server/src/project-cases.ts, packages/targets/src/cases-view.ts).',
         'GET /api/projects groups runs by config.target.project (simulated runs as "simulations"); GET /api/runs?project= lists one project. run.finished’s summary is kept on the run row for these lists.',
       ],
       files: ['apps/server/src/http.ts'],

@@ -18,6 +18,7 @@
     "@cafe/mcp-gateway": "workspace:*",
     "@cafe/models": "workspace:*",
     "@cafe/protocol": "workspace:*",
+    "@cafe/targets": "workspace:*",
     "@cafe/telemetry": "workspace:*",
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -33,7 +34,6 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@cafe/targets": "workspace:*",
     "tsx": "^4.23.13"
   }
 }

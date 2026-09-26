@@ -6,3 +6,6 @@ dist/
 .DS_Store
 coverage/
 .vite/
+
+# a local override: where each project's eval pack lives on this machine
+projects.local.json

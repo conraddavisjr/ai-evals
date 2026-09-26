@@ -75,6 +75,13 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.confi
 - `STARDUST_URL` points `--record` at another dashboard; when that dashboard sets `STARDUST_INGEST_TOKEN`, the recorder must send the same token.
 - Recording is an observer: when the dashboard is down the evaluation still runs and still gates, and the CLI says what it could not send.
 
+## Seeing a project's cases
+
+Projects, then a project, then **Test cases** lists every golden case read-only: the count, the smoke subset, and for each case what it sends, every check, and what the judge must say.
+The cases stay in the project's repo.
+The dashboard reads them through the machine's `gh` login at `main`, or at an open pull request or a run's branch from the branch picker.
+To read a local checkout instead, add `projects.local.json` at the harness root (it is gitignored): `{ "palate": { "pack": "../recipe-builder/evals/stardust.config.json" } }`.
+
 ## Writing a pack
 
 - `docs/contracts/stardust-config.v1.schema.json` and `stardust-dataset.v1.schema.json` describe the files; point `$schema` at them for editor checks.

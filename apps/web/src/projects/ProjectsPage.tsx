@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fmtUsd, shortModel } from '../format.js'
 import { type ProjectInfo, type RunRow, useHarness } from '../harness/index.js'
 import { CASE_NOUN, sentence } from '../lib/nomenclature.js'
+import { CasesTab } from './CasesTab.js'
 import './projects.css'
 
 /**
@@ -110,6 +111,7 @@ function ProjectRuns({
   const finished = useMemo(() => (runs ?? []).filter((r) => r.summary), [runs])
   const latest = finished[0]
   const spend = finished.reduce((s, r) => s + (r.summary?.costUsd ?? 0), 0)
+  const [tab, setTab] = useState<'runs' | 'cases'>('runs')
   return (
     <>
       <div className="project-title">
@@ -122,40 +124,66 @@ function ProjectRuns({
               : 'Evaluated over HTTP.'}
         </p>
       </div>
-      <div className="project-tiles">
-        <Tile
-          label="Latest pass rate"
-          value={latest?.summary ? pct(passRate(latest)) : '–'}
-          tone={latest?.summary ? (passRate(latest) === 1 ? 'good' : 'bad') : null}
-        />
-        <Tile label="Runs" value={String(project.runs)} />
-        <Tile label="Last run" value={relative(project.lastAt)} />
-        <Tile label={project.simulated ? 'Model spend' : 'App spend'} value={fmtUsd(spend)} />
+      <div className="segmented project-tabs" role="tablist" aria-label="Project view">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'runs'}
+          className={tab === 'runs' ? 'on' : ''}
+          onClick={() => setTab('runs')}
+        >
+          Runs <span className="muted">{project.runs}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'cases'}
+          className={tab === 'cases' ? 'on' : ''}
+          onClick={() => setTab('cases')}
+        >
+          Test cases
+        </button>
       </div>
-      {runs === null ? (
-        <p className="muted small">Loading runs…</p>
-      ) : runs.length === 0 ? (
-        <p className="muted small">No runs for this project.</p>
+      {tab === 'cases' ? (
+        <CasesTab key={project.id} project={project.id} />
       ) : (
-        <div className="runs-table-wrap">
-          <table className="runs-table">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Result</th>
-                <th>Source</th>
-                <th>{project.simulated ? 'Domain' : 'Branch · commit'}</th>
-                <th>{project.simulated ? 'Models' : 'Pull request'}</th>
-                <th className="num">Spend</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((r) => (
-                <RunLine key={r.id} run={r} simulated={project.simulated} onOpen={onOpenRun} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="project-tiles">
+            <Tile
+              label="Latest pass rate"
+              value={latest?.summary ? pct(passRate(latest)) : '–'}
+              tone={latest?.summary ? (passRate(latest) === 1 ? 'good' : 'bad') : null}
+            />
+            <Tile label="Runs" value={String(project.runs)} />
+            <Tile label="Last run" value={relative(project.lastAt)} />
+            <Tile label={project.simulated ? 'Model spend' : 'App spend'} value={fmtUsd(spend)} />
+          </div>
+          {runs === null ? (
+            <p className="muted small">Loading runs…</p>
+          ) : runs.length === 0 ? (
+            <p className="muted small">No runs for this project.</p>
+          ) : (
+            <div className="runs-table-wrap">
+              <table className="runs-table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Result</th>
+                    <th>Source</th>
+                    <th>{project.simulated ? 'Domain' : 'Branch · commit'}</th>
+                    <th>{project.simulated ? 'Models' : 'Pull request'}</th>
+                    <th className="num">Spend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <RunLine key={r.id} run={r} simulated={project.simulated} onOpen={onOpenRun} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </>
   )

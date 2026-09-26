@@ -17,7 +17,12 @@ export class MissingEnvError extends Error {
 const ENV = /\$\{([A-Z0-9_]+)(?::-([^}]*))?\}/g
 
 /** Replace `${VAR}` everywhere in a JSON value; throws once, naming every missing variable. */
-export function interpolateEnv<T>(value: T, env: NodeJS.ProcessEnv = process.env): T {
+export function interpolateEnv<T>(
+  value: T,
+  env: NodeJS.ProcessEnv = process.env,
+  /** 'keep' leaves an unset variable as written, for reading a pack without its secrets. */
+  missingVars: 'throw' | 'keep' = 'throw',
+): T {
   const missing = new Set<string>()
   const walk = (v: unknown): unknown => {
     if (typeof v === 'string')
@@ -26,7 +31,8 @@ export function interpolateEnv<T>(value: T, env: NodeJS.ProcessEnv = process.env
         if (got !== undefined && got !== '') return got
         if (fallback !== undefined) return fallback
         missing.add(name)
-        return ''
+        // "${NAME}" as written
+        return missingVars === 'keep' ? `${'$'}{${name}}` : ''
       })
     if (Array.isArray(v)) return v.map(walk)
     if (v && typeof v === 'object')
@@ -34,7 +40,7 @@ export function interpolateEnv<T>(value: T, env: NodeJS.ProcessEnv = process.env
     return v
   }
   const out = walk(value) as T
-  if (missing.size) throw new MissingEnvError([...missing])
+  if (missing.size && missingVars === 'throw') throw new MissingEnvError([...missing])
   return out
 }
 

@@ -22,6 +22,7 @@ import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { BenchRunner } from './bench.js'
 import { listOrchestrators } from './orchestrators/index.js'
+import { ProjectNotFound, projectCases } from './project-cases.js'
 import type { RecordedEvent, RunManager } from './run-manager.js'
 import { getDataset, listDatasets } from './scenarios.js'
 import { suiteMetrics, suiteTelemetry } from './suite-results.js'
@@ -183,6 +184,16 @@ export function createApp(deps: HttpDeps) {
         .sort((a, b) => Number(a.simulated) - Number(b.simulated) || b.lastAt - a.lastAt),
     ),
   )
+
+  /** A project's golden cases, read-only (its repo on GitHub, or a local checkout override). */
+  app.get('/api/projects/:id/cases', async (c) => {
+    try {
+      return c.json(await projectCases(store, c.req.param('id'), c.req.query('ref') || undefined))
+    } catch (err) {
+      const status = err instanceof ProjectNotFound ? 404 : 502
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, status)
+    }
+  })
 
   // ---------- recorded runs: a target run streams in from the CLI or a CI job ----------
 
