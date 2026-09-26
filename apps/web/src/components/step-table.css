@@ -1,0 +1,77 @@
+/* ---------- step timelines (Inspector: a case step by step, an agent's time) ---------- */
+.inspector .step-table {
+  width: 100%;
+  margin: 4px 0 12px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.inspector table.step-table th {
+  padding: 4px 6px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.inspector table.step-table td {
+  padding: 4px 6px;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  overflow-wrap: break-word;
+}
+.inspector table.step-table td.num,
+.inspector table.step-table th.num {
+  text-align: right;
+  white-space: nowrap;
+}
+.inspector table.step-table .who {
+  font-size: 11px;
+  color: var(--muted);
+}
+.inspector table.step-table .who .link {
+  font-size: 11px;
+}
+.inspector table.step-table tr.bad td {
+  color: var(--bad);
+}
+.inspector .step-sub {
+  margin: 10px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+/* same layer colours as the Trace legend */
+.layer-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: #8f97b8;
+  vertical-align: 1px;
+}
+.layer-dot.input {
+  background: #ff7aa2;
+}
+.layer-dot.orch {
+  background: #5ad48f;
+}
+.layer-dot.agent {
+  background: #ffcf5a;
+}
+.layer-dot.tool {
+  background: #ff9a5a;
+}
+.layer-dot.eval {
+  background: #b48cff;
+}
+.layer-dot.error {
+  background: #ff5966;
+}
+
+.inspector table.step-table tr.running td {
+  color: var(--gold);
+}
+
+.inspector table.step-table td button.link {
+  text-align: left;
+}

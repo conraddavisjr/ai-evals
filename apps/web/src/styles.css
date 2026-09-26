@@ -707,6 +707,9 @@ main {
 .transport .primary {
   min-width: 64px;
 }
+.transport .skip-end {
+  white-space: nowrap;
+}
 label.inline {
   display: inline-flex;
   align-items: center;
