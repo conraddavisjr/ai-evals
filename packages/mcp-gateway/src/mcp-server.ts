@@ -8,7 +8,7 @@ import type { Capability } from './types.js'
  * transport and see only what that capability allows.
  */
 export function createMcpServer(gateway: Gateway, cap: Capability): McpServer {
-  const server = new McpServer({ name: `stardust-cafe/${cap.role}`, version: '0.1.0' })
+  const server = new McpServer({ name: `evals-cafe/${cap.role}`, version: '0.1.0' })
   for (const tool of gateway.toolsFor(cap)) {
     server.registerTool(
       tool.name,

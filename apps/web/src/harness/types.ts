@@ -117,7 +117,7 @@ export interface StreamHandlers {
 
 /**
  * Everything the cafe UI needs from whatever is producing the event stream.
- * The Stardust server implements it over REST + SSE (`createHttpHarness`); another
+ * The Evals Cafe server implements it over REST + SSE (`createHttpHarness`); another
  * harness only has to emit `CafeEvent`s from `@cafe/protocol` and answer these calls.
  * The scene, the player and the panels never talk to the network directly.
  */

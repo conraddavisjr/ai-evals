@@ -1,4 +1,5 @@
 import { registerEvaluatorPersona, registerPersona } from '@cafe/models'
+import { canonicalDatasetId } from '@cafe/protocol'
 import { CAFE_PACK } from './cafe.js'
 import { SUPPORT_ADVERSARIAL, SUPPORT_PACK, SUPPORT_PERSONAS } from './support/index.js'
 import type { DomainPack } from './types.js'
@@ -29,4 +30,4 @@ export const BUILTIN_SCENARIOS = new Map(
 
 /** The pack whose built-in dataset has this id. */
 export const packForDataset = (datasetId: string) =>
-  DOMAIN_PACKS.find((d) => d.dataset.id === datasetId)
+  DOMAIN_PACKS.find((d) => d.dataset.id === canonicalDatasetId(datasetId))

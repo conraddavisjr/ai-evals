@@ -45,7 +45,7 @@ export function initTracing(opts: {
     processors.push(otlp)
   }
   const provider = new BasicTracerProvider({
-    resource: resourceFromAttributes({ 'service.name': opts.serviceName ?? 'stardust-cafe' }),
+    resource: resourceFromAttributes({ 'service.name': opts.serviceName ?? 'evals-cafe' }),
     spanProcessors: processors,
   })
   context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable())

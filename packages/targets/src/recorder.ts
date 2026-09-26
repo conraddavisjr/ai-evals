@@ -16,7 +16,7 @@ import type { LoadedCase } from './load.js'
 import type { Attempt, Report } from './runner.js'
 
 /**
- * Sends a target run to a Stardust dashboard as it happens, so the Trace board
+ * Sends a target run to a Evals Cafe dashboard as it happens, so the Trace board
  * and the scenes show it live, and it is stored under its project afterwards.
  * Recording is an observer: when the dashboard is down the evaluation still runs
  * and still gates; the recorder reports what it could not send.
@@ -198,7 +198,7 @@ export function repoFromRemote(remote: string | undefined): string | undefined {
  * request and job link from the environment. Locally: the config pack's git
  * checkout, and the open pull request for its branch when `gh` can find one.
  */
-/** The pack's path inside its own repository ("evals/stardust.config.json"), else as given. */
+/** The pack's path inside its own repository ("evals/evals-cafe.config.json"), else as given. */
 export function packPath(file: string, packDir: string): string {
   const root = git(packDir, ['rev-parse', '--show-toplevel'])
   if (!root) return file

@@ -17,7 +17,7 @@ import type {
   StreamHandlers,
 } from './types.js'
 
-/** The Stardust server's REST + SSE API, mounted under `baseUrl` (default: same origin). */
+/** The Evals Cafe server's REST + SSE API, mounted under `baseUrl` (default: same origin). */
 export function createHttpHarness(baseUrl = ''): HarnessClient & ExperimentClient {
   const url = (path: string) => `${baseUrl}${path}`
   async function json<T>(path: string, init?: RequestInit): Promise<T> {

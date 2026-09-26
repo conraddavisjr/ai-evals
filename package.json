@@ -2,7 +2,7 @@
   "name": "ai-eval-cafe",
   "private": true,
   "version": "0.1.0",
-  "description": "Stardust Cafe: a model-agnostic multi-agent eval harness visualized as a Stardew-style cafe",
+  "description": "Evals Cafe: a model-agnostic multi-agent eval harness visualized as a Stardew-style cafe",
   "type": "module",
   "packageManager": "pnpm@12.4.2",
   "engines": {

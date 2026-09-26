@@ -13,7 +13,7 @@ import { MissingEnvError } from './template.js'
 
 const USAGE = `Evaluate another project's AI through its config pack.
 
-  pnpm eval:target --config ../recipe-builder/evals/stardust.config.json
+  pnpm eval:target --config ../recipe-builder/evals/evals-cafe.config.json
       [--cases id,id] [--tags adversarial,harmful] [--smoke]
       [--repeats 3] [--concurrency 2] [--max-usd 5]
       [--judge <model spec> | --no-judge]
@@ -24,7 +24,7 @@ const USAGE = `Evaluate another project's AI through its config pack.
 
 --replay re-scores the answers saved in an earlier --json report (current assertions and judge, no calls to the app).
 
---record streams the run to a Stardust dashboard (STARDUST_URL, STARDUST_INGEST_TOKEN) and stores it
+--record streams the run to a Evals Cafe dashboard (EVALS_CAFE_URL, EVALS_CAFE_INGEST_TOKEN) and stores it
 under the pack's project, with its branch, commit and pull request. With --replay it imports the run instead.
 
 Exit codes: 0 every gate passed · 1 a gate failed or the run was cut short · 2 bad config or flags.
@@ -65,8 +65,8 @@ function loadEnv(): void {
 
 /** The web app for an API URL: the local pair is :4747 and :5180; a hosted dashboard serves both. */
 function dashboardUrl(api: string): string {
-  if (process.env.STARDUST_DASHBOARD_URL)
-    return process.env.STARDUST_DASHBOARD_URL.replace(/\/$/, '')
+  if (process.env.EVALS_CAFE_DASHBOARD_URL)
+    return process.env.EVALS_CAFE_DASHBOARD_URL.replace(/\/$/, '')
   return api.replace(/\/$/, '').replace(/:4747$/, ':5180')
 }
 
@@ -170,14 +170,14 @@ async function main(): Promise<number> {
       ? null
       : typeof args.record === 'string'
         ? args.record
-        : (process.env.STARDUST_URL ?? 'http://localhost:4747')
+        : (process.env.EVALS_CAFE_URL ?? 'http://localhost:4747')
   let recorder: Recorder | null = null
   if (recordUrl) {
     const { source, git } = gitContext(pack.dir)
     const replayOf = typeof args.replay === 'string' ? args.replay : undefined
     recorder = new Recorder({
       url: recordUrl,
-      token: process.env.STARDUST_INGEST_TOKEN,
+      token: process.env.EVALS_CAFE_INGEST_TOKEN,
       meta: {
         pack: pack.config,
         cases,
@@ -282,13 +282,13 @@ async function importReport(
   const url =
     typeof args.record === 'string'
       ? args.record
-      : (process.env.STARDUST_URL ?? 'http://localhost:4747')
+      : (process.env.EVALS_CAFE_URL ?? 'http://localhost:4747')
   const ids = new Set(report.cases.map((c) => c.id))
   const cases = pack.cases.filter((c) => ids.has(c.id))
   const { source, git } = gitContext(pack.dir)
   const recorder = new Recorder({
     url,
-    token: process.env.STARDUST_INGEST_TOKEN,
+    token: process.env.EVALS_CAFE_INGEST_TOKEN,
     meta: {
       pack: pack.config,
       cases,

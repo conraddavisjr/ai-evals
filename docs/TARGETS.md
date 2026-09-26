@@ -8,7 +8,7 @@ The design and the reasoning behind it are in [EXTERNAL-TARGETS.md](EXTERNAL-TAR
 
 ```sh
 # the app under test, running locally with its eval route switched on
-EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.config.json --smoke
+EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/evals-cafe.config.json --smoke
 ```
 
 | Flag | What it does |
@@ -59,10 +59,10 @@ Any assertion takes `"when": ["served"]` to apply only to that outcome, so a cas
 
 ## Watching and keeping runs (the dashboard)
 
-`--record` streams a run to a Stardust dashboard as it happens, and stores it under the pack's project:
+`--record` streams a run to a Evals Cafe dashboard as it happens, and stores it under the pack's project:
 
 ```sh
-EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.config.json --smoke --record
+EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/evals-cafe.config.json --smoke --record
 # Recording to http://localhost:4747. Watch it live: http://localhost:5180/?run=<id>
 ```
 
@@ -72,7 +72,7 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.confi
 - Menu, **Projects**: every run grouped by project, with the time, pass rate, local or CI, branch and commit, the pull request (or a "No PR" marker for a local run without one) and the app's spend.
 - In GitHub Actions the run carries the repository, branch, commit, pull request and job link from the environment; locally it reads the pack's git checkout and asks `gh` for the branch's open pull request.
 - `--import report.json` stores an earlier `--json` report as it was, with no calls to the app and no judging.
-- `STARDUST_URL` points `--record` at another dashboard; when that dashboard sets `STARDUST_INGEST_TOKEN`, the recorder must send the same token.
+- `EVALS_CAFE_URL` points `--record` at another dashboard; when that dashboard sets `EVALS_CAFE_INGEST_TOKEN`, the recorder must send the same token.
 - Recording is an observer: when the dashboard is down the evaluation still runs and still gates, and the CLI says what it could not send.
 
 ## Seeing a project's cases
@@ -80,11 +80,11 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/stardust.confi
 Projects, then a project, then **Test cases** lists every golden case read-only: the count, the smoke subset, and for each case what it sends, every check, and what the judge must say.
 The cases stay in the project's repo.
 The dashboard reads them through the machine's `gh` login at `main`, or at an open pull request or a run's branch from the branch picker.
-To read a local checkout instead, add `projects.local.json` at the harness root (it is gitignored): `{ "palate": { "pack": "../recipe-builder/evals/stardust.config.json" } }`.
+To read a local checkout instead, add `projects.local.json` at the harness root (it is gitignored): `{ "palate": { "pack": "../recipe-builder/evals/evals-cafe.config.json" } }`.
 
 ## Writing a pack
 
-- `docs/contracts/stardust-config.v1.schema.json` and `stardust-dataset.v1.schema.json` describe the files; point `$schema` at them for editor checks.
+- `docs/contracts/evals-cafe-config.v1.schema.json` and `evals-cafe-dataset.v1.schema.json` describe the files; point `$schema` at them for editor checks.
   Regenerate them after changing `packages/targets/src/config.ts` with `pnpm --filter @cafe/targets schemas`.
 - `${VAR}` and `${VAR:-default}` in the target are read from the environment, so secrets never live in the file.
 - The first consumer is Palate: `recipe-builder/evals/`.

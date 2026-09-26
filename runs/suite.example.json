@@ -1,6 +1,6 @@
 {
   "name": "judge shootout",
-  "datasetId": "builtin:stardust",
+  "datasetId": "builtin:cafe",
   "base": {
     "roles": {
       "cashier": "mock:cashier",

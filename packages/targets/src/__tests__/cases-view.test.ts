@@ -5,7 +5,7 @@ import { casesView } from '../cases-view.js'
 import { loadPack, MissingEnvError } from '../index.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const file = join(here, 'fixtures/stardust.config.json')
+const file = join(here, 'fixtures/evals-cafe.config.json')
 
 describe('casesView', () => {
   it('lists a pack’s cases with what each checks, without needing its secrets', () => {

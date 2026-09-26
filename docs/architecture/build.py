@@ -20,8 +20,8 @@ legend = ''.join(f'<span class="tone-{t}"><i></i>{name}</span>' for t, name in l
 
 variants = {
     'traditional': dict(
-        title='Stardust Cafe Architecture',
-        desc='Pannable architecture map of the Stardust Cafe agentic eval harness: client, API server, orchestration, agent runtime, MCP gateway, models, evals, data and the shared protocol.',
+        title='Evals Cafe Architecture',
+        desc='Pannable architecture map of the Evals Cafe agentic eval harness: client, API server, orchestration, agent runtime, MCP gateway, models, evals, data and the shared protocol.',
         sub='Drag to pan · scroll to zoom · click a component for details',
         search='Jump to a component…',
         hint='Click any component to expand it. Esc collapses.',
@@ -30,7 +30,7 @@ variants = {
         nick='false',
     ),
     'cafe': dict(
-        title='Stardust Cafe Floor Plan',
+        title='Evals Cafe Floor Plan',
         desc='The same architecture drawn as districts of the cafe, in the dusk palette of the 3D scene: storefront, back office, the floor, the staff, the pass, the roster, the inspector’s desk, the cellar and the house rules.',
         sub='Wander the square · scroll to zoom · tap a station to peek behind the counter',
         search='Find a station…',

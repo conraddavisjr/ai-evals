@@ -62,7 +62,7 @@ Open a `run` span under `deps.parentContext` and a `visit` span per customer (`@
 ```ts
 // apps/server/src/orchestrators/index.ts
 export const ORCHESTRATORS = {
-  stardust: { ... },
+  'evals-cafe': { ... },
   mastra: {
     id: 'mastra',
     label: 'Mastra',

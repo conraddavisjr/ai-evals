@@ -13,7 +13,7 @@ const run = promisify(execFile)
 /** Where a project's cases were read from, for the page to say so. */
 export interface CasesSource {
   kind: 'file' | 'github' | 'builtin'
-  /** "conraddavisjr/ai-recipe-builder @ evals-front-door · evals/stardust.config.json" */
+  /** "conraddavisjr/ai-recipe-builder @ evals-front-door · evals/evals-cafe.config.json" */
   label: string
   ref: string | null
   /** Branches to pick from: main, open pull requests, branches runs came from, with their case counts. */
@@ -24,10 +24,11 @@ export type ProjectCases = CasesView & { source: CasesSource }
 
 /**
  * A local override, for reading a project's pack straight from a checkout:
- * projects.local.json (or STARDUST_PROJECTS) maps { "palate": { "pack": "../recipe-builder/evals/stardust.config.json" } }.
+ * projects.local.json (or EVALS_CAFE_PROJECTS) maps { "palate": { "pack": "../recipe-builder/evals/evals-cafe.config.json" } }.
  */
 function localPack(project: string): string | null {
-  const file = process.env.STARDUST_PROJECTS ?? resolve(process.cwd(), '../../projects.local.json')
+  const file =
+    process.env.EVALS_CAFE_PROJECTS ?? resolve(process.cwd(), '../../projects.local.json')
   if (!existsSync(file)) return null
   try {
     const map = JSON.parse(readFileSync(file, 'utf8')) as Record<string, { pack?: string }>
@@ -84,7 +85,7 @@ async function githubPack(repo: string, packPath: string, ref: string): Promise<
   if (hit && Date.now() - hit.at < 60_000 && existsSync(hit.file)) return hit.file
   const root = join(
     tmpdir(),
-    'stardust-packs',
+    'evals-cafe-packs',
     `${repo.replace('/', '__')}@${ref.replace(/[^\w.-]/g, '_')}`,
   )
   const put = (rel: string, text: string) => {

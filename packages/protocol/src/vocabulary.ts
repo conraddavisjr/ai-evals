@@ -12,7 +12,7 @@ import type { Beat } from './beats.js'
  * every label a person reads comes from here.
  */
 export interface DomainVocabulary {
-  /** The business being simulated: "Stardust Cafe". */
+  /** The business being simulated: "Evals Cafe". */
   business: string
   /** Who brings a case: "customer". */
   requester: string
@@ -38,7 +38,7 @@ export interface DomainVocabulary {
 
 export const DOMAIN_VOCABULARY: Record<string, DomainVocabulary> = {
   cafe: {
-    business: 'Stardust Cafe',
+    business: 'Evals Cafe',
     requester: 'customer',
     workItem: 'order',
     line: 'item',

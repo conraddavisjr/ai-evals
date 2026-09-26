@@ -86,7 +86,7 @@ const meta: TargetRunMeta = {
   info: {
     project: 'palate',
     projectName: 'Palate',
-    pack: 'evals/stardust.config.json',
+    pack: 'evals/evals-cafe.config.json',
     url: 'http://x',
     source: 'local',
     git: { branch: 'eval-route' },

@@ -6,14 +6,14 @@ import { cafeGateBench } from './cafe-bench.js'
 import type { DomainPack } from './types.js'
 
 /**
- * Stardust Cafe, the original pack: customers order drinks from a cashier, tickets
+ * Evals Cafe, the original pack: customers order drinks from a cashier, tickets
  * go on the rail, a barista makes them. Its pieces predate the pack seam and still
  * live where they started (tools in mcp-gateway, prompts in agents, the dataset and
  * question wording in evals); this file is the one place that assembles them.
  */
 export const CAFE_PACK: DomainPack = {
   id: 'cafe',
-  label: 'Stardust Cafe',
+  label: 'Evals Cafe',
   blurb:
     'A neighbourhood coffee shop: a cashier takes orders and payment, a barista makes the drinks. The pack with the animated scenes.',
   vocabulary: DOMAIN_VOCABULARY.cafe as DomainVocabulary,
@@ -38,7 +38,7 @@ export const CAFE_PACK: DomainPack = {
   roleScopes: ROLE_SCOPES,
   dataset: {
     id: BUILTIN_DATASET_ID,
-    name: 'Stardust starter',
+    name: 'Evals Cafe starter',
     description:
       'The scenarios that ship with the cafe: happy paths, edge cases and adversarial customers.',
     scenarios: SCENARIOS,

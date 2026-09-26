@@ -13,7 +13,7 @@ import { runPack } from '../runner.js'
 import { type FakeApp, startFakeApp } from './fixtures/fake-app.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const configFile = join(here, 'fixtures/stardust.config.json')
+const configFile = join(here, 'fixtures/evals-cafe.config.json')
 let app: FakeApp
 
 beforeAll(async () => {
@@ -180,7 +180,7 @@ describe('the CLI', () => {
     const out = mkdtempSync(join(tmpdir(), 'targets-'))
     const r = await run([
       '--config',
-      'fixtures/stardust.config.json',
+      'fixtures/evals-cafe.config.json',
       '--json',
       join(out, 'r.json'),
       '--junit',
@@ -195,7 +195,7 @@ describe('the CLI', () => {
   it('exits 1 when a threshold fails, and runs only the smoke subset when asked', async () => {
     const r = await run([
       '--config',
-      'fixtures/stardust.config.json',
+      'fixtures/evals-cafe.config.json',
       '--min-pass',
       '1',
       '--no-judge',
@@ -204,7 +204,7 @@ describe('the CLI', () => {
     expect(r.status).toBe(1)
     const smoke = await run([
       '--config',
-      'fixtures/stardust.config.json',
+      'fixtures/evals-cafe.config.json',
       '--smoke',
       '--min-pass',
       '1',
@@ -217,14 +217,20 @@ describe('the CLI', () => {
     const out = mkdtempSync(join(tmpdir(), 'targets-'))
     await run([
       '--config',
-      'fixtures/stardust.config.json',
+      'fixtures/evals-cafe.config.json',
       '--no-judge',
       '--json',
       join(out, 'r.json'),
     ])
     const before = app.calls.length
     const r = await run(
-      ['--config', 'fixtures/stardust.config.json', '--no-judge', '--replay', join(out, 'r.json')],
+      [
+        '--config',
+        'fixtures/evals-cafe.config.json',
+        '--no-judge',
+        '--replay',
+        join(out, 'r.json'),
+      ],
       { FAKE_URL: 'http://127.0.0.1:9/never' },
     )
     expect(app.calls.length).toBe(before)
@@ -234,11 +240,11 @@ describe('the CLI', () => {
   })
 
   it('exits 2 on a bad config or a missing secret', async () => {
-    const r = await run(['--config', 'fixtures/stardust.config.json'], { FAKE_URL: '' })
+    const r = await run(['--config', 'fixtures/evals-cafe.config.json'], { FAKE_URL: '' })
     expect(r.stderr).toContain('Missing environment variable: FAKE_URL')
     expect(r.status).toBe(2)
     expect(
-      (await run(['--config', 'fixtures/stardust.config.json', '--cases', 'nope'])).status,
+      (await run(['--config', 'fixtures/evals-cafe.config.json', '--cases', 'nope'])).status,
     ).toBe(2)
   })
 })
