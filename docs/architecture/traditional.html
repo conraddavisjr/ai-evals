@@ -686,6 +686,7 @@ const ARCH = {
         'The Log opens a nested inspector pane beside the trace instead of switching tabs; the side panel is resizable up to half the viewport (components/usePanelWidth.ts).',
         'Metrics has a Telemetry view: hand-rolled SVG charts (charts/) over the span aggregate: tool latency and reasoning latency per step as dot strips, cumulative cost, errors by layer and kind, one row per visit. Polls while the run is live.',
         'The Experiment page (experiment/) is a clickable pipeline diagram (the architecture engine in select mode) whose nodes open that layer’s controls: dataset editor, engine + manager, staff models, chaos, judge. Variants beside it each loop the dataset; results show per-variant metrics, an item x variant grid and overlaid telemetry.',
+        'Inspector timing: a case step by step (when each step started, who, how long: router, model steps, tool calls, the queue wait, review, judge; a live row for a step still running) and an agent’s time per case (lib/step-timeline.ts). Metrics for a target run come from its events (lib/target-metrics.ts): pass rate, refusals, by tag, failing checks, judge means, per case.',
         'Projects page (menu): every run grouped by project, with time, pass rate, local or CI, branch and commit, and the pull request; opening one plays it in the Run view. ?run=<id> opens a run directly (the link the target CLI prints).',
         'Cases tab: one entry per golden case ("Case 3 · <title>") with its verdict, the orchestrator review and why, the judge, and a timing table (router, each agent with its tool calls, the wait for agent 2, gate, review, judge; lib/case-timing.ts). Opening a case shows its details in the panel with the list as a column to its left.',
         'Every themed word goes through lib/nomenclature.ts, which follows the active domain (the loaded run’s, else the draft’s, or the suite’s on the Experiment page): "agent 1 (support rep 2)", resolved/declined, beat labels.',
@@ -697,6 +698,8 @@ const ARCH = {
       ],
       files: [
         'apps/web/src/projects/ProjectsPage.tsx',
+        'apps/web/src/lib/step-timeline.ts',
+        'apps/web/src/lib/target-metrics.ts',
         'apps/web/src/App.tsx',
         'apps/web/src/components/*.tsx',
         'apps/web/src/components/run-draft.ts',
@@ -735,6 +738,7 @@ const ARCH = {
       summary:
         'Decides when each event is applied: live-buffered, raw, replay, step, director’s cut.',
       details: [
+        'skipToEnd() jumps to the newest event (the End button and key): a finished run’s results, or a live run’s latest state, keeping the clock in wall time when live.',
         'Holds the ordered event list and a cursor; never uses the wall clock for simulation time.',
         'Live-buffered renders a few seconds behind real time; replay advances a virtual clock at a chosen speed.',
         'Step pauses on beats and exposes the real delta; director’s cut clamps gaps per character (tiny steps stretched, hangs compressed).',

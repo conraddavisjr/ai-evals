@@ -301,6 +301,19 @@ export class TimelinePlayer {
   }
 
   /** Jump so that the given event is the last applied one. */
+  /**
+   * Jump to the newest event: a finished run's final results, or a live run's
+   * latest state (it keeps following from there). The clock moves with it, in
+   * wall time when live and visual time otherwise.
+   */
+  skipToEnd(): void {
+    const last = this.events.at(-1)
+    if (!last) return
+    this.rebuild(this.events.length)
+    this.vclock = this.mode.startsWith('live') ? Math.max(this.vclock, last.t) : this.visualEnd()
+    this.emitChange()
+  }
+
   seekToSeq(seq: number): void {
     const idx = this.events.findIndex((e) => e.seq === seq)
     if (idx < 0) return
