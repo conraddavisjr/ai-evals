@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 /**
  * A config pack: everything the harness needs to evaluate another project's AI,
- * in one JSON file that lives in that project (`evals/stardust.config.json`).
+ * in one JSON file that lives in that project (`evals/evals-cafe.config.json`).
  * The project describes how to call it and what "right" looks like; the harness
  * never imports the project's code, it only talks to a URL.
  */

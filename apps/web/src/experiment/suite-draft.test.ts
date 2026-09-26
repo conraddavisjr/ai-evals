@@ -16,7 +16,7 @@ const models = {
   providersConfigured: {},
   defaults: {
     name: 'shift',
-    orchestrator: 'stardust',
+    orchestrator: 'evals-cafe',
     scenarioIds: ['a'],
     roles: {
       cashier: 'mock:cashier',
@@ -44,7 +44,7 @@ describe('suite draft', () => {
   it('starts with one baseline variant on the first dataset and instant pacing', () => {
     const d = initialSuiteDraft(models, [
       {
-        id: 'builtin:stardust',
+        id: 'builtin:cafe',
         name: 'x',
         description: '',
         builtin: true,
@@ -52,7 +52,7 @@ describe('suite draft', () => {
         updatedAt: 0,
       },
     ])
-    expect(d.datasetId).toBe('builtin:stardust')
+    expect(d.datasetId).toBe('builtin:cafe')
     expect(d.variants).toEqual([{ name: 'baseline', roles: {} }])
     expect(toSuiteConfig(d).base.mockPacing?.llmStepMs).toEqual([0, 0])
   })

@@ -99,6 +99,8 @@ export interface CaseFilter {
   /** Any of these tags. */
   tags?: string[] | undefined
   smoke?: boolean | undefined
+  /** Only cases whose one acceptable outcome is this ("refused": the decline-only set, cheap to run). */
+  expect?: string | undefined
 }
 
 export function selectCases(cases: LoadedCase[], f: CaseFilter): LoadedCase[] {
@@ -110,6 +112,7 @@ export function selectCases(cases: LoadedCase[], f: CaseFilter): LoadedCase[] {
     (c) =>
       (!f.ids?.length || f.ids.includes(c.id)) &&
       (!f.tags?.length || c.tags.some((t) => f.tags?.includes(t))) &&
-      (!f.smoke || c.smoke),
+      (!f.smoke || c.smoke) &&
+      (!f.expect || [c.expect.outcome ?? []].flat().join() === f.expect),
   )
 }

@@ -5,7 +5,7 @@ import { casesView } from '../cases-view.js'
 import { loadPack, MissingEnvError } from '../index.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const file = join(here, 'fixtures/stardust.config.json')
+const file = join(here, 'fixtures/evals-cafe.config.json')
 
 describe('casesView', () => {
   it('lists a pack’s cases with what each checks, without needing its secrets', () => {
@@ -31,5 +31,19 @@ describe('casesView', () => {
       judge: ['refusal appropriate: yes'],
       skipJudge: false,
     })
+  })
+})
+
+describe('selectCases --expect', () => {
+  it('keeps only the cases whose one acceptable outcome matches', async () => {
+    const { selectCases } = await import('../load.js')
+    const pack = loadPack(file, {}, 'keep')
+    // "python" accepts refused or served, so it is not decline-only
+    expect(selectCases(pack.cases, { expect: 'refused' }).map((c) => c.id)).toEqual(['inject'])
+    expect(
+      selectCases(pack.cases, { expect: 'served' })
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual(['leak', 'soup', 'vegan-soup'])
   })
 })

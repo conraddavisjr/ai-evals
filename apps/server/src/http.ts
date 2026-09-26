@@ -198,11 +198,11 @@ export function createApp(deps: HttpDeps) {
   // ---------- recorded runs: a target run streams in from the CLI or a CI job ----------
 
   /**
-   * When STARDUST_INGEST_TOKEN is set, recorders must send it as a bearer token
+   * When EVALS_CAFE_INGEST_TOKEN is set, recorders must send it as a bearer token
    * (a hosted dashboard); unset, the local server accepts recorders on its own.
    */
   const ingestAllowed = (c: { req: { header(name: string): string | undefined } }) => {
-    const token = process.env.STARDUST_INGEST_TOKEN
+    const token = process.env.EVALS_CAFE_INGEST_TOKEN
     return !token || c.req.header('authorization') === `Bearer ${token}`
   }
 

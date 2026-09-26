@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Stardust Cafe Architecture</title>
-<meta name="description" content="Pannable architecture map of the Stardust Cafe agentic eval harness: client, API server, orchestration, agent runtime, MCP gateway, models, evals, data and the shared protocol." />
+<title>Evals Cafe Architecture</title>
+<meta name="description" content="Pannable architecture map of the Evals Cafe agentic eval harness: client, API server, orchestration, agent runtime, MCP gateway, models, evals, data and the shared protocol." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -528,7 +528,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; } body { background: var
 <body>
 <div class="archv archv-page">
   <header class="bar">
-    <h1 class="title">Stardust Cafe Architecture</h1>
+    <h1 class="title">Evals Cafe Architecture</h1>
     <span class="sub">Drag to pan · scroll to zoom · click a component for details</span>
     <span class="spacer"></span>
     <input id="search" list="search-list" placeholder="Jump to a component…" aria-label="Jump to a component" />
@@ -543,7 +543,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; } body { background: var
   <div id="canvas"></div>
 </div>
 <script>
-/* Architecture model for Stardust Cafe. One source for both diagram treatments. */
+/* Architecture model for Evals Cafe. One source for both diagram treatments. */
 const ARCH = {
   world: { w: 2620, h: 1580 },
   segments: [
@@ -692,7 +692,7 @@ const ARCH = {
         'Cases tab: one entry per golden case ("Case 3 · <title>") with its verdict, the orchestrator review and why, the judge, and a timing table (router, each agent with its tool calls, the wait for agent 2, gate, review, judge; lib/case-timing.ts). Opening a case shows its details in the panel with the list as a column to its left.',
         'Every themed word goes through lib/nomenclature.ts, which follows the active domain (the loaded run’s, else the draft’s, or the suite’s on the Experiment page): "agent 1 (support rep 2)", resolved/declined, beat labels.',
         'The Run tab has a Business domain picker and a Decision points section: triage routing and the action gate with its own model and threshold.',
-        'Themes (menu, Settings · Theme; themes/theme.ts): Refined (default, themes/refined.css, an override layer scoped under :root[data-theme="refined"]) and Stardust (the base stylesheets, the game look). The Village and Pixel canvases keep their look in both. Spec: docs/design/REFINED-THEME.md.',
+        'Themes (menu, Settings · Theme; themes/theme.ts): Refined (default, themes/refined.css, an override layer scoped under :root[data-theme="refined"]) and Classic (the base stylesheets, the original game look). The Village and Pixel canvases keep their look in both. Spec: docs/design/REFINED-THEME.md.',
         'The Decision bench page (bench/) runs the same labelled decisions (door, gate, judge) against up to five evaluation models and shows accuracy vs latency per decision point, a scores table and every decision a model got wrong.',
         'Inspector: linked views of a case (its full golden expectation, the expected tools per agent marked called / missing / unexpected, and what happened), a tool (description, scope, holders, input schema, every call in the run) an agent (persona with Read more, tool slice, model, latency, usage, tool trail), and a case’s judge verdict or orchestrator review (every answer, agreement with ground truth, model, cost, the brief it read). Drilling in opens the next view in the panel and moves the previous ones into columns to its left (InspectorTrail), folding the oldest into strips when the stage would get too narrow. Case pills are verdicts: green when the outcome matches the expectation, red with a red case header when it deviates.',
         'Metrics tab reads /api/runs/:id/metrics and compares recent shifts.',
@@ -722,7 +722,7 @@ const ARCH = {
       title: 'Harness client',
       nick: 'the runner',
       summary:
-        'The HarnessClient interface the UI talks to; the Stardust server implements it over REST + SSE.',
+        'The HarnessClient interface the UI talks to; the Evals Cafe server implements it over REST + SSE.',
       details: [
         'HarnessClient is the one seam between the stage and whatever produces events: models, scenarios, runs, events, metrics and a stream() tail.',
         'createHttpHarness() is the REST + SSE implementation: POST /api/runs starts a shift, GET /api/runs/:id/events fetches history, stream() tails /api/runs/:id/stream and closes on the “done” frame.',
@@ -934,7 +934,7 @@ const ARCH = {
       summary:
         'pnpm eval:target evaluates another project’s AI over HTTP from its config pack, and gates CI on the result.',
       details: [
-        'The consumer repo holds evals/stardust.config.json: target URL, body template, response map, datasets, judge questions, thresholds, budget.',
+        'The consumer repo holds evals/evals-cafe.config.json: target URL, body template, response map, datasets, judge questions, thresholds, budget.',
         'Per case: POST to the app’s eval route, map the answer to served / refused / failed with a reason, run deterministic assertions (JSONPath, count, regex, steps), then ask the judge only if those pass.',
         'Reports pass rate by tag, false and missed refusals, flaky cases across repeats, and target-reported spend; writes JSON, JUnit and a Markdown summary; exits 1 when a gate fails.',
         'Headless, no database. First consumer: Palate (recipe-builder). See docs/TARGETS.md.',
@@ -964,7 +964,7 @@ const ARCH = {
       details: [
         'POST /api/runs validates the RunConfig and refuses live specs unless CAFE_ALLOW_LIVE_MODELS=true.',
         'GET /api/runs/:id/events serves the persisted stream for replay.',
-        'POST /api/ingest/runs (+ /:id/events, /:id/finish) takes a run recorded elsewhere (the target CLI, a CI job) as a live run: RunManager.startRecorded keeps an EventBus open so SSE viewers watch it, and the run is stored like any other. STARDUST_INGEST_TOKEN guards it on a hosted dashboard.',
+        'POST /api/ingest/runs (+ /:id/events, /:id/finish) takes a run recorded elsewhere (the target CLI, a CI job) as a live run: RunManager.startRecorded keeps an EventBus open so SSE viewers watch it, and the run is stored like any other. EVALS_CAFE_INGEST_TOKEN guards it on a hosted dashboard.',
         'GET /api/projects/:id/cases lists a project’s golden cases read-only: from a local checkout (projects.local.json) or the project’s repo on GitHub through gh, at main, an open pull request or a run’s branch, with each branch’s case count (apps/server/src/project-cases.ts, packages/targets/src/cases-view.ts).',
         'GET /api/projects groups runs by config.target.project (simulated runs as "simulations"); GET /api/runs?project= lists one project. run.finished’s summary is kept on the run row for these lists.',
       ],
@@ -1065,7 +1065,7 @@ const ARCH = {
       seg: 'orch',
       x: 750,
       y: 600,
-      title: 'Orchestrator (stardust engine)',
+      title: 'Orchestrator (evals-cafe engine)',
       nick: 'the floor manager',
       summary:
         'The built-in engine: cases arrive, agent 1 takes them, work items queue, agent 2 fulfils. The run’s domain pack supplies the business.',
@@ -1175,7 +1175,7 @@ const ARCH = {
       summary:
         'One business per pack: words, tools, prompts, mocks, golden dataset, question wording, gate.',
       details: [
-        'cafe (Stardust Cafe, the original, with the animated scenes) and support (Brightside Goods support desk: refunds, replacements and store credit against a returns policy).',
+        'cafe (Evals Cafe, the original, with the animated scenes) and support (Brightside Goods support desk: refunds, replacements and store credit against a returns policy).',
         'Registered in packages/domains; its mocks register as mock:<persona> with the model registry. Add a pack there plus its vocabulary in protocol.',
         'The harness keeps stable internal keys (roles cashier/barista/manager, order.* events) so stored runs replay; every label comes from the pack’s vocabulary.',
         'See docs/DOMAIN-PACKS.md.',
@@ -1329,9 +1329,9 @@ const ARCH = {
       summary:
         'A read-only golden dataset per domain pack, plus user-defined datasets in Postgres.',
       details: [
-        'builtin:stardust and builtin:support ship 14 cases each.',
+        'builtin:cafe and builtin:support ship 14 cases each.',
         'A scenario is a golden item: the customer’s input (name, utterance, loyalty id) and the expected output (items, total, tools per role, refusal, rubric).',
-        'Datasets: the built-in one is virtual (builtin:stardust, read-only); saved ones live in datasets / dataset_items and their items are ds:<datasetId>:<slug>.',
+        'Datasets: the built-in one is virtual (builtin:cafe, read-only); saved ones live in datasets / dataset_items and their items are ds:<datasetId>:<slug>.',
         'resolveScenarios() turns a run config’s ids into scenarios (built-ins + dataset items, in order) before a run row exists, so a bad id is a 400.',
         'CRUD under /api/datasets, /api/tools lists the tool catalogue for the editor, the CLI takes --dataset.',
       ],

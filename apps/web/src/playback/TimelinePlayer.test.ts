@@ -20,7 +20,7 @@ const recorded = () =>
           domain: 'cafe',
           triageRoutes: false,
           gate: { enabled: false, threshold: 0.5 },
-          orchestrator: 'stardust',
+          orchestrator: 'evals-cafe',
           tools: { kind: 'builtin' },
           scenarioIds: ['a'],
           roles: {

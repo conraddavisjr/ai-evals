@@ -23,7 +23,7 @@ export async function connectRemoteTools(input: {
   scopeOf: (toolName: string) => string
   clientName?: string
 }): Promise<RemoteToolSource> {
-  const client = new Client({ name: input.clientName ?? 'stardust-cafe-gateway', version: '0.1.0' })
+  const client = new Client({ name: input.clientName ?? 'evals-cafe-gateway', version: '0.1.0' })
   await client.connect(input.transport)
   const listed = await client.listTools()
   const tools: ToolDef[] = listed.tools.map((t) => ({

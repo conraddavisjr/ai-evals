@@ -6,7 +6,13 @@ import { Scenario } from './domain.js'
  * built-in one ships with the code; the rest live in the database and are edited
  * from the UI. Item ids are namespaced so a run config can mix both.
  */
-export const BUILTIN_DATASET_ID = 'builtin:stardust'
+export const BUILTIN_DATASET_ID = 'builtin:cafe'
+
+/** Ids stored before the rename to Evals Cafe, still accepted everywhere a dataset id is read. */
+const LEGACY_DATASET_IDS: Record<string, string> = { 'builtin:stardust': BUILTIN_DATASET_ID }
+
+/** A dataset id as it is today: a pre-rename id maps to its current one. */
+export const canonicalDatasetId = (id: string): string => LEGACY_DATASET_IDS[id] ?? id
 
 /** Every domain pack ships a read-only dataset under a `builtin:` id. */
 export const isBuiltinDatasetId = (id: string): boolean => id.startsWith('builtin:')

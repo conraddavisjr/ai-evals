@@ -1,12 +1,12 @@
-# Visual style handoff: Stardust Cafe
+# Visual style handoff: Evals Cafe
 
-This document is for whichever agent or person takes the next swing at how Stardust Cafe *looks*.
+This document is for whichever agent or person takes the next swing at how Evals Cafe *looks*.
 It says what the product is, what the scene layer must keep doing, where the style should go, what exists today, and what is weak.
 Read this before touching `apps/web`.
 
 ## What the product is
 
-Stardust Cafe is an evaluation harness for multi-agent AI pipelines, visualized as a cafe.
+Evals Cafe is an evaluation harness for multi-agent AI pipelines, visualized as a cafe.
 Each member of staff (two cashiers, one or more baristas, a manager, a judge) is a sub-agent with its own model and its own slice of MCP tools.
 Customers are scripted scenarios: happy path, edge cases, adversarial.
 Everything that happens is an event in a typed stream (`packages/protocol/src/events.ts`); the scene is a pure consumer of that stream, which is what makes live view, replay, step-through and the "director's cut" all show the same thing.

@@ -37,6 +37,6 @@ const app = createApp({ store, runs, suites, allowLive })
 
 serve({ fetch: app.fetch, port }, () => {
   console.log(
-    `Stardust Cafe server on http://localhost:${port}  (live models: ${allowLive ? 'ENABLED' : 'disabled'})`,
+    `Evals Cafe server on http://localhost:${port}  (live models: ${allowLive ? 'ENABLED' : 'disabled'})`,
   )
 })

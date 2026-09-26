@@ -14,7 +14,7 @@ import {
  * spans through here so attribute names and parenting stay consistent. Without an
  * SDK registered (tests, the CLI by default) all of this is a no-op.
  */
-export const TRACER_NAME = 'stardust-cafe'
+export const TRACER_NAME = 'evals-cafe'
 
 /** Attribute keys. Kept flat and prefixed so they survive any OTLP backend's UI. */
 export const ATTR = {
