@@ -1,0 +1,56 @@
+# Checks every pull request (and main) must pass: lint, types, the whole test
+# suite against a real Postgres, and that generated files were regenerated.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cafe
+          POSTGRES_PASSWORD: cafe
+          POSTGRES_DB: cafe
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U cafe -d cafe"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://cafe:cafe@localhost:5434/cafe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Tests
+        # mock models only: no keys, no spend
+        run: pnpm test
+      - name: Architecture pages are rebuilt
+        run: |
+          python3 docs/architecture/build.py
+          git diff --exit-code docs/architecture || {
+            echo "::error::docs/architecture is stale: run python3 docs/architecture/build.py and commit the result"
+            exit 1
+          }
