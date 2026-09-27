@@ -37,6 +37,42 @@ export interface RunRow {
   summary?: RunSummary | null
 }
 
+/** One golden case as the dashboard lists it (see packages/targets/src/cases-view.ts). */
+export interface CaseInfo {
+  id: string
+  title: string
+  dataset: string
+  tags: string[]
+  smoke: boolean
+  prompt: string
+  input: Record<string, unknown>
+  expect: { outcomes: string[]; reasons: string[] | null; checks: string[] }
+  judge: string[]
+  skipJudge: boolean
+  rubric: string | null
+}
+
+/** A project's golden cases, read-only, and where they were read from. */
+export interface ProjectCasesInfo {
+  name: string
+  target: string | null
+  judge: {
+    model: string
+    questions: Array<{ id: string; type: string; instructions: string }>
+  } | null
+  thresholds: { overall: number | null; byTag: Record<string, number> }
+  datasets: Array<{ name: string; count: number; smoke: number }>
+  cases: CaseInfo[]
+  total: number
+  smoke: number
+  source: {
+    kind: 'file' | 'github' | 'builtin'
+    label: string
+    ref: string | null
+    refs: Array<{ ref: string; total: number | null; openPr: boolean }>
+  }
+}
+
 /** A project with runs: a target app evaluated over HTTP, or "simulations" for the built-in domains. */
 export interface ProjectInfo {
   id: string
@@ -95,6 +131,8 @@ export interface HarnessClient {
   runs(project?: string): Promise<RunRow[]>
   /** Projects that have runs. Optional: a harness without target runs can leave it out. */
   projects?(): Promise<ProjectInfo[]>
+  /** A project's golden cases, at a branch of its repo (its default when omitted). */
+  projectCases?(project: string, ref?: string): Promise<ProjectCasesInfo>
   run(id: string): Promise<RunRow>
   startRun(config: RunConfigInput): Promise<{ runId: string }>
   cancelRun(id: string): Promise<{ cancelled: boolean }>

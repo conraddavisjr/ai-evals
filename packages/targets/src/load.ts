@@ -39,14 +39,19 @@ const issues = (file: string, err: z.ZodError) =>
  * Read a config pack and its datasets. Environment variables are resolved in the
  * target only, so a dataset can mention `${...}` in a prompt without tripping it.
  */
-export function loadPack(file: string, env: NodeJS.ProcessEnv = process.env): LoadedPack {
+export function loadPack(
+  file: string,
+  env: NodeJS.ProcessEnv = process.env,
+  /** 'keep' reads a pack whose secrets are not set here (the dashboard's case list). */
+  missingVars: 'throw' | 'keep' = 'throw',
+): LoadedPack {
   const abs = resolve(file)
   const dir = dirname(abs)
   const raw = readJson(abs) as Record<string, unknown>
   const parsed = PackConfig.safeParse(raw)
   if (!parsed.success) throw issues(abs, parsed.error)
   const config = parsed.data
-  config.target = interpolateEnv(config.target, env)
+  config.target = interpolateEnv(config.target, env, missingVars)
 
   const files = [
     ...new Set(

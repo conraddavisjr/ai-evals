@@ -274,6 +274,15 @@ export function caseEndEvents(
     out.push({ ...usageFor(st, n, cashierId, 'cashier'), t: at() })
   }
 
+  // Each agent says when its part is over, so a finished run never shows one still "working".
+  const idle = (agentId: string, role: 'cashier' | 'barista'): RecordedEvent => ({
+    type: 'agent.idle',
+    txId,
+    agentId,
+    role,
+    t: at(),
+  })
+
   const orderId = `${txId}-out`
   if (r.outcome === 'served') {
     const results = Array.isArray(r.output) ? r.output : r.output == null ? [] : [r.output]
@@ -306,6 +315,7 @@ export function caseEndEvents(
           t: at(),
         },
         { type: 'customer.moved', txId, customerId, to: 'waiting', t: at() },
+        idle(cashierId, 'cashier'),
         { type: 'order.claimed', txId, orderId, baristaId, waitedMs: 0, t: at() },
       )
       let m = 0
@@ -332,8 +342,9 @@ export function caseEndEvents(
           customerName: `Case ${slot.index + 1}`,
           t: at(),
         },
+        idle(baristaId, 'barista'),
       )
-    }
+    } else out.push(idle(cashierId, 'cashier'))
     out.push(
       { type: 'order.delivered', txId, orderId, t: at() },
       { type: 'customer.moved', txId, customerId, to: 'pickup', t: at() },
@@ -350,6 +361,7 @@ export function caseEndEvents(
         reason: r.reason ? `${r.reason}: ${said}` : said,
         t: at(),
       },
+      idle(cashierId, 'cashier'),
     )
   } else {
     out.push({
@@ -362,6 +374,7 @@ export function caseEndEvents(
       retryable: false,
       t: at(),
     })
+    out.push(idle(cashierId, 'cashier'))
   }
   // Whatever the phases add up to, the case ends when the app answered.
   t = Math.max(t, opts.t0 + r.latencyMs)

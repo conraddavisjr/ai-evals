@@ -320,7 +320,10 @@ export function App() {
         else player.play()
       } else if (e.code === 'ArrowRight') player.stepForward()
       else if (e.code === 'ArrowLeft') player.stepBack()
-      else if (e.key === '1') player.setMode('live-buffered')
+      else if (e.code === 'End') {
+        e.preventDefault()
+        player.skipToEnd()
+      } else if (e.key === '1') player.setMode('live-buffered')
       else if (e.key === '2') player.setMode('live-raw')
       else if (e.key === '3') player.setMode('replay')
       else if (e.key === '4') player.setMode('step')

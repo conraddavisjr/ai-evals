@@ -79,6 +79,20 @@ export function PlaybackControls({ player }: { player: TimelinePlayer }) {
           >
             ▶
           </button>
+          <button
+            type="button"
+            className="skip-end"
+            onClick={() => player.skipToEnd()}
+            title={
+              player.mode.startsWith('live')
+                ? 'Skip to the latest: everything received so far (End)'
+                : 'Skip to the end: the finished results (End)'
+            }
+            aria-label="Skip to the end"
+            disabled={idle || pos.cursor >= pos.total}
+          >
+            End ⏭
+          </button>
         </div>
         {timed && (
           <label className="inline">

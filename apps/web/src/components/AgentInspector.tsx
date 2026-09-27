@@ -19,7 +19,9 @@ import {
   reviewLabel,
   roleLabel,
   verdictOf,
+  words,
 } from '../lib/nomenclature.js'
+import { agentWork, caseTimeline, type StepKind, type TimelineStep } from '../lib/step-timeline.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { AgentView, CustomerView } from '../state/cafe-state.js'
 import {
@@ -30,6 +32,7 @@ import {
   MODEL_NOTE,
   readScale,
 } from './judge-explain.js'
+import './step-table.css'
 import { VerdictPill } from './TransactionList.js'
 
 /** Selections the Inspector understands: an agent id, a case's customer id, or `tool:<name>`. */
@@ -270,6 +273,8 @@ function CaseDetail({
     () => toolCalls(s.applied).filter((c) => c.txId === customer.txId),
     [s.applied, customer.txId],
   )
+  // a target app's results carry no price: only show money when the work item has one
+  const priced = !!order && (order.totalCents > 0 || order.items.some((i) => i.unitPriceCents > 0))
   const calledBy = (role: string) =>
     new Set(calls.filter((c) => s.agents[c.agentId]?.role === role).map((c) => c.tool))
   return (
@@ -386,6 +391,8 @@ function CaseDetail({
 
       {customer.scored && <CaseChecks scored={customer.scored} />}
 
+      <CaseSteps player={player} txId={customer.txId} onSelect={onSelect} />
+
       {(customer.triage || order || calls.length > 0 || review || verdict) && (
         <h4>What happened</h4>
       )}
@@ -394,21 +401,27 @@ function CaseDetail({
           <>
             <dt>router</dt>
             <dd>
-              {customer.triage.intent} · escalate {Math.round(customer.triage.probability * 100)}%
+              {customer.triage.intent}
+              {/* an app's own pre-classifier reports no escalation probability */}
+              {customer.triage.probability > 0 || customer.triage.escalate
+                ? ` · escalate ${Math.round(customer.triage.probability * 100)}%`
+                : ''}
             </dd>
           </>
         )}
         {order && (
           <>
-            <dt>work item</dt>
+            <dt>{words().workItem}</dt>
             <dd>
-              {order.status} · {fmtCents(order.totalCents)}
+              {order.status}
+              {priced ? ` · ${fmtCents(order.totalCents)}` : ''}
               <ul className="items">
                 {order.items.map((i) => (
                   <li
                     key={`${i.menuItemId}-${i.size}-${i.modifiers.join('+')}-${i.unitPriceCents}`}
                   >
-                    {lineText(i)} · {fmtCents(i.unitPriceCents)}
+                    {lineText(i)}
+                    {priced ? ` · ${fmtCents(i.unitPriceCents)}` : ''}
                   </li>
                 ))}
               </ul>
@@ -465,7 +478,7 @@ function CaseDetail({
             <dd>
               <code>{shortModel(verdict.judgeSpec)}</code> in {fmtMs(verdict.latencyMs)}
               <ul className="items">
-                {Object.entries(verdict.answers).map(([id, a]) => (
+                {inQuestionOrder(verdict.answers, verdict.questions).map(([id, a]) => (
                   <li key={id}>
                     {answerLabel(id)}:{' '}
                     {'probability' in a ? `${Math.round(a.probability * 100)}%` : `${a.score}/5`}
@@ -659,6 +672,7 @@ function AgentDetail({
           </>
         )}
       </dl>
+      <AgentTime player={player} agentId={agent.agentId} onSelect={onSelect} />
       {slice.length > 0 && (
         <>
           <h4>Tool slice</h4>
@@ -749,6 +763,189 @@ function ToolCallRow({
 // ---------- evaluation: the judge and the orchestrator review ----------
 
 /** The case a txId belongs to, with its arrival index for "Case N". */
+const KIND_LAYER: Record<StepKind, string> = {
+  arrive: 'input',
+  router: 'orch',
+  model: 'agent',
+  tool: 'tool',
+  wait: 'orch',
+  gate: 'eval',
+  review: 'eval',
+  judge: 'eval',
+  checks: 'eval',
+  result: 'orch',
+  error: 'error',
+}
+
+/** Rows of a step timeline: when each step started, who did it and what, and how long it took. */
+function StepTable({
+  steps,
+  onSelect,
+  showWho = true,
+}: {
+  steps: TimelineStep[]
+  onSelect: (id: string) => void
+  showWho?: boolean
+}) {
+  return (
+    <table className="step-table">
+      <thead>
+        <tr>
+          <th className="num">at</th>
+          <th>step</th>
+          <th className="num">took</th>
+        </tr>
+      </thead>
+      <tbody>
+        {steps.map((st) => (
+          <tr key={st.seq} className={st.ok === false ? 'bad' : st.running ? 'running' : ''}>
+            <td className="num mono muted">+{fmtMs(st.atMs)}</td>
+            <td>
+              {showWho && (
+                <div className="who">
+                  <i className={`layer-dot ${KIND_LAYER[st.kind]}`} aria-hidden="true" />
+                  {st.agentId ? (
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={() => onSelect(st.agentId ?? '')}
+                    >
+                      {st.who}
+                    </button>
+                  ) : (
+                    st.who
+                  )}
+                </div>
+              )}
+              <div className="what">
+                {!showWho && (
+                  <i className={`layer-dot ${KIND_LAYER[st.kind]}`} aria-hidden="true" />
+                )}
+                {st.kind === 'tool' ? (
+                  <button
+                    type="button"
+                    className="link mono"
+                    onClick={() => onSelect(toolSelection(st.what.split(' ')[0] ?? ''))}
+                  >
+                    {st.what}
+                  </button>
+                ) : (
+                  st.what
+                )}
+              </div>
+            </td>
+            <td className="num mono">{st.durationMs === null ? '' : fmtMs(st.durationMs)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** A case, step by step in the order things happened, with how long each step took. */
+function CaseSteps({
+  player,
+  txId,
+  onSelect,
+}: {
+  player: TimelinePlayer
+  txId: string
+  onSelect: (id: string) => void
+}) {
+  const t = caseTimeline(player.state.applied, txId, player.clockEpoch())
+  if (t.steps.length <= 1) return null
+  const busy = t.steps.reduce((s, x) => s + (x.durationMs ?? 0), 0)
+  return (
+    <>
+      <h4>Step by step</h4>
+      <p className="muted small">
+        {t.totalMs === null ? 'In progress' : `${fmtMs(t.totalMs)} from arrival to leaving`} ·{' '}
+        {fmtMs(busy)} of timed steps. “at” is when a step started, from the case’s arrival.
+      </p>
+      <StepTable steps={t.steps} onSelect={onSelect} />
+    </>
+  )
+}
+
+/** Where an agent's time went: its model steps and tool calls, overall and per case. */
+function AgentTime({
+  player,
+  agentId,
+  onSelect,
+}: {
+  player: TimelinePlayer
+  agentId: string
+  onSelect: (id: string) => void
+}) {
+  const w = agentWork(player.state.applied, agentId)
+  if (w.steps === 0 && w.tools === 0) return null
+  const latest = w.byCase.at(-1)
+  const latestSteps = latest
+    ? caseTimeline(player.state.applied, latest.txId).steps.filter((st) => st.agentId === agentId)
+    : []
+  const latestCase = latest ? caseOfTx(player, latest.txId) : null
+  return (
+    <>
+      <h4>Time</h4>
+      <dl>
+        <dt>model</dt>
+        <dd>
+          {fmtMs(w.modelMs)} over {w.steps} step{w.steps === 1 ? '' : 's'}
+          {w.steps ? ` · ${fmtMs(w.modelMs / w.steps)} each on average` : ''}
+        </dd>
+        <dt>tools</dt>
+        <dd>
+          {w.tools ? `${fmtMs(w.toolMs)} over ${w.tools} call${w.tools === 1 ? '' : 's'}` : 'none'}
+          {w.failedTools ? <span className="bad"> · {w.failedTools} failed</span> : null}
+        </dd>
+      </dl>
+      {w.byCase.length > 0 && (
+        <table className="step-table">
+          <thead>
+            <tr>
+              <th>case</th>
+              <th className="num">steps</th>
+              <th className="num">tools</th>
+              <th className="num">time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {w.byCase.map((c) => {
+              const found = caseOfTx(player, c.txId)
+              return (
+                <tr key={c.txId}>
+                  <td>
+                    {found ? (
+                      <button
+                        type="button"
+                        className="link"
+                        onClick={() => onSelect(found.customer.customerId)}
+                      >
+                        {caseLabel(found.index)} · {found.customer.title ?? found.customer.name}
+                      </button>
+                    ) : (
+                      c.txId
+                    )}
+                  </td>
+                  <td className="num mono">{c.steps}</td>
+                  <td className="num mono">{c.tools}</td>
+                  <td className="num mono">{fmtMs(c.ms)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+      {latestSteps.length > 0 && latestCase && (
+        <>
+          <h5 className="step-sub">{caseLabel(latestCase.index)}, step by step</h5>
+          <StepTable steps={latestSteps} onSelect={onSelect} showWho={false} />
+        </>
+      )}
+    </>
+  )
+}
+
 function caseOfTx(player: TimelinePlayer, txId: string) {
   const byArrival = Object.values(player.state.customers).sort((a, b) => a.arrivedAt - b.arrivedAt)
   const index = byArrival.findIndex((c) => c.txId === txId)
@@ -1213,6 +1410,13 @@ function CaseChecks({ scored }: { scored: NonNullable<CustomerView['scored']> })
 
 const isStandard = (id: string): id is AnswerId => id in ANSWER_LABEL
 
+/** Stored answers come back in the database's key order; list them in the order they were asked. */
+function inQuestionOrder(answers: Answers, questions: Array<{ id: string }> | null | undefined) {
+  const order = (questions ?? []).map((q) => q.id)
+  const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length)
+  return Object.entries(answers).sort(([x], [y]) => rank(x) - rank(y))
+}
+
 /** "refusal appropriate" for the standard five; "only recipes" for a pack's onlyRecipes. */
 function answerLabel(id: string): string {
   if (isStandard(id)) return ANSWER_LABEL[id]
@@ -1254,16 +1458,11 @@ function JudgeAnswers({
   }, [brief])
   const [open, setOpen] = useState<string | null>(null)
   const mock = v.judgeSpec.startsWith('mock:')
-  // Stored answers come back in the database's key order; show them in the order asked.
-  const order = (v.questions ?? []).map((q) => q.id)
-  const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length)
-  const rows = Object.entries(v.answers)
-    .sort(([x], [y]) => rank(x) - rank(y))
-    .map(([id, a]) =>
-      'probability' in a
-        ? { id, kind: 'probability' as const, value: a.probability }
-        : { id, kind: 'score' as const, value: a.score },
-    )
+  const rows = inQuestionOrder(v.answers, v.questions).map(([id, a]) =>
+    'probability' in a
+      ? { id, kind: 'probability' as const, value: a.probability }
+      : { id, kind: 'score' as const, value: a.score },
+  )
   return (
     <div className="judge-answers">
       {rows.map(({ id, kind, value }) => {
