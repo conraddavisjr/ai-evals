@@ -89,15 +89,26 @@ function failed(
  */
 export function httpTarget(
   cfg: HttpTargetConfig,
-  opts: { fetch?: Fetch; responseSchema?: z.ZodType | null } = {},
+  opts: {
+    fetch?: Fetch
+    responseSchema?: z.ZodType | null
+    /** Never let the app keep what a case produces (CI): `{{run.persist}}` is always false. */
+    noPersist?: boolean
+  } = {},
 ): Target {
   const doFetch = opts.fetch ?? fetch
   const schema = opts.responseSchema ?? null
   const ctxOf = (c: EvalCase, ctx: InvokeContext) => ({
     input: c.input,
     case: { id: c.id, title: c.title, tags: c.tags },
-    // firstAttempt lets a pack keep side effects (saved output) to one repeat of a case.
-    run: { id: ctx.runId, attempt: ctx.attempt, firstAttempt: ctx.attempt === 1 },
+    // firstAttempt and persist let a pack keep side effects (saved output) to one repeat of a case, or none.
+    run: {
+      id: ctx.runId,
+      attempt: ctx.attempt,
+      firstAttempt: ctx.attempt === 1,
+      // true on a case's first attempt unless the run said not to keep anything
+      persist: ctx.attempt === 1 && !opts.noPersist,
+    },
   })
   return {
     kind: 'http',

@@ -99,6 +99,8 @@ export interface CaseFilter {
   /** Any of these tags. */
   tags?: string[] | undefined
   smoke?: boolean | undefined
+  /** None of these tags (drop cases a CI environment cannot serve, like an empty catalog). */
+  excludeTags?: string[] | undefined
   /** Only cases whose one acceptable outcome is this ("refused": the decline-only set, cheap to run). */
   expect?: string | undefined
 }
@@ -113,6 +115,7 @@ export function selectCases(cases: LoadedCase[], f: CaseFilter): LoadedCase[] {
       (!f.ids?.length || f.ids.includes(c.id)) &&
       (!f.tags?.length || c.tags.some((t) => f.tags?.includes(t))) &&
       (!f.smoke || c.smoke) &&
+      !c.tags.some((t) => f.excludeTags?.includes(t)) &&
       (!f.expect || [c.expect.outcome ?? []].flat().join() === f.expect),
   )
 }

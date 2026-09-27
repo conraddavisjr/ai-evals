@@ -14,12 +14,12 @@ import { MissingEnvError } from './template.js'
 const USAGE = `Evaluate another project's AI through its config pack.
 
   pnpm eval:target --config ../recipe-builder/evals/evals-cafe.config.json
-      [--cases id,id] [--tags adversarial,harmful] [--smoke] [--expect refused]
+      [--cases id,id] [--tags adversarial,harmful] [--smoke] [--expect refused] [--exclude-tags thrive]
       [--repeats 3] [--concurrency 2] [--max-usd 5]
       [--judge <model spec> | --no-judge]
       [--min-pass 0.9] [--min-pass-tag adversarial=1,benign=0.9]
       [--json out/report.json] [--junit out/junit.xml] [--summary out/summary.md]
-      [--list] [--dry-run] [--replay out/report.json]
+      [--list] [--dry-run] [--replay out/report.json] [--no-persist]
       [--record [http://localhost:4747]] [--import out/report.json]
 
 --replay re-scores the answers saved in an earlier --json report (current assertions and judge, no calls to the app).
@@ -113,6 +113,7 @@ async function main(): Promise<number> {
     tags: list(args.tags),
     smoke: args.smoke === true,
     expect: typeof args.expect === 'string' ? args.expect : undefined,
+    excludeTags: list(args['exclude-tags']),
   })
   if (!cases.length) throw new ConfigError('No cases selected')
   if (typeof args.import === 'string') return importReport(at(args.import), pack, cwd, args)
@@ -120,7 +121,10 @@ async function main(): Promise<number> {
   const target =
     typeof args.replay === 'string'
       ? replayTarget(at(args.replay))
-      : httpTarget(pack.config.target, { responseSchema: pack.responseSchema })
+      : httpTarget(pack.config.target, {
+          responseSchema: pack.responseSchema,
+          noPersist: args['no-persist'] === true,
+        })
   const runId = `t-${new Date()
     .toISOString()
     .replace(/[-:.TZ]/g, '')

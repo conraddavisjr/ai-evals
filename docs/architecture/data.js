@@ -393,6 +393,7 @@ export const ARCH = {
         'Per case: POST to the app’s eval route, map the answer to served / refused / failed with a reason, run deterministic assertions (JSONPath, count, regex, steps), then ask the judge only if those pass.',
         'Reports pass rate by tag, false and missed refusals, flaky cases across repeats, and target-reported spend; writes JSON, JUnit and a Markdown summary; exits 1 when a gate fails.',
         'Headless, no database. First consumer: Palate (recipe-builder). See docs/TARGETS.md.',
+        'In CI: the composite action .github/actions/run-evals (pinned by commit) installs just this package and runs it: subsets refused / smoke / all, --no-persist, JUnit, job summary and the report as an artifact, failing the job on a missed gate.',
         '--record streams each case to the API as the same CafeEvents a simulated case emits (router, agent 1, hand-off, agent 2, case.scored, judge.verdict), so the dashboard plays it live and keeps it under its project with branch, commit and pull request.',
       ],
       files: [
@@ -402,6 +403,7 @@ export const ARCH = {
         'packages/targets/src/assertions.ts',
         'packages/targets/src/events.ts',
         'packages/targets/src/recorder.ts',
+        '.github/actions/run-evals/action.yml',
         'docs/contracts/*.schema.json',
       ],
     },

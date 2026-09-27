@@ -15,6 +15,8 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/evals-cafe.con
 | --- | --- |
 | `--config <file>` | The config pack (required). |
 | `--cases a,b` / `--tags x,y` / `--smoke` | Run a subset: by id, by any of the tags, or the cases marked `smoke`. |
+| `--exclude-tags a,b` | Drop cases with any of these tags (for example, cases a CI environment cannot serve). |
+| `--no-persist` | `{{run.persist}}` is false for every attempt: the app keeps nothing (CI). |
 | `--expect refused` | Only cases whose one acceptable outcome is this: `refused` is the decline-only set, which costs pennies because the app turns them away before drafting. |
 | `--repeats n` | Run every case n times; flaky cases are named in the report. |
 | `--concurrency n` | Cases in flight at once (the pack's `target.concurrency` by default). |
@@ -75,6 +77,30 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/evals-cafe.con
 - `--import report.json` stores an earlier `--json` report as it was, with no calls to the app and no judging.
 - `EVALS_CAFE_URL` points `--record` at another dashboard; when that dashboard sets `EVALS_CAFE_INGEST_TOKEN`, the recorder must send the same token.
 - Recording is an observer: when the dashboard is down the evaluation still runs and still gates, and the CLI says what it could not send.
+
+## In CI (GitHub Actions)
+
+A consumer repo runs the harness with the composite action, pinned to a commit of this repository:
+
+```yaml
+- uses: conraddavisjr/ai-evals/.github/actions/run-evals@<sha>
+  env:
+    PALATE_URL: http://localhost:3000
+    EVAL_SECRET: ${{ steps.secret.outputs.value }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # for the judge
+  with:
+    config: evals/evals-cafe.config.json
+    subset: refused          # refused (decline-only) | smoke | all
+    max-usd: '1'
+    extra-args: --exclude-tags thrive
+```
+
+- GitHub downloads this repository at the pinned commit to run the action, so that exact harness runs: nothing is published or cloned.
+  The action sets up Node 24 and pnpm itself and installs only the harness and what it needs.
+- Nothing the cases produce is kept: the action passes `--no-persist`, so `{{run.persist}}` is false (set `persist: 'true'` to change that).
+- It writes `report.json`, `junit.xml` and `summary.md`, appends the summary to the job summary, uploads them as an artifact even when evals fail, and then fails the job on a missed gate (exit 1) or bad config (exit 2).
+- Outputs: `exit-code`, `report`, `junit`, `summary`.
+- `.github/workflows/run-evals-action.yml` tests the action against a stand-in app on every change to it or the harness.
 
 ## Seeing a project's cases
 

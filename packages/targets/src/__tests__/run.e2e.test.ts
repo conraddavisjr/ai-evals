@@ -239,6 +239,22 @@ describe('the CLI', () => {
     expect(r.stdout).toContain('target spend $0.000')
   })
 
+  it('keeps nothing with --no-persist, and drops cases by tag', async () => {
+    const before = app.calls.length
+    const r = await run([
+      '--config',
+      'fixtures/evals-cafe.config.json',
+      '--no-judge',
+      '--no-persist',
+      '--exclude-tags',
+      'adversarial',
+    ])
+    const sent = app.calls.slice(before)
+    expect(r.stdout).toContain('3 case(s)')
+    expect(sent).toHaveLength(3)
+    expect(sent.every((b) => b.persist === false)).toBe(true)
+  })
+
   it('exits 2 on a bad config or a missing secret', async () => {
     const r = await run(['--config', 'fixtures/evals-cafe.config.json'], { FAKE_URL: '' })
     expect(r.stderr).toContain('Missing environment variable: FAKE_URL')

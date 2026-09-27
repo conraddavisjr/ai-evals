@@ -1,0 +1,126 @@
+name: Run Evals Cafe
+description: >-
+  Run a project's golden datasets against its eval route with the Evals Cafe
+  harness: fail on a missed threshold, publish JUnit, a step summary and the
+  full report as an artifact.
+
+# Pin it to a commit: uses: conraddavisjr/ai-evals/.github/actions/run-evals@<sha>
+# GitHub downloads this repository at that commit to run the action, so the
+# harness that runs is exactly the pinned one; nothing is published or cloned.
+
+inputs:
+  config:
+    description: Path to the config pack in the calling repository, e.g. evals/evals-cafe.config.json.
+    required: true
+  subset:
+    description: 'Which cases: "refused" (decline-only, cheap), "smoke" (the pack''s smoke set) or "all".'
+    default: refused
+  repeats:
+    description: Attempts per case; flaky cases are named in the report.
+    default: '1'
+  max-usd:
+    description: Stop starting cases once the app reports this much spend (empty for the pack's budget).
+    default: ''
+  judge:
+    description: 'Judge model spec, "off" to skip the judge, or empty for the pack''s judge.'
+    default: ''
+  persist:
+    description: '"true" lets the app keep what cases produce ({{run.persist}}); CI normally keeps nothing.'
+    default: 'false'
+  extra-args:
+    description: More CLI flags, e.g. "--exclude-tags thrive".
+    default: ''
+  results-dir:
+    description: Where the report, JUnit and summary are written, relative to the workspace.
+    default: evals-cafe-results
+  artifact-name:
+    description: Name of the uploaded artifact (report.json, junit.xml, summary.md).
+    default: evals-cafe-report
+
+outputs:
+  exit-code:
+    description: 0 every gate passed, 1 a gate failed or the run was cut short, 2 bad config or flags.
+    value: ${{ steps.run.outputs.exit-code }}
+  report:
+    description: Path to report.json.
+    value: ${{ steps.run.outputs.report }}
+  junit:
+    description: Path to junit.xml.
+    value: ${{ steps.run.outputs.junit }}
+  summary:
+    description: Path to summary.md (also appended to the job summary).
+    value: ${{ steps.run.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    - name: Node for the harness
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: ${{ github.action_path }}/../../../.nvmrc
+
+    - name: Install the harness (only its runner and what it needs)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH/../../.."
+        pnpm_version="$(node -p "require('./package.json').packageManager.split('@')[1]")"
+        npm install --global --silent "pnpm@${pnpm_version}"
+        pnpm install --frozen-lockfile --filter "@cafe/targets..."
+
+    - name: Run the evals
+      id: run
+      shell: bash
+      env:
+        IN_CONFIG: ${{ inputs.config }}
+        IN_SUBSET: ${{ inputs.subset }}
+        IN_REPEATS: ${{ inputs.repeats }}
+        IN_MAX_USD: ${{ inputs.max-usd }}
+        IN_JUDGE: ${{ inputs.judge }}
+        IN_PERSIST: ${{ inputs.persist }}
+        IN_EXTRA: ${{ inputs.extra-args }}
+        IN_RESULTS: ${{ inputs.results-dir }}
+      run: |
+        set -uo pipefail
+        harness="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        out="$GITHUB_WORKSPACE/$IN_RESULTS"
+        mkdir -p "$out"
+        echo "report=$out/report.json" >> "$GITHUB_OUTPUT"
+        echo "junit=$out/junit.xml" >> "$GITHUB_OUTPUT"
+        echo "summary=$out/summary.md" >> "$GITHUB_OUTPUT"
+        args=(--config "$GITHUB_WORKSPACE/$IN_CONFIG" --repeats "$IN_REPEATS"
+          --json "$out/report.json" --junit "$out/junit.xml" --summary "$out/summary.md")
+        case "$IN_SUBSET" in
+          refused) args+=(--expect refused) ;;
+          smoke) args+=(--smoke) ;;
+          all) ;;
+          *) echo "::error::subset must be refused, smoke or all, not \"$IN_SUBSET\""; echo "exit-code=2" >> "$GITHUB_OUTPUT"; exit 0 ;;
+        esac
+        [ -n "$IN_MAX_USD" ] && args+=(--max-usd "$IN_MAX_USD")
+        if [ "$IN_JUDGE" = "off" ]; then args+=(--no-judge); elif [ -n "$IN_JUDGE" ]; then args+=(--judge "$IN_JUDGE"); fi
+        [ "$IN_PERSIST" = "true" ] || args+=(--no-persist)
+        read -r -a extra <<< "$IN_EXTRA"
+        cd "$harness/packages/targets"
+        # INIT_CWD: relative paths in flags resolve from the calling repository
+        INIT_CWD="$GITHUB_WORKSPACE" node --import tsx src/cli.ts "${args[@]}" "${extra[@]}"
+        echo "exit-code=$?" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ github.workspace }}/${{ inputs.results-dir }}
+        if-no-files-found: warn
+
+    - name: Gate on the result
+      if: always()
+      shell: bash
+      env:
+        CODE: ${{ steps.run.outputs.exit-code }}
+      run: |
+        case "${CODE:-2}" in
+          0) echo "Evals Cafe: every gate passed." ;;
+          1) echo "::error::Evals Cafe: a gate failed or the run was cut short. See the job summary and the report artifact."; exit 1 ;;
+          *) echo "::error::Evals Cafe: bad config, flags or a judge that could not answer (exit ${CODE:-unknown})."; exit "${CODE:-2}" ;;
+        esac
