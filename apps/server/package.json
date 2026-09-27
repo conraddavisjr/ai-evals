@@ -33,6 +33,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@cafe/targets": "workspace:*",
     "tsx": "^4.23.13"
   }
 }

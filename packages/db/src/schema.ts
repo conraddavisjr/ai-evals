@@ -7,6 +7,7 @@ import type {
   RunConfig,
   RunMetrics,
   RunStatus,
+  RunSummary,
   Scenario,
   SuiteConfig,
   SuiteStatus,
@@ -139,6 +140,8 @@ export const runs = pgTable(
     suiteId: text('suite_id').references(() => suites.id, { onDelete: 'cascade' }),
     variant: text('variant'),
     repeat: integer('repeat'),
+    /** run.finished's summary, kept on the row so run lists show results without reading events. */
+    summary: jsonb('summary').$type<RunSummary>(),
   },
   (t) => [index('runs_suite').on(t.suiteId)],
 )

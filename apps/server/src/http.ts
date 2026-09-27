@@ -10,6 +10,7 @@ import {
   isBuiltinDatasetId,
   type Role,
   RunConfig,
+  type RunConfigInput,
   type Scenario,
   ScenarioInput,
   slugify,
@@ -21,7 +22,7 @@ import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { BenchRunner } from './bench.js'
 import { listOrchestrators } from './orchestrators/index.js'
-import type { RunManager } from './run-manager.js'
+import type { RecordedEvent, RunManager } from './run-manager.js'
 import { getDataset, listDatasets } from './scenarios.js'
 import { suiteMetrics, suiteTelemetry } from './suite-results.js'
 import { SuiteRunner } from './suite-runner.js'
@@ -160,8 +161,89 @@ export function createApp(deps: HttpDeps) {
   )
 
   app.get('/api/runs', async (c) => {
-    const rows = await store.runs.list(100)
+    const project = c.req.query('project')
+    const rows =
+      project === undefined
+        ? await store.runs.list(100)
+        : await store.runs.listForProject(project === 'simulations' ? null : project)
     return c.json(rows.map((r) => ({ ...r, active: runs.isActive(r.id) })))
+  })
+
+  /** Every project that has runs; simulated runs (no target) group as "simulations". */
+  app.get('/api/projects', async (c) =>
+    c.json(
+      (await store.runs.projects())
+        .map((p) => ({
+          id: p.project ?? 'simulations',
+          name: p.name ?? 'Simulations',
+          simulated: p.project === null,
+          runs: p.runs,
+          lastAt: p.lastAt,
+        }))
+        .sort((a, b) => Number(a.simulated) - Number(b.simulated) || b.lastAt - a.lastAt),
+    ),
+  )
+
+  // ---------- recorded runs: a target run streams in from the CLI or a CI job ----------
+
+  /**
+   * When STARDUST_INGEST_TOKEN is set, recorders must send it as a bearer token
+   * (a hosted dashboard); unset, the local server accepts recorders on its own.
+   */
+  const ingestAllowed = (c: { req: { header(name: string): string | undefined } }) => {
+    const token = process.env.STARDUST_INGEST_TOKEN
+    return !token || c.req.header('authorization') === `Bearer ${token}`
+  }
+
+  app.post('/api/ingest/runs', async (c) => {
+    if (!ingestAllowed(c)) return c.json({ error: 'unauthorized' }, 401)
+    const body = await parseBody(
+      c,
+      z.object({ config: z.unknown(), startedAt: z.number().int().positive().optional() }),
+    )
+    if ('error' in body) return c.json({ error: body.error }, 400)
+    try {
+      const { runId } = await runs.startRecorded(
+        body.data.config as RunConfigInput,
+        body.data.startedAt,
+      )
+      return c.json({ runId }, 201)
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+    }
+  })
+
+  app.post('/api/ingest/runs/:id/events', async (c) => {
+    if (!ingestAllowed(c)) return c.json({ error: 'unauthorized' }, 401)
+    const body = await parseBody(
+      c,
+      z.object({ events: z.array(z.record(z.string(), z.unknown())) }),
+    )
+    if ('error' in body) return c.json({ error: body.error }, 400)
+    try {
+      const count = runs.record(c.req.param('id'), body.data.events as unknown as RecordedEvent[])
+      return c.json({ count })
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+    }
+  })
+
+  app.post('/api/ingest/runs/:id/finish', async (c) => {
+    if (!ingestAllowed(c)) return c.json({ error: 'unauthorized' }, 401)
+    const body = await parseBody(
+      c,
+      z.object({
+        status: z.enum(['finished', 'failed', 'cancelled']).default('finished'),
+        error: z.string().optional(),
+      }),
+    )
+    if ('error' in body) return c.json({ error: body.error }, 400)
+    try {
+      await runs.finishRecorded(c.req.param('id'), body.data.status, body.data.error)
+      return c.json({ finished: true })
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+    }
   })
 
   /** Parse a JSON body with a zod schema; 400 with a readable message otherwise. */

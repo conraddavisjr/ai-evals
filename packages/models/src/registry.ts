@@ -81,6 +81,10 @@ export class ModelRegistry {
         return this.gateway()(p.model) as LanguageModelV4
       case 'ollama':
         return this.ollama()(p.model) as LanguageModelV4
+      case 'app':
+        throw new Error(
+          `${spec} names a model an app under test reported; the harness cannot call it`,
+        )
     }
   }
 
@@ -107,6 +111,10 @@ export class ModelRegistry {
         )
       case 'ollama':
         return languageModelAsEvaluationModel(this.ollama()(p.model) as LanguageModelV4)
+      case 'app':
+        throw new Error(
+          `${spec} names a model an app under test reported; the harness cannot call it`,
+        )
     }
   }
 

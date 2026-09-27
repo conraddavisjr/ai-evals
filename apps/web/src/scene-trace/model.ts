@@ -1,4 +1,4 @@
-import type { CafeEvent } from '@cafe/protocol'
+import { answersLine, type CafeEvent, type JudgeAnswers, probabilityOf } from '@cafe/protocol'
 import { agentLabel, lineText, outcomeLabel, roleShort, words } from '../lib/nomenclature.js'
 
 /** Which layer of the pipeline a badge belongs to; decides its colour. */
@@ -56,6 +56,9 @@ export interface Column {
   startSeq: number
   /** Seq of customer.left: from it on, the outcome is known. */
   leftSeq: number | null
+  /** A target run's own verdict on the case (case.scored) and when it landed. */
+  passed: boolean | null
+  scoredSeq: number | null
   bands: Record<Band, Badge[]>
 }
 
@@ -129,7 +132,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
             atMs: 0,
             layer: 'input',
             head: 'expect',
-            text: `${e.expected.outcome}${e.expected.cashierTools.length ? ` · agent 1: ${e.expected.cashierTools.map(short).join(' ')}` : ''}${e.expected.baristaTools.length ? ` · agent 2: ${e.expected.baristaTools.map(short).join(' ')}` : ''}`,
+            text: `${(e.expected.outcomes ?? [e.expected.outcome]).join(' or ')}${e.expected.cashierTools.length ? ` · agent 1: ${e.expected.cashierTools.map(short).join(' ')}` : ''}${e.expected.baristaTools.length ? ` · agent 2: ${e.expected.baristaTools.map(short).join(' ')}` : ''}`,
             customerId: e.customerId,
           })
         break
@@ -141,7 +144,7 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'orch',
           head: 'router',
-          text: `${e.intent}${e.escalate ? ' · escalate' : ''} · ${Math.round(e.escalateProbability * 100)}%${e.routed ? ' · routed away' : ''}`,
+          text: `${e.intent}${e.escalate ? ' · escalate' : ''}${e.escalateProbability > 0 ? ` · ${Math.round(e.escalateProbability * 100)}%` : ''}${e.routed ? ' · routed away' : ''}`,
           detail: e.modelSpec,
           latencyMs: e.latencyMs,
           mark: e.routed || e.escalate ? 'warn' : undefined,
@@ -429,6 +432,25 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           agentId: 'manager-1',
         })
         break
+      case 'case.scored': {
+        c.passed = e.passed
+        c.scoredSeq = e.seq
+        const failed = e.checks.filter((k) => !k.ok)
+        place(c, 'eval', {
+          seq: e.seq,
+          t: e.t,
+          atMs: rel,
+          layer: 'eval',
+          head: 'checks',
+          text: e.passed
+            ? `all ${e.checks.length} pass`
+            : `${failed.length} of ${e.checks.length} failed: ${failed.map((k) => k.label).join(' · ')}`,
+          detail: failed.map((k) => `${k.label}: ${k.detail}`).join('\n') || undefined,
+          mark: e.passed ? 'ok' : 'bad',
+          customerId: e.customerId,
+        })
+        break
+      }
       case 'judge.verdict': {
         const a = e.answers
         place(c, 'eval', {
@@ -437,9 +459,9 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
           atMs: rel,
           layer: 'eval',
           head: 'judge',
-          text: `correct ${Math.round(a.correct.probability * 100)}% · refusal ${Math.round(a.refusalAppropriate.probability * 100)}% · help ${a.helpfulness.score}/5 · tone ${a.tone.score}/5 · tools ${a.toolUseQuality.score}/5`,
+          text: answersLine(a),
           detail: e.judgeSpec,
-          mark: a.correct.probability >= 0.5 ? 'ok' : 'bad',
+          mark: judgeMark(a),
           latencyMs: e.latencyMs,
           agentId: 'judge-1',
         })
@@ -513,6 +535,8 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
         outcome: null,
         startSeq: e.seq,
         leftSeq: null,
+        passed: null,
+        scoredSeq: null,
         bands: { input: [], orch: [], work: [], eval: [] },
       }
       columns.push(c)
@@ -553,6 +577,11 @@ export function buildTrace(events: CafeEvent[]): TraceModel {
   return { columns, shift, runStatus }
 }
 
+/** A standard verdict is marked by its "correct" answer; a pack's own questions are marked by case.scored instead. */
+const judgeMark = (a: JudgeAnswers): 'ok' | 'bad' => {
+  const correct = probabilityOf(a, 'correct')
+  return correct === null || correct >= 0.5 ? 'ok' : 'bad'
+}
 const short = (tool: string) => tool.replace(/^[a-z]+\./, '')
 const itemsText = (items: Parameters<typeof lineText>[0][], totalCents: number) =>
   `${items.map(lineText).join(', ')} · $${(totalCents / 100).toFixed(2)}`

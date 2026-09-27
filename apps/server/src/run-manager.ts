@@ -2,6 +2,7 @@ import type { CafeStore } from '@cafe/db'
 import { domainPack } from '@cafe/domains'
 import {
   type CafeEvent,
+  type CafeEventInput,
   isMockSpec,
   type RunConfig,
   type RunConfigInput,
@@ -16,9 +17,14 @@ import { flushTracing } from './telemetry/tracing.js'
 
 interface ActiveRun {
   bus: EventBus
-  orchestrator: Orchestrator
+  orchestrator: Pick<Orchestrator, 'cancel'>
   done: Promise<void>
+  /** Set for runs recorded elsewhere (a target run): finishing it resolves `done`. */
+  finish?: () => void
 }
+
+/** An event as a recorder sends it: the payload plus when it happened. */
+export type RecordedEvent = CafeEventInput & { t?: number }
 
 /** Owns live runs; finished runs are served from the database. */
 export class RunManager {
@@ -85,6 +91,7 @@ export class RunManager {
       repeat: opts.repeat ?? null,
     })
     const bus = new EventBus(run.id, this.store)
+    this.keepSummary(bus)
     const orchestrator = orchestratorFor(config.orchestrator).create({
       store: this.store,
       bus,
@@ -104,6 +111,61 @@ export class RunManager {
       })
     this.active.set(run.id, { bus, orchestrator, done })
     return { runId: run.id }
+  }
+
+  /** Copy run.finished's summary onto the row, so run lists show results without reading events. */
+  private keepSummary(bus: EventBus): void {
+    bus.subscribe((e) => {
+      if (e.type === 'run.finished')
+        void this.store.runs
+          .setSummary(bus.runId, e.summary)
+          .catch((err) => console.error('[runs] failed to store summary', err))
+    })
+  }
+
+  /**
+   * A run driven somewhere else (the target CLI, a CI job) that streams its
+   * events here. It is live like any other run: SSE subscribers watch it as the
+   * recorder sends events, until finishRecorded() closes it.
+   */
+  async startRecorded(input: RunConfigInput, startedAt?: number): Promise<{ runId: string }> {
+    const config = RunConfigSchema.parse(input)
+    if (!config.target) throw new Error('A recorded run needs config.target (project, source, url)')
+    const at = startedAt ?? Date.now()
+    const run = await this.store.runs.create(config, { owner: this.ownerId, createdAt: at })
+    await this.store.runs.setStatus(run.id, 'running', { startedAt: at })
+    const bus = new EventBus(run.id, this.store)
+    this.keepSummary(bus)
+    let finish = () => {}
+    const done = new Promise<void>((resolve) => {
+      finish = resolve
+    }).finally(() => setTimeout(() => this.active.delete(run.id), 10_000))
+    // The recorder owns the work; cancelling here only stops listening.
+    this.active.set(run.id, { bus, orchestrator: { cancel: () => finish() }, done, finish })
+    return { runId: run.id }
+  }
+
+  /** Append events to a recorded run, in order, keeping the times they happened. */
+  record(runId: string, events: RecordedEvent[]): number {
+    const a = this.active.get(runId)
+    if (!a?.finish) throw new Error(`Run ${runId} is not a recorded run that is still open`)
+    for (const { t, ...input } of events) a.bus.emitAt(input as CafeEventInput, t ?? Date.now())
+    return a.bus.buffer.length
+  }
+
+  async finishRecorded(
+    runId: string,
+    status: 'finished' | 'failed' | 'cancelled',
+    error?: string,
+  ): Promise<void> {
+    const a = this.active.get(runId)
+    if (!a?.finish) throw new Error(`Run ${runId} is not a recorded run that is still open`)
+    await a.bus.flush()
+    await this.store.runs.setStatus(runId, status, {
+      finishedAt: Date.now(),
+      ...(error ? { error } : {}),
+    })
+    a.finish()
   }
 
   cancel(runId: string): boolean {

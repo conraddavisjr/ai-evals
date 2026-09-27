@@ -1,5 +1,5 @@
 import { ModelRegistry } from '@cafe/models'
-import { CafeEvent, type CafeEventInput } from '@cafe/protocol'
+import { CafeEvent, type CafeEventInput, probabilityOf, scoreOf } from '@cafe/protocol'
 import { describe, expect, it } from 'vitest'
 import { groundTruth, toolScores } from '../ground-truth.js'
 import { buildBlindedTranscript, judgeTransaction } from '../judge.js'
@@ -265,8 +265,8 @@ describe('metrics', () => {
       order,
       outcome: 'served',
     })
-    expect(judged.answers.correct.probability).toBeGreaterThan(0.5)
-    expect(judged.answers.helpfulness.score).toBeGreaterThanOrEqual(1)
+    expect(probabilityOf(judged.answers, 'correct')).toBeGreaterThan(0.5)
+    expect(scoreOf(judged.answers, 'helpfulness')).toBeGreaterThanOrEqual(1)
     const tm = transactionMetrics({
       txId: tx,
       events: happy,

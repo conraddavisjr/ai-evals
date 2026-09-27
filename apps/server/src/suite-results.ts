@@ -7,7 +7,7 @@ import type {
   SuiteMatrixRow,
   SuiteVariantResult,
 } from '@cafe/protocol'
-import { shortScenarioId, variantKey } from '@cafe/protocol'
+import { probabilityOf, shortScenarioId, variantKey } from '@cafe/protocol'
 import { getDataset } from './scenarios.js'
 
 export interface SuiteMetricsView {
@@ -54,7 +54,7 @@ export async function suiteMetrics(
             costUsd: t.costUsd,
             durationMs: t.totalMs,
             errors: t.errors,
-            judgeCorrect: t.judge?.correct.probability ?? null,
+            judgeCorrect: t.judge ? probabilityOf(t.judge, 'correct') : null,
             reviewVerdict: t.review?.verdict ?? null,
           }
         : null

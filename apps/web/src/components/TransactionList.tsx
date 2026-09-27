@@ -2,6 +2,7 @@ import { allTimelines, shortScenarioId } from '@cafe/protocol'
 import { Fragment, useState } from 'react'
 import { fmtMs } from '../format.js'
 import { caseTiming, type TimingRow } from '../lib/case-timing.js'
+import { judgeLine } from '../lib/judge-lines.js'
 import { CASE_NOUN, caseLabel, reviewLabel, verdictOf, verdictPill } from '../lib/nomenclature.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 
@@ -58,7 +59,7 @@ export function TransactionList({
         return (
           <section
             key={tl.txId}
-            className={`tx verdict-${verdictOf(tl.outcome, cust?.expected?.outcome)}${open ? ' open' : ''}`}
+            className={`tx verdict-${verdictOf(tl.outcome, cust?.expected?.outcome, cust?.scored?.passed)}${open ? ' open' : ''}`}
           >
             <div className="tx-head">
               <button
@@ -74,7 +75,11 @@ export function TransactionList({
                   ›
                 </span>
               </button>
-              <VerdictPill outcome={tl.outcome} expected={cust?.expected?.outcome} />
+              <VerdictPill
+                outcome={tl.outcome}
+                expected={cust?.expected?.outcome}
+                scored={cust?.scored?.passed}
+              />
             </div>
             <div className="tx-meta">
               <span className="mono">{fmtMs(timing.totalMs ?? tl.totalMs ?? now - tl.startT)}</span>
@@ -93,12 +98,25 @@ export function TransactionList({
                   )}
                 </span>
               )}
-              {verdict && (
+              {cust?.scored && (
+                <span
+                  className="muted small"
+                  title="Deterministic checks, then the judge's expectations"
+                >
+                  {cust.scored.passed
+                    ? `${cust.scored.checks.length} checks pass`
+                    : cust.scored.checks
+                        .filter((k) => !k.ok)
+                        .map((k) => k.label)
+                        .join(' · ')}
+                </span>
+              )}
+              {verdict && !cust?.scored && (
                 <span
                   className="muted small"
                   title="The judge's confidence that the case was handled correctly"
                 >
-                  judge {Math.round(verdict.answers.correct.probability * 100)}% correct
+                  {judgeLine(verdict.answers).short}
                 </span>
               )}
             </div>
@@ -170,11 +188,14 @@ function TimingTable({ rows }: { rows: TimingRow[] }) {
 export function VerdictPill({
   outcome,
   expected,
+  scored,
 }: {
   outcome: string | null | undefined
   expected: string | null | undefined
+  /** A target run's own verdict on the case (case.scored), when there is one. */
+  scored?: boolean | null | undefined
 }) {
-  const v = verdictPill(outcome, expected)
+  const v = verdictPill(outcome, expected, scored)
   return (
     <span className={v.cls} title={v.title}>
       {v.text}

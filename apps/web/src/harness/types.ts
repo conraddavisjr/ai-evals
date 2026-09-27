@@ -12,6 +12,7 @@ import type {
   RunConfig,
   RunConfigInput,
   RunMetrics,
+  RunSummary,
   RunTelemetry,
   Scenario,
   ScenarioInput,
@@ -32,6 +33,17 @@ export interface RunRow {
   createdAt: number
   /** The harness still owns this run: events are still arriving. */
   active: boolean
+  /** run.finished's numbers, once the run has finished. */
+  summary?: RunSummary | null
+}
+
+/** A project with runs: a target app evaluated over HTTP, or "simulations" for the built-in domains. */
+export interface ProjectInfo {
+  id: string
+  name: string
+  simulated: boolean
+  runs: number
+  lastAt: number
 }
 
 export interface ModelsInfo {
@@ -79,7 +91,10 @@ export interface HarnessClient {
   scenarios(domain?: string): Promise<Scenario[]>
   /** The business domains on offer. Optional: a harness with one domain can leave it out. */
   domains?(): Promise<DomainInfo[]>
-  runs(): Promise<RunRow[]>
+  /** Recent runs, or one project's (`simulations` for the built-in domains). */
+  runs(project?: string): Promise<RunRow[]>
+  /** Projects that have runs. Optional: a harness without target runs can leave it out. */
+  projects?(): Promise<ProjectInfo[]>
   run(id: string): Promise<RunRow>
   startRun(config: RunConfigInput): Promise<{ runId: string }>
   cancelRun(id: string): Promise<{ cancelled: boolean }>

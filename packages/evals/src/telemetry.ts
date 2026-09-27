@@ -1,4 +1,10 @@
-import type { ErrorLayer, RunMetrics, RunTelemetry, SpanSummary } from '@cafe/protocol'
+import {
+  type ErrorLayer,
+  probabilityOf,
+  type RunMetrics,
+  type RunTelemetry,
+  type SpanSummary,
+} from '@cafe/protocol'
 import { latencyStats } from './metrics.js'
 
 const MAX_SAMPLES = 300
@@ -180,7 +186,7 @@ export function runTelemetry(
       toolCalls: toolSpans.length,
       toolErrors: toolSpans.filter((s) => s.status === 'error').length,
       agentErrors: mine.filter((s) => s.kind === 'agent.turn' && s.status === 'error').length,
-      judgeCorrect: tm?.judge?.correct.probability ?? null,
+      judgeCorrect: tm?.judge ? probabilityOf(tm.judge, 'correct') : null,
       reviewVerdict: tm?.review?.verdict ?? null,
     }
   })

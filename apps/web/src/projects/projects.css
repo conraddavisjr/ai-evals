@@ -1,0 +1,283 @@
+/* ---------- projects page: runs grouped by the project they evaluated ---------- */
+.projects-page {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+.projects-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.projects-head h2 {
+  margin: 0;
+  flex: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+}
+.projects-head p {
+  margin: 0;
+  font-size: 13px;
+}
+.projects-cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+}
+.projects-list {
+  overflow-y: auto;
+  padding: 8px;
+  border-right: 1px solid var(--line);
+  background: var(--bg-2, var(--bg));
+}
+.projects-list .pad {
+  padding: 8px;
+}
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  margin: 0 0 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.project-item:hover {
+  background: var(--panel-2, var(--panel));
+}
+.project-item.on {
+  background: var(--panel-2, var(--panel));
+  border-color: var(--line-2, var(--line));
+}
+.project-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--panel-3, var(--panel));
+  font-weight: 600;
+  font-size: 13px;
+}
+.project-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.project-name {
+  font-weight: 600;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projects-main {
+  overflow-y: auto;
+  padding: 20px 24px 32px;
+}
+.project-title h3 {
+  margin: 0 0 2px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.project-title p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.project-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+.project-tile {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.project-tile .tile-value {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.project-tile .tile-value.good {
+  color: var(--good);
+}
+.project-tile .tile-value.bad {
+  color: var(--bad);
+}
+.runs-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.runs-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.runs-table td {
+  padding: 10px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.runs-table tr:last-child td {
+  border-bottom: none;
+}
+.runs-table .num {
+  text-align: right;
+}
+.runs-table .mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.run-line {
+  cursor: pointer;
+}
+.runs-table .run-line:hover td {
+  background: var(--panel);
+}
+.run-line:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.result-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.result-num {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.result-num.good {
+  color: var(--good);
+}
+.result-num.bad {
+  color: var(--bad);
+}
+.result-bar .bar {
+  position: relative;
+  width: 72px;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bad) 45%, transparent);
+  overflow: hidden;
+}
+.result-bar .bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--good);
+}
+.source-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--line-2, var(--line));
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.source-chip.ci {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  color: var(--gold);
+}
+.pr-link {
+  color: var(--gold);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pr-link:hover {
+  text-decoration: underline;
+}
+.no-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px;
+  border: 1px dashed var(--line-2, var(--line));
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.no-pr svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.live-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-pill .dot {
+    animation: none;
+  }
+}
+@media (max-width: 760px) {
+  .projects-cols {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .projects-list {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .project-item {
+    width: auto;
+    flex: none;
+  }
+  .project-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .runs-table-wrap {
+    overflow-x: auto;
+  }
+}

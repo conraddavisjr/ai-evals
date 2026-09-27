@@ -8,6 +8,7 @@ export type {
   HarnessClient,
   ModelsInfo,
   OrchestratorInfo,
+  ProjectInfo,
   RunRow,
   StreamHandlers,
   SuiteMetricsView,

@@ -1,6 +1,8 @@
 import type {
   CafeEvent,
+  CaseCheck,
   JudgeAnswers,
+  JudgeQuestionInfo,
   OrderItem,
   ReviewIssue,
   ReviewVerdict,
@@ -75,6 +77,14 @@ export interface CustomerView {
   outcome: 'served' | 'refused' | 'abandoned' | 'failed' | null
   orderId: string | null
   triage: { intent: string; escalate: boolean; probability: number } | null
+  /** A target run's verdict on the case: every check, and whether all passed (case.scored). */
+  scored: {
+    passed: boolean
+    checks: CaseCheck[]
+    reason: string | null
+    detail: string | null
+    output: unknown
+  } | null
 }
 
 export interface OrderView {
@@ -110,7 +120,13 @@ export interface CafeState {
   queue: string[]
   verdicts: Record<
     string,
-    { answers: JudgeAnswers; judgeSpec: string; latencyMs: number; at: number }
+    {
+      answers: JudgeAnswers
+      judgeSpec: string
+      latencyMs: number
+      at: number
+      questions: JudgeQuestionInfo[] | null
+    }
   >
   /** The manager's post-visit review per transaction. */
   reviews: Record<
@@ -322,6 +338,7 @@ export function reduce(prev: CafeState, e: CafeEvent): CafeState {
         outcome: null,
         orderId: null,
         triage: null,
+        scored: null,
       }
       break
     case 'customer.moved': {
@@ -465,9 +482,30 @@ export function reduce(prev: CafeState, e: CafeEvent): CafeState {
       if (e.txId)
         s.verdicts = {
           ...s.verdicts,
-          [e.txId]: { answers: e.answers, judgeSpec: e.judgeSpec, latencyMs: e.latencyMs, at: e.t },
+          [e.txId]: {
+            answers: e.answers,
+            judgeSpec: e.judgeSpec,
+            latencyMs: e.latencyMs,
+            at: e.t,
+            questions: e.questions ?? null,
+          },
         }
       break
+    case 'case.scored': {
+      const c = customers[e.customerId]
+      if (c)
+        customers[e.customerId] = {
+          ...c,
+          scored: {
+            passed: e.passed,
+            checks: e.checks,
+            reason: e.reason,
+            detail: e.detail,
+            output: e.output ?? null,
+          },
+        }
+      break
+    }
     default:
       break
   }

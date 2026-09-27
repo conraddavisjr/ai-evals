@@ -9,6 +9,7 @@ import type {
   RunConfig,
   RunMetrics,
   RunStatus,
+  RunSummary,
   Scenario,
   SuiteConfig,
   SuiteStatus,
@@ -68,16 +69,25 @@ export interface RunsStore {
       suiteId?: string | null
       variant?: string | null
       repeat?: number | null
+      /** When the run actually happened, for runs imported after the fact. */
+      createdAt?: number
     },
   ): Promise<RunRow>
   forSuite(suiteId: string): Promise<RunRow[]>
   get(id: string): Promise<RunRow | null>
   list(limit?: number): Promise<RunRow[]>
+  /** Runs of one project (config.target.project), or simulated runs when project is null. */
+  listForProject(project: string | null, limit?: number): Promise<RunRow[]>
+  /** Every project with runs: its id, name, run count and latest run. */
+  projects(): Promise<
+    Array<{ project: string | null; name: string | null; runs: number; lastAt: number }>
+  >
   setStatus(
     id: string,
     status: RunStatus,
     patch?: { startedAt?: number; finishedAt?: number; error?: string },
   ): Promise<void>
+  setSummary(id: string, summary: RunSummary): Promise<void>
   delete(id: string): Promise<void>
 }
 
@@ -319,7 +329,7 @@ export function createPgStore(db: Db): CafeStore {
           id,
           status: 'pending',
           config,
-          createdAt: Date.now(),
+          createdAt: opts.createdAt ?? Date.now(),
           owner: opts.owner ?? null,
           suiteId: opts.suiteId ?? null,
           variant: opts.variant ?? null,
@@ -333,6 +343,32 @@ export function createPgStore(db: Db): CafeStore {
     get: async (id) => one(await db.select().from(s.runs).where(eq(s.runs.id, id))),
     list: async (limit = 50) =>
       db.select().from(s.runs).orderBy(sql`${s.runs.createdAt} desc`).limit(limit),
+    listForProject: async (project, limit = 200) =>
+      db
+        .select()
+        .from(s.runs)
+        .where(
+          project === null
+            ? sql`${s.runs.config}->'target' is null`
+            : sql`${s.runs.config}->'target'->>'project' = ${project}`,
+        )
+        .orderBy(sql`${s.runs.createdAt} desc`)
+        .limit(limit),
+    async projects() {
+      const rows = await db
+        .select({
+          project: sql<string | null>`${s.runs.config}->'target'->>'project'`,
+          name: sql<string | null>`max(${s.runs.config}->'target'->>'projectName')`,
+          runs: sql<number>`count(*)::int`,
+          lastAt: sql<number>`max(${s.runs.createdAt})`,
+        })
+        .from(s.runs)
+        .groupBy(sql`${s.runs.config}->'target'->>'project'`)
+      return rows.map((r) => ({ ...r, lastAt: Number(r.lastAt) }))
+    },
+    async setSummary(id, summary) {
+      await db.update(s.runs).set({ summary }).where(eq(s.runs.id, id))
+    },
     async setStatus(id, status, patch = {}) {
       await db
         .update(s.runs)

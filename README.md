@@ -95,6 +95,11 @@ The **Experiment** page (hamburger menu) is the workbench for comparisons: click
 
 Adding a business domain: `docs/DOMAIN-PACKS.md`. Where decision models such as Jev fit and how to compare them: `docs/DECISION-MODELS.md`. Swapping the orchestration engine (Mastra, LangChain, ...): `docs/ORCHESTRATORS.md`. Pointing the agents at a different MCP server and its database: `docs/TOOL-SOURCES.md`. Design handoff and style brief: `docs/HANDOFF-visual-style.md`. Plugging the stage into another harness: `docs/EMBEDDING.md`. Side-by-side of both styles: `docs/screenshots/style-comparison.png`. Interactive architecture maps: `docs/architecture/traditional.html` and `docs/architecture/cafe.html`.
 
+## Evaluating another app
+
+`pnpm eval:target --config <project>/evals/stardust.config.json` runs another project's golden datasets against its HTTP eval route, with deterministic assertions, a judge, per-tag thresholds, JUnit output and a failing exit code for CI.
+See [docs/TARGETS.md](docs/TARGETS.md).
+
 ## The 3D scene
 
 `apps/web/src/scene3d/` builds the square procedurally: `builders.ts` makes every prop from rounded boxes, cylinders and spheres (no external assets), `materials.ts` gives them a four-band toon gradient, `CafeWorld.ts` places them on the same 20 x 13 tile grid the layout has always used, and `mergeStatic()` bakes the static props into one mesh per material so a frame is a couple of dozen draw calls.

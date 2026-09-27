@@ -24,9 +24,13 @@ let active: DomainVocabulary = vocabularyFor('cafe')
 let activeId = 'cafe'
 
 /** Point every label at a domain's words. The app calls this when the run or the draft changes domain. */
-export function setActiveDomain(id: string | null | undefined): void {
+export function setActiveDomain(
+  id: string | null | undefined,
+  /** A target run's own words (its config pack's vocabulary), over the domain's. */
+  override?: Record<string, unknown> | null,
+): void {
   activeId = id ?? 'cafe'
-  active = vocabularyFor(activeId)
+  active = vocabularyFor(activeId, override)
 }
 
 /** The active domain's words: business name, work item, outcomes, beats. */
@@ -127,8 +131,11 @@ export type Verdict = 'pass' | 'fail' | 'pending' | 'unknown'
 export function verdictOf(
   outcome: string | null | undefined,
   expected: string | null | undefined,
+  /** A target run's own verdict (case.scored): every check, not just the outcome. */
+  scored?: boolean | null,
 ): Verdict {
   if (!outcome) return 'pending'
+  if (scored === true || scored === false) return scored ? 'pass' : 'fail'
   if (!expected) return 'unknown'
   return outcome === expected ? 'pass' : 'fail'
 }
@@ -137,10 +144,16 @@ export function verdictOf(
 export function verdictPill(
   outcome: string | null | undefined,
   expected: string | null | undefined,
+  scored?: boolean | null,
 ): { cls: string; text: string; title: string } {
-  const v = verdictOf(outcome, expected)
+  const v = verdictOf(outcome, expected, scored)
   const label = outcomeLabel(outcome)
-  const want = expected ? `expected ${outcomeLabel(expected)}` : 'no expectation recorded'
+  const want =
+    scored === false
+      ? 'some checks failed'
+      : expected
+        ? `expected ${outcomeLabel(expected)}`
+        : 'no expectation recorded'
   if (v === 'pass')
     return {
       cls: 'pill verdict-pass',

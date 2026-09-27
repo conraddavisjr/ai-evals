@@ -1,4 +1,4 @@
-import { type RunMetrics, shortScenarioId } from '@cafe/protocol'
+import { probabilityOf, type RunMetrics, shortScenarioId } from '@cafe/protocol'
 import { useEffect, useState } from 'react'
 import { fmtMs, fmtUsd, pct, shortModel } from '../format.js'
 import { type RunRow, useHarness } from '../harness/index.js'
@@ -255,7 +255,11 @@ function MetricsSummary({
                       {t.scopeViolations ? ` (+${t.scopeViolations} scope)` : ''}
                     </td>
                     <td>{fmtMs(t.totalMs)}</td>
-                    <td>{t.judge ? pct(t.judge.correct.probability) : '–'}</td>
+                    <td>
+                      {t.judge
+                        ? ((p) => (p === null ? '–' : pct(p)))(probabilityOf(t.judge, 'correct'))
+                        : '–'}
+                    </td>
                     <td>{fmtUsd(t.costUsd)}</td>
                   </tr>
                 ))}

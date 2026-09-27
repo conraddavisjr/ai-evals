@@ -1,5 +1,6 @@
 import type { CafeEvent, Station } from '@cafe/protocol'
 import * as THREE from 'three'
+import { judgeLine, scoredLine } from '../lib/judge-lines.js'
 import type { TimelinePlayer } from '../playback/TimelinePlayer.js'
 import type { AgentView, CafeState, CustomerView } from '../state/cafe-state.js'
 import type { SceneCallbacks } from '../views/types.js'
@@ -473,15 +474,18 @@ export class CafeScene3D {
         )
         break
       case 'judge.verdict': {
-        const ok = e.answers.correct.probability >= 0.5
+        const line = judgeLine(e.answers)
+        this.say('judge-1', line.text, line.ok ? 'speech' : 'shout', this.ttl(3200))
+        break
+      }
+      case 'case.scored':
         this.say(
           'judge-1',
-          `${ok ? '✓' : '✗'} correct ${Math.round(e.answers.correct.probability * 100)}% · help ${e.answers.helpfulness.score}/5 · tone ${e.answers.tone.score}/5`,
-          ok ? 'speech' : 'shout',
+          scoredLine(e.passed, e.checks),
+          e.passed ? 'speech' : 'shout',
           this.ttl(3200),
         )
         break
-      }
       case 'run.started':
         this.showBanner(null)
         this.ensureJudge()
