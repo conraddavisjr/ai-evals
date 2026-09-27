@@ -116,6 +116,9 @@
             },
             "model": {
               "type": "string"
+            },
+            "context": {
+              "type": "string"
             }
           },
           "required": ["outcome", "outcomeMap"]
@@ -247,7 +250,8 @@
     },
     "thresholds": {
       "default": {
-        "byTag": {}
+        "byTag": {},
+        "latency": []
       },
       "type": "object",
       "properties": {
@@ -266,6 +270,47 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1
+          }
+        },
+        "latency": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["served", "refused", "failed"]
+              },
+              "step": {
+                "type": "string"
+              },
+              "p50Ms": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "p95Ms": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "maxMs": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "warnOnly": {
+                "default": false,
+                "type": "boolean"
+              }
+            }
           }
         }
       }

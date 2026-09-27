@@ -84,6 +84,8 @@ export interface CustomerView {
     reason: string | null
     detail: string | null
     output: unknown
+    /** What the app applied to the request (resolved profile and filters), when reported. */
+    context: unknown
   } | null
 }
 
@@ -502,6 +504,7 @@ export function reduce(prev: CafeState, e: CafeEvent): CafeState {
             reason: e.reason,
             detail: e.detail,
             output: e.output ?? null,
+            context: e.context ?? null,
           },
         }
       break

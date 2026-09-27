@@ -1,7 +1,7 @@
 import { globSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { z } from 'zod'
-import { DatasetFile, type EvalCase, PackConfig } from './config.js'
+import { type Assertion, DatasetFile, type EvalCase, PackConfig } from './config.js'
 import { interpolateEnv } from './template.js'
 
 export class ConfigError extends Error {
@@ -74,7 +74,13 @@ export function loadPack(
       const dup = seen.get(c.id)
       if (dup) throw new ConfigError(`Case id ${c.id} appears in both ${dup} and ${name}`)
       seen.set(c.id, name)
-      cases.push({ ...c, tags: [...new Set([...ds.data.tags, ...c.tags])], dataset: ds.data.name })
+      const assertions = c.expect.assertions.map((a) => checkedPattern(a, `${name}: case ${c.id}`))
+      cases.push({
+        ...c,
+        expect: { ...c.expect, assertions },
+        tags: [...new Set([...ds.data.tags, ...c.tags])],
+        dataset: ds.data.name,
+      })
     }
   }
 
@@ -92,6 +98,35 @@ export function loadPack(
     }
   }
   return { file: abs, dir, config, cases, responseSchema }
+}
+
+/**
+ * Regex checks compile when the pack loads, not when a case runs: a bad pattern
+ * is a config error naming its case. A leading inline flag group, as other
+ * regex engines write it ("(?i)cilantro"), becomes a JavaScript flag.
+ */
+function checkedPattern(a: Assertion, where: string): Assertion {
+  if (a.type !== 'regexAbsent' && a.type !== 'regexPresent') return a
+  let { pattern, flags } = a
+  const inline = /^\(\?([a-z]+)\)/.exec(pattern)
+  if (inline?.[1]) {
+    const extra = inline[1]
+    const unsupported = [...extra].filter((f) => !'imsu'.includes(f))
+    if (unsupported.length)
+      throw new ConfigError(
+        `${where}: the inline flag${unsupported.length === 1 ? '' : 's'} (?${unsupported.join('')}) in /${pattern}/ ${unsupported.length === 1 ? 'has' : 'have'} no JavaScript equivalent; use "flags" instead`,
+      )
+    pattern = pattern.slice(inline[0].length)
+    flags = [...new Set([...flags, ...extra])].join('')
+  }
+  try {
+    new RegExp(pattern, flags)
+  } catch (err) {
+    throw new ConfigError(
+      `${where}: /${pattern}/${flags} is not a valid JavaScript regex (${(err as Error).message})`,
+    )
+  }
+  return { ...a, pattern, flags }
 }
 
 export interface CaseFilter {

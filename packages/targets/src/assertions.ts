@@ -18,12 +18,27 @@ export interface Check {
 export function resultDocument(r: TargetResult): Record<string, unknown> {
   return {
     outcome: r.outcome,
+    latencyMs: r.latencyMs,
     reason: r.reason,
     detail: r.detail,
     output: r.output,
     steps: r.steps,
     raw: r.raw,
   }
+}
+
+/** "850ms", "2.4s", "1m 12s". */
+export function fmtMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`
+}
+
+/** The whole request's time, or the sum of one reported step's times (null when not reported). */
+export function latencyOf(r: TargetResult, step?: string): number | null {
+  if (!step) return r.latencyMs
+  const hits = r.steps.filter((s) => s.name === step && s.ms !== null)
+  return hits.length ? hits.reduce((sum, s) => sum + (s.ms ?? 0), 0) : null
 }
 
 const show = (v: unknown, max = 120): string => {
@@ -62,6 +77,8 @@ export function describeAssertion(a: Assertion): string {
       return `/${a.pattern}/ in ${a.path}`
     case 'stepPresent':
       return `step "${a.name}" ran`
+    case 'latency':
+      return `${a.step ? `step "${a.step}"` : 'the whole request'} within ${fmtMs(a.maxMs)}`
   }
 }
 
@@ -115,7 +132,13 @@ export function runAssertion(a: Assertion, r: TargetResult): Check {
     }
     case 'regexAbsent':
     case 'regexPresent': {
-      const re = new RegExp(a.pattern, a.flags)
+      let re: RegExp
+      try {
+        re = new RegExp(a.pattern, a.flags)
+      } catch (err) {
+        // loadPack rejects bad patterns first; a case built another way still fails cleanly
+        return check(false, `not a valid regex: ${(err as Error).message}`)
+      }
       const hits = strings(query(doc, a.path)).flatMap((s) => {
         const m = re.exec(s)
         return m ? [m[0]] : []
@@ -127,6 +150,11 @@ export function runAssertion(a: Assertion, r: TargetResult): Check {
     case 'stepPresent': {
       const names = r.steps.map((s) => s.name)
       return check(names.includes(a.name), `steps: ${names.join(', ') || 'none reported'}`)
+    }
+    case 'latency': {
+      const ms = latencyOf(r, a.step)
+      if (ms === null) return check(false, `step "${a.step}" was not reported`)
+      return check(ms <= a.maxMs, `took ${fmtMs(ms)}`)
     }
   }
   return check(false, 'unknown assertion')

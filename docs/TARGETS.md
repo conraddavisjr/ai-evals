@@ -17,6 +17,7 @@ EVAL_SECRET=... pnpm eval:target --config ../recipe-builder/evals/evals-cafe.con
 | `--cases a,b` / `--tags x,y` / `--smoke` | Run a subset: by id, by any of the tags, or the cases marked `smoke`. |
 | `--exclude-tags a,b` | Drop cases with any of these tags (for example, cases a CI environment cannot serve). |
 | `--no-persist` | `{{run.persist}}` is false for every attempt: the app keeps nothing (CI). |
+| `--latency-warn-only` | Report latency budgets without failing on them. |
 | `--expect refused` | Only cases whose one acceptable outcome is this: `refused` is the decline-only set, which costs pennies because the app turns them away before drafting. |
 | `--repeats n` | Run every case n times; flaky cases are named in the report. |
 | `--concurrency n` | Cases in flight at once (the pack's `target.concurrency` by default). |
@@ -57,8 +58,36 @@ Paths are JSONPath (`$`, `.key`, `['key']`, `[0]`, `[*]`, `..key`) over `{ outco
 | `count` | `{ "path": "$.output", "max": 1 }` counts an array's items, or the matches |
 | `regexAbsent` / `regexPresent` | `{ "pattern": "cilantro", "path": "$.output[*].ingredients[*].name" }`, case-insensitive by default |
 | `stepPresent` | `{ "name": "repairing" }` |
+| `latency` | `{ "maxMs": 3000 }` or `{ "step": "classify", "maxMs": 2000 }` |
 
 Any assertion takes `"when": ["served"]` to apply only to that outcome, so a case that may either decline or answer can still check the answer when there is one.
+
+## Latency
+
+Latency is gated in two ways, both decided without a model.
+
+- Per case, the `latency` assertion: `{ "type": "latency", "maxMs": 3000 }` for the whole request as the harness timed it, or `{ "type": "latency", "step": "classify", "maxMs": 2000 }` for one step the app reports.
+  `$.latencyMs` is also there for JSONPath checks.
+- Over a set of cases, `thresholds.latency` budgets: each selects cases by tags and/or the outcome the app gave, measures the whole request or one step, and bounds p50, p95 or max.
+
+```json
+"thresholds": {
+  "latency": [
+    { "name": "declines at the door", "outcome": "refused", "p95Ms": 5000, "maxMs": 15000 },
+    { "name": "served recipes", "outcome": "served", "maxMs": 240000 },
+    { "name": "drafting", "step": "drafting", "p95Ms": 150000, "warnOnly": true }
+  ]
+}
+```
+
+- A missed budget fails the run like a pass-rate gate; `warnOnly` reports it (⚠ in the summary) without failing, for figures that are noisy on shared CI runners.
+  `--latency-warn-only` downgrades every latency budget for one run.
+- CI gates what code changes move (an extra repair round, a longer prompt, a classifier that stops short-circuiting); production latency (real load, provider drift, alerts) belongs to the app's own observability.
+
+## The context the app applied
+
+`responseMap.context` names where the response says what the app applied to the request (the resolved profile and filters).
+The judge reads it as `request.appliedContext`, so a question like "respects the constraints" is answered against the real rules rather than a fixture's name, and the Inspector shows it on the case.
 
 ## Watching and keeping runs (the dashboard)
 

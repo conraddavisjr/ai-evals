@@ -937,6 +937,7 @@ const ARCH = {
         'The consumer repo holds evals/evals-cafe.config.json: target URL, body template, response map, datasets, judge questions, thresholds, budget.',
         'Per case: POST to the app’s eval route, map the answer to served / refused / failed with a reason, run deterministic assertions (JSONPath, count, regex, steps), then ask the judge only if those pass.',
         'Reports pass rate by tag, false and missed refusals, flaky cases across repeats, and target-reported spend; writes JSON, JUnit and a Markdown summary; exits 1 when a gate fails.',
+        'Latency: a per-case latency assertion (whole request or one reported step) and thresholds.latency budgets (p50/p95/max over cases picked by tag or outcome, optionally warn-only). responseMap.context carries what the app applied (profile, filters) to the judge and the Inspector.',
         'Headless, no database. First consumer: Palate (recipe-builder). See docs/TARGETS.md.',
         'In CI: the composite action .github/actions/run-evals (pinned by commit) installs just this package and runs it: subsets refused / smoke / all, --no-persist, JUnit, job summary and the report as an artifact, failing the job on a missed gate.',
         '--record streams each case to the API as the same CafeEvents a simulated case emits (router, agent 1, hand-off, agent 2, case.scored, judge.verdict), so the dashboard plays it live and keeps it under its project with branch, commit and pull request.',
