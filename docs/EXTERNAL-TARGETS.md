@@ -98,7 +98,7 @@ interface TargetResult {
 A consumer repo describes its evaluation in one file the harness reads:
 
 ```jsonc
-// recipe-builder/evals/stardust.config.json
+// recipe-builder/evals/evals-cafe.config.json
 {
   "contract": 1,
   "name": "Palate",
@@ -143,7 +143,7 @@ Code packs (cafe, support desk) stay for simulations; a config pack is the same 
 
 - `--min-pass`, `--min-pass-tag adversarial=1`, `--json`, `--junit`, and a non-zero exit when a threshold fails.
 - A storage option that needs no Docker: PGlite (Postgres in WASM, same Drizzle schema) for CI, Postgres for the dashboard.
-- Ship the headless part as a package with a bin (`npx @stardust/eval run --config evals/stardust.config.json`) and a composite GitHub Action, so a consumer never clones the web app.
+- Ship the headless part as a package with a bin (`npx @evals-cafe/eval run --config evals/evals-cafe.config.json`) and a composite GitHub Action, so a consumer never clones the web app.
 - pass@k and flaky-case reporting across `repeats`.
 
 ## Visualising a project's architecture dynamically
@@ -160,7 +160,7 @@ Both render through the same engine, which already takes any graph of segments, 
 From the dashboard: "Add a project", point at a repo (a path or a GitHub URL), and an agent studies it and proposes the evaluation.
 
 1. **Study** (read-only): find every model call, prompt, schema, tool and entry point; classify the AI shape (single call, chain, tool loop, multi-agent, classifier).
-2. **Propose**: a draft `stardust.config.json` (target, response map, judge questions matched to the risks it found), a starter dataset (benign, adversarial, constraint cases), the architecture graph, and, if the app has no eval endpoint, the smallest route to add, as a patch for the project's own agent or a pull request.
+2. **Propose**: a draft `evals-cafe.config.json` (target, response map, judge questions matched to the risks it found), a starter dataset (benign, adversarial, constraint cases), the architecture graph, and, if the app has no eval endpoint, the smallest route to add, as a patch for the project's own agent or a pull request.
 3. **Validate**: every artifact is checked against its JSON Schema, then a smoke run of three cases proves the target answers and the response map resolves.
 4. **Hand over**: nothing is committed to the consumer repo without a human approving the pull request.
 
@@ -202,7 +202,7 @@ Gate merges on smoke subsets with repeats and pass@k, name flaky cases instead o
 
 | Phase | Delivers | Unblocks |
 |---|---|---|
-| 0. Contract | Target Response v1 JSON Schema (outcome, reason codes, output, steps, usage with USD, trace id, model overrides), `stardust.config.json` schema, agreed with the recipe-builder agent | Palate can build `/api/eval/generate` (fail-closed secret, long `maxDuration`, per-step model override, USD pricing) |
+| 0. Contract | Target Response v1 JSON Schema (outcome, reason codes, output, steps, usage with USD, trace id, model overrides), `evals-cafe.config.json` schema, agreed with the recipe-builder agent | Palate can build `/api/eval/generate` (fail-closed secret, long `maxDuration`, per-step model override, USD pricing) |
 | 1. HTTP target | Pack/target split, HTTP target, `Case.input`, free tags, generic assertions, per-pack judge questions, `reason` codes, target-reported cost, CLI thresholds and exit codes, `--json` / `--junit` | Palate gates pull requests on a preview |
 | 2. CI footprint | PGlite store, `npx` bin, composite GitHub Action, pass@k and flaky reporting, HTTP classifier target for the decision bench | Nightly suites; scoring Palate's `isRecipeRequest` |
 | 3. Glass box | `traceparent` propagation, OTLP ingest into the spans table, target steps and tool calls on the Trace board | Seeing inside the Thrive tool loop |

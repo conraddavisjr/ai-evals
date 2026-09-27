@@ -13,7 +13,7 @@ It is deliberately short; the code comments on the two interfaces carry the deta
 
 2. **The harness client** (`apps/web/src/harness/types.ts`).
    `HarnessClient` is the only thing the UI calls for data: models, scenarios, runs, a run's events, metrics, judgements, start, cancel, and `stream()` to tail a live run.
-   `createHttpHarness(baseUrl)` is the Stardust server implementation over REST + SSE.
+   `createHttpHarness(baseUrl)` is the Evals Cafe server implementation over REST + SSE.
    The client is handed to the tree once, in `apps/web/src/main.tsx`, through `HarnessProvider`; panels get it with `useHarness()`.
    To embed elsewhere, implement `HarnessClient` against your backend and swap that one line.
    Anything you cannot answer (metrics, judgements) can reject; the panels that use them show the error and the rest keeps working.

@@ -1,0 +1,61 @@
+# Proves the run-evals action works on a real runner: against a stand-in app,
+# a passing subset exits 0 and a failing one exits 1 with its report uploaded.
+name: run-evals action
+
+on:
+  pull_request:
+    paths:
+      - .github/actions/run-evals/**
+      - .github/workflows/run-evals-action.yml
+      - packages/targets/**
+      - packages/models/**
+      - packages/protocol/**
+      - pnpm-lock.yaml
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVAL_SECRET: selftest-secret
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stand-in app
+        run: |
+          python3 .github/actions/run-evals/selftest/fake_app.py &
+          for i in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:8787 && break; sleep 0.5; done
+
+      - name: A passing subset (the thrive case excluded)
+        id: pass
+        uses: ./.github/actions/run-evals
+        with:
+          config: .github/actions/run-evals/selftest/evals-cafe.config.json
+          subset: all
+          judge: 'off'
+          extra-args: --exclude-tags thrive
+          artifact-name: selftest-pass
+
+      - name: A failing subset must fail
+        id: fail
+        continue-on-error: true
+        uses: ./.github/actions/run-evals
+        with:
+          config: .github/actions/run-evals/selftest/evals-cafe.config.json
+          subset: all
+          judge: 'off'
+          results-dir: evals-cafe-results-fail
+          artifact-name: selftest-fail
+
+      - name: Check both outcomes
+        env:
+          PASS_CODE: ${{ steps.pass.outputs.exit-code }}
+          FAIL_CODE: ${{ steps.fail.outputs.exit-code }}
+          FAIL_OUTCOME: ${{ steps.fail.outcome }}
+        run: |
+          test "$PASS_CODE" = "0" || { echo "::error::passing subset exited $PASS_CODE"; exit 1; }
+          test "$FAIL_CODE" = "1" || { echo "::error::failing subset exited $FAIL_CODE, expected 1"; exit 1; }
+          test "$FAIL_OUTCOME" = "failure" || { echo "::error::the failing run did not fail its step"; exit 1; }
+          test -s evals-cafe-results/report.json && test -s evals-cafe-results/junit.xml
+          test -s evals-cafe-results-fail/report.json
+          echo "run-evals action: pass exits 0, fail exits 1, reports written"

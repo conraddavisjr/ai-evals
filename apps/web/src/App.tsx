@@ -31,6 +31,7 @@ import { applyTheme, readTheme, THEMES, type ThemeId } from './themes/theme.js'
 import { DEFAULT_VIEW_ID, findView, SCENE_VIEWS, type SceneHandle } from './views/index.js'
 
 type Tab = 'run' | 'inspector' | 'queue' | 'cases' | 'metrics' | 'log'
+const APP_NAME = 'Evals Cafe'
 const VIEW_KEY = 'cafe.sceneView'
 
 // One player per page, surviving Vite HMR so a live stream is never orphaned mid-run.
@@ -436,8 +437,11 @@ export function App() {
         <div className="brand">
           <LanternMark />
           <div className="brand-text">
-            <span className="title">Stardust</span>
-            <span className="subtitle">agentic eval · {vocab.business}</span>
+            <span className="title">{APP_NAME}</span>
+            <span className="subtitle">
+              {/* the cafe domain is the app's namesake: say it once */}
+              agentic eval{vocab.business === APP_NAME ? '' : ` · ${vocab.business}`}
+            </span>
           </div>
         </div>
         <div className="segmented view-switch" role="tablist" aria-label="Scene style">

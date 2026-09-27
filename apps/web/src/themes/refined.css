@@ -1,6 +1,6 @@
 /*
  * The refined theme (default): an override layer on top of the base stylesheets,
- * which are the Stardust (game) look. Everything here is scoped under
+ * which are the Classic (game) look. Everything here is scoped under
  * :root[data-theme="refined"] so switching theme is one attribute on <html>.
  * The Village and Pixel canvases (.scene-host and what the scenes draw inside it)
  * keep their own look in every theme.
@@ -74,7 +74,7 @@
   --rf-elev-3: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-/* ---------- 2. the game scenes keep the Stardust tokens ---------- */
+/* ---------- 2. the game scenes keep the Classic tokens ---------- */
 :root[data-theme="refined"] .scene-host:not(.trace-mount) {
   --bg: #0b1b26;
   --bg-2: #0e2231;

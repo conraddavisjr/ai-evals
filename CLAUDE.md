@@ -1,4 +1,4 @@
-# Stardust Cafe: working notes for agents
+# Evals Cafe: working notes for agents
 
 ## Keep the architecture map current
 

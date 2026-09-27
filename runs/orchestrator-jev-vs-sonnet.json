@@ -1,6 +1,6 @@
 {
   "name": "orchestrator: mock vs Jev vs Sonnet",
-  "datasetId": "builtin:stardust",
+  "datasetId": "builtin:cafe",
   "itemIds": ["latte-simple", "prompt-injection", "out-of-stock", "refund-scam", "two-items"],
   "base": {
     "roles": {

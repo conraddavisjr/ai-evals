@@ -13,7 +13,7 @@ const run = promisify(execFile)
 /** Where a project's cases were read from, for the page to say so. */
 export interface CasesSource {
   kind: 'file' | 'github' | 'builtin'
-  /** "conraddavisjr/ai-recipe-builder @ evals-front-door · evals/stardust.config.json" */
+  /** "conraddavisjr/ai-recipe-builder @ evals-front-door · evals/evals-cafe.config.json" */
   label: string
   ref: string | null
   /** Branches to pick from: main, open pull requests, branches runs came from, with their case counts. */
@@ -24,10 +24,11 @@ export type ProjectCases = CasesView & { source: CasesSource }
 
 /**
  * A local override, for reading a project's pack straight from a checkout:
- * projects.local.json (or STARDUST_PROJECTS) maps { "palate": { "pack": "../recipe-builder/evals/stardust.config.json" } }.
+ * projects.local.json (or EVALS_CAFE_PROJECTS) maps { "palate": { "pack": "../recipe-builder/evals/evals-cafe.config.json" } }.
  */
 function localPack(project: string): string | null {
-  const file = process.env.STARDUST_PROJECTS ?? resolve(process.cwd(), '../../projects.local.json')
+  const file =
+    process.env.EVALS_CAFE_PROJECTS ?? resolve(process.cwd(), '../../projects.local.json')
   if (!existsSync(file)) return null
   try {
     const map = JSON.parse(readFileSync(file, 'utf8')) as Record<string, { pack?: string }>
@@ -78,13 +79,40 @@ const cache = new Map<string, { at: number; file: string }>()
  * from GitHub into a temp folder with the same layout, so the one loader reads it.
  * Uses the machine's `gh` login; a hosted dashboard would use a token instead.
  */
-async function githubPack(repo: string, packPath: string, ref: string): Promise<string> {
+/**
+ * The pack at a branch: the path runs recorded, else the conventional name beside
+ * it (a pack renamed from stardust.config.json to evals-cafe.config.json after
+ * those runs, or the reverse on an older branch).
+ */
+async function githubPack(
+  repo: string,
+  packPath: string,
+  ref: string,
+): Promise<{ file: string; path: string }> {
+  const dir = dirname(packPath)
+  const names = [
+    packPath,
+    join(dir, 'evals-cafe.config.json'),
+    join(dir, 'stardust.config.json'),
+  ].filter((p, i, all) => all.indexOf(p) === i)
+  let last: unknown = null
+  for (const p of names) {
+    try {
+      return { file: await githubPackAt(repo, p, ref), path: p }
+    } catch (err) {
+      last = err
+    }
+  }
+  throw last
+}
+
+async function githubPackAt(repo: string, packPath: string, ref: string): Promise<string> {
   const key = `${repo}@${ref}:${packPath}`
   const hit = cache.get(key)
   if (hit && Date.now() - hit.at < 60_000 && existsSync(hit.file)) return hit.file
   const root = join(
     tmpdir(),
-    'stardust-packs',
+    'evals-cafe-packs',
     `${repo.replace('/', '__')}@${ref.replace(/[^\w.-]/g, '_')}`,
   )
   const put = (rel: string, text: string) => {
@@ -167,18 +195,18 @@ export async function projectCases(
   const open = await openBranches(repo)
   const refs = [...new Set(['main', ...open, ...runRefs])]
   let at = ref
-  let file: string | null = null
-  if (at) file = await githubPack(repo, target.pack, at)
+  let found: { file: string; path: string } | null = null
+  if (at) found = await githubPack(repo, target.pack, at)
   // main when the pack is merged there, else the newest open PR that has it, else the latest run's branch
   else
     for (const candidate of refs) {
       try {
-        file = await githubPack(repo, target.pack, candidate)
+        found = await githubPack(repo, target.pack, candidate)
         at = candidate
         break
       } catch {}
     }
-  if (!file || !at) throw new ProjectNotFound(`No branch of ${repo} has ${target.pack}`)
+  if (!found || !at) throw new ProjectNotFound(`No branch of ${repo} has ${target.pack}`)
   // Each branch's case count, so an open PR that adds cases is visible from the default view.
   const counted = await Promise.all(
     refs.map(async (r) => {
@@ -186,7 +214,7 @@ export async function projectCases(
         const f = await githubPack(repo, target.pack, r)
         return {
           ref: r,
-          total: loadPack(f, process.env, 'keep').cases.length,
+          total: loadPack(f.file, process.env, 'keep').cases.length,
           openPr: open.includes(r),
         }
       } catch {
@@ -194,12 +222,12 @@ export async function projectCases(
       }
     }),
   )
-  const pack = loadPack(file, process.env, 'keep')
+  const pack = loadPack(found.file, process.env, 'keep')
   return {
     ...casesView(pack.config, pack.cases),
     source: {
       kind: 'github',
-      label: `${repo} @ ${at} · ${target.pack}`,
+      label: `${repo} @ ${at} · ${found.path}`,
       ref: at,
       // branches without the pack have nothing to show
       refs: counted.filter((r) => r.total !== null),

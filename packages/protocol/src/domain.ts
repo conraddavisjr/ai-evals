@@ -216,7 +216,7 @@ export const RunConfig = z.object({
   domain: z.string().default('cafe'),
   tools: ToolSource.default({ kind: 'builtin' }),
   /** Which orchestration engine drives the shift (see apps/server/src/orchestrators). */
-  orchestrator: z.string().default('stardust'),
+  orchestrator: z.string().default('evals-cafe'),
   scenarioIds: z.array(z.string()).min(1),
   roles: RoleModels,
   staffing: Staffing.prefault({}),

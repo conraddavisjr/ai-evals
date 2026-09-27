@@ -1,0 +1,28 @@
+{
+  "contract": 1,
+  "name": "Action self-test",
+  "project": "action-selftest",
+  "target": {
+    "kind": "http",
+    "url": "${SELFTEST_URL:-http://127.0.0.1:8787}/api/eval/generate",
+    "headers": { "authorization": "Bearer ${EVAL_SECRET}" },
+    "bodyTemplate": {
+      "contract": 1,
+      "case_id": "{{case.id}}",
+      "prompt": "{{input.prompt}}",
+      "persist": "{{run.persist}}"
+    },
+    "responseMap": {
+      "outcome": "$.outcome",
+      "outcomeMap": { "recipes": "served", "declined": "refused" },
+      "reason": "$.reason",
+      "detail": "$.decline_reason",
+      "output": "$.recipes",
+      "steps": "$.steps",
+      "usd": "$.usage.usd"
+    },
+    "timeoutMs": 10000
+  },
+  "datasets": ["dataset.json"],
+  "thresholds": { "overall": 1 }
+}

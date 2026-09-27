@@ -104,7 +104,7 @@ describe('recorded target runs', () => {
         info: {
           project: 'recorder-test',
           projectName: 'Recorder test app',
-          pack: 'evals/stardust.config.json',
+          pack: 'evals/evals-cafe.config.json',
           url: 'http://app.test/api/eval',
           source: 'ci',
           git: {
@@ -178,7 +178,7 @@ describe('recorded target runs', () => {
   it('requires the ingest token when one is configured', async () => {
     const runs = new RunManager(store, false)
     const app = createApp({ store, runs, allowLive: false })
-    process.env.STARDUST_INGEST_TOKEN = 'secret'
+    process.env.EVALS_CAFE_INGEST_TOKEN = 'secret'
     try {
       const denied = await app.request('/api/ingest/runs', { method: 'POST', body: '{}' })
       expect(denied.status).toBe(401)
@@ -189,7 +189,7 @@ describe('recorded target runs', () => {
       })
       expect(bad.status).toBe(400)
     } finally {
-      delete process.env.STARDUST_INGEST_TOKEN
+      delete process.env.EVALS_CAFE_INGEST_TOKEN
     }
     const closed = await app.request('/api/ingest/runs/nope/events', {
       method: 'POST',

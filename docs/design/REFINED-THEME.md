@@ -1,9 +1,9 @@
 # Refined theme
 
-The refined theme is the default look of the Stardust web app.
+The refined theme is the default look of the Evals Cafe web app.
 It is one override stylesheet, `apps/web/src/themes/refined.css`, scoped under `:root[data-theme="refined"]`.
-The base stylesheets stay the Stardust (game) theme, byte for byte, and `data-theme="stardust"` shows them untouched.
-The Village and Pixel canvases keep their game look in both themes: everything inside `.scene-host` (except the Trace board) gets the Stardust tokens back.
+The base stylesheets stay the Classic (game) theme, byte for byte, and `data-theme="classic"` shows them untouched (a saved `stardust` choice from before the rename loads as Classic).
+The Village and Pixel canvases keep their game look in both themes: everything inside `.scene-host` (except the Trace board) gets the Classic tokens back.
 
 ## Principles
 
@@ -111,7 +111,7 @@ A deviated verdict gets a slightly stronger fill and a 1px inner ring so it is f
 
 ### Layer colours (Trace board)
 
-The meaning is unchanged from Stardust; the hues are slightly calmer.
+The meaning is unchanged from Classic; the hues are slightly calmer.
 
 | Layer | Token | Value |
 | --- | --- | --- |
@@ -263,7 +263,7 @@ Status fills stay at about 10-12% alpha.
 These are things an override layer cannot fix cleanly.
 
 - `styles.css` styles every `<header>` element as the app bar (two bare `header { ... }` rules: min-height 74px, gradient, 3px border).
-  That leaks into `.tx-head`, `.trail-head`, `.drawer-head` and `.bench-head`, including in the Stardust theme.
+  That leaks into `.tx-head`, `.trail-head`, `.drawer-head` and `.bench-head`, including in the Classic theme.
   Scope those rules to `.app > header`.
   The refined theme resets it with a zero-specificity rule for now.
 - `architecture.css` declares `--bg: var(--bg)` and `--font-mono: var(--font-mono)` on `.archv-app`.

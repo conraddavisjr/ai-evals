@@ -1,4 +1,4 @@
-# Stardust Cafe
+# Evals Cafe
 
 A model-agnostic evaluation harness for multi-agent pipelines: agentic orchestration, optional MCP tool sources, LLM-as-judge and golden datasets.
 Every agent is a sub-agent with its own model and its own slice of MCP tools.
@@ -97,7 +97,7 @@ Adding a business domain: `docs/DOMAIN-PACKS.md`. Where decision models such as 
 
 ## Evaluating another app
 
-`pnpm eval:target --config <project>/evals/stardust.config.json` runs another project's golden datasets against its HTTP eval route, with deterministic assertions, a judge, per-tag thresholds, JUnit output and a failing exit code for CI.
+`pnpm eval:target --config <project>/evals/evals-cafe.config.json` runs another project's golden datasets against its HTTP eval route, with deterministic assertions, a judge, per-tag thresholds, JUnit output and a failing exit code for CI.
 See [docs/TARGETS.md](docs/TARGETS.md).
 
 ## The 3D scene

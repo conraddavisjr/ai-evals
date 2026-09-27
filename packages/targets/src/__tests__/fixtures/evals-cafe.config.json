@@ -11,7 +11,7 @@
       "prompt": "{{input.prompt}}",
       "profile_fixture": "{{input.profile}}",
       "count": "{{input.count}}",
-      "persist": "{{run.firstAttempt}}"
+      "persist": "{{run.persist}}"
     },
     "responseMap": {
       "outcome": "$.outcome",

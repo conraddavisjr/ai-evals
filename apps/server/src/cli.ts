@@ -31,7 +31,7 @@ import { initTracing } from './telemetry/tracing.js'
  *   pnpm eval --route                      (the router turns adversarial cases away before agent 1)
  *   pnpm eval --bench --domain support --specs mock:support-lead,gateway:typesafe-ai/jev,anthropic/claude-haiku-4-5-20251001
  *        [--tasks door,gate,judge] [--judge-run <runId>]   (decision bench: same labelled decisions, model vs model)
- *   flags: --router --no-judge --no-review --max-usd 0.5 --orchestrator stardust
+ *   flags: --router --no-judge --no-review --max-usd 0.5 --orchestrator evals-cafe
  */
 function parseArgs(argv: string[]) {
   const out: Record<string, string | boolean> = {}
@@ -70,7 +70,7 @@ function configsFromArgs(
   const cfg: RunConfigInput = {
     name: str('name', 'cli'),
     domain: pack.id,
-    orchestrator: str('orchestrator', 'stardust'),
+    orchestrator: str('orchestrator', 'evals-cafe'),
     scenarioIds:
       typeof args.scenarios === 'string'
         ? args.scenarios.split(',')
