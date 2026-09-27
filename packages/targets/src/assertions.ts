@@ -132,7 +132,13 @@ export function runAssertion(a: Assertion, r: TargetResult): Check {
     }
     case 'regexAbsent':
     case 'regexPresent': {
-      const re = new RegExp(a.pattern, a.flags)
+      let re: RegExp
+      try {
+        re = new RegExp(a.pattern, a.flags)
+      } catch (err) {
+        // loadPack rejects bad patterns first; a case built another way still fails cleanly
+        return check(false, `not a valid regex: ${(err as Error).message}`)
+      }
       const hits = strings(query(doc, a.path)).flatMap((s) => {
         const m = re.exec(s)
         return m ? [m[0]] : []
