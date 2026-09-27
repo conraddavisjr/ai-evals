@@ -1,6 +1,6 @@
 import type { ModelRegistry } from '@cafe/models'
-import { type Check, deterministicChecks } from './assertions.js'
-import type { JudgeExpectation, PackConfig } from './config.js'
+import { type Check, deterministicChecks, latencyOf } from './assertions.js'
+import type { JudgeExpectation, LatencyGate, PackConfig } from './config.js'
 import type { Target, TargetResult } from './http-target.js'
 import { type JudgeAnswer, judgeCase, judgeChecks, judgeState } from './judge.js'
 import type { LoadedCase } from './load.js'
@@ -44,10 +44,14 @@ export interface CaseSummary {
 
 export interface Gate {
   name: string
+  /** A pass rate (0 to 1, at least `required`) or a time in ms (at most `required`). */
+  unit?: 'rate' | 'ms'
   required: number
   actual: number
   attempts: number
   ok: boolean
+  /** A miss is reported but does not fail the run. */
+  warnOnly?: boolean
 }
 
 export interface Report {
@@ -86,7 +90,11 @@ export interface RunOptions {
   repeats: number
   concurrency: number
   maxUsd: number | null
-  thresholds: { overall?: number | undefined; byTag: Record<string, number> }
+  thresholds: {
+    overall?: number | undefined
+    byTag: Record<string, number>
+    latency?: LatencyGate[] | undefined
+  }
   runId: string
   onAttempt?: ((a: Attempt, c: LoadedCase) => void) | undefined
   /** Called as each attempt's request goes out, before its answer (a live dashboard shows the case arriving). */
@@ -267,6 +275,7 @@ export async function runPack(o: RunOptions): Promise<Report> {
       ok: rate(list) >= required,
     })
   }
+  gates.push(...latencyGates(o.thresholds.latency ?? [], cases))
   const skipped = all.filter((a) => a.skipped).length
 
   return {
@@ -291,6 +300,56 @@ export async function runPack(o: RunOptions): Promise<Report> {
     },
     gates,
     // A run cut short by the budget never counts as green.
-    ok: gates.every((g) => g.ok) && skipped === 0,
+    ok: gates.every((g) => g.ok || g.warnOnly) && skipped === 0,
   }
+}
+
+/** Nearest-rank percentile of a list of ms (the list must not be empty). */
+function percentile(values: number[], p: number): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))] ?? 0
+}
+
+/** One gate per bound of each latency budget, over the attempts it selects. */
+export function latencyGates(budgets: LatencyGate[], cases: CaseSummary[]): Gate[] {
+  const gates: Gate[] = []
+  for (const b of budgets) {
+    const picked = cases
+      .filter((c) => !b.tags?.length || c.tags.some((t) => b.tags?.includes(t)))
+      .flatMap((c) => c.attempts)
+      .filter((a) => a.result && (!b.outcome || a.result.outcome === b.outcome))
+    const values = picked.flatMap((a) => {
+      const ms = a.result ? latencyOf(a.result, b.step) : null
+      return ms === null ? [] : [ms]
+    })
+    // Nothing selected (a subset without these cases) has nothing to gate.
+    if (!values.length) continue
+    const label =
+      b.name ??
+      [
+        b.step ? `step ${b.step}` : 'latency',
+        b.outcome ? b.outcome : '',
+        b.tags?.length ? b.tags.join('/') : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    const bounds: Array<[string, number | undefined, number]> = [
+      ['p50', b.p50Ms, percentile(values, 0.5)],
+      ['p95', b.p95Ms, percentile(values, 0.95)],
+      ['max', b.maxMs, Math.max(...values)],
+    ]
+    for (const [stat, required, actual] of bounds) {
+      if (required === undefined) continue
+      gates.push({
+        name: `${label} ${stat}`,
+        unit: 'ms',
+        required,
+        actual,
+        attempts: values.length,
+        ok: actual <= required,
+        warnOnly: b.warnOnly,
+      })
+    }
+  }
+  return gates
 }

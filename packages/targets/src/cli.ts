@@ -17,7 +17,7 @@ const USAGE = `Evaluate another project's AI through its config pack.
       [--cases id,id] [--tags adversarial,harmful] [--smoke] [--expect refused] [--exclude-tags thrive]
       [--repeats 3] [--concurrency 2] [--max-usd 5]
       [--judge <model spec> | --no-judge]
-      [--min-pass 0.9] [--min-pass-tag adversarial=1,benign=0.9]
+      [--min-pass 0.9] [--min-pass-tag adversarial=1,benign=0.9] [--latency-warn-only]
       [--json out/report.json] [--junit out/junit.xml] [--summary out/summary.md]
       [--list] [--dry-run] [--replay out/report.json] [--no-persist]
       [--record [http://localhost:4747]] [--import out/report.json]
@@ -227,7 +227,14 @@ async function main(): Promise<number> {
     repeats,
     concurrency,
     maxUsd: number(args, 'max-usd') ?? pack.config.budget.maxUsdPerRun ?? null,
-    thresholds: { overall: number(args, 'min-pass') ?? pack.config.thresholds.overall, byTag },
+    thresholds: {
+      overall: number(args, 'min-pass') ?? pack.config.thresholds.overall,
+      byTag,
+      // --latency-warn-only: report time budgets without failing on them (a noisy runner)
+      latency: pack.config.thresholds.latency.map((g) =>
+        args['latency-warn-only'] ? { ...g, warnOnly: true } : g,
+      ),
+    },
     runId,
     signal: controller.signal,
     onStart: (c, attempt, index, startedAt) => live?.caseStarted(c, attempt, index, startedAt),

@@ -327,6 +327,8 @@ export const CafeEvent = z.discriminatedUnion('type', [
     detail: z.string().nullable(),
     /** What the app returned, trimmed for the Inspector. */
     output: z.unknown().optional(),
+    /** What the app says it applied to the request (resolved profile, filters). */
+    context: z.unknown().optional(),
   }),
   Base.extend({
     type: z.literal('staffing.changed'),

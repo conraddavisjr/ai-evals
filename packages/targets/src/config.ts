@@ -32,6 +32,12 @@ export const HttpTargetConfig = z.object({
     inputTokens: z.string().optional(),
     outputTokens: z.string().optional(),
     model: z.string().optional(),
+    /**
+     * What the app says it applied to this request (the resolved profile and
+     * filters). The judge reads it, so "respects the constraints" is checked
+     * against the real rules, not the fixture's name; the Inspector shows it.
+     */
+    context: z.string().optional(),
   }),
   /** A JSON Schema file (relative to the config) every response must satisfy: the contract test. */
   responseSchema: z.string().optional(),
@@ -63,6 +69,26 @@ export const JudgeQuestion = z.discriminatedUnion('type', [
   }),
 ])
 export type JudgeQuestion = z.infer<typeof JudgeQuestion>
+
+/**
+ * A latency budget over the cases it selects (any of `tags`, and/or the outcome
+ * the app actually gave), measured on the whole request as the harness timed it
+ * or on one step the app reports (`step: "drafting"`). Shared CI runners and
+ * model APIs are noisy: `warnOnly` reports a miss without failing the run.
+ */
+export const LatencyGate = z
+  .object({
+    name: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    outcome: Outcome.optional(),
+    step: z.string().optional(),
+    p50Ms: z.number().positive().optional(),
+    p95Ms: z.number().positive().optional(),
+    maxMs: z.number().positive().optional(),
+    warnOnly: z.boolean().default(false),
+  })
+  .refine((g) => g.p50Ms || g.p95Ms || g.maxMs, 'give p50Ms, p95Ms or maxMs')
+export type LatencyGate = z.infer<typeof LatencyGate>
 
 export const PackConfig = z.object({
   $schema: z.string().optional(),
@@ -109,8 +135,10 @@ export const PackConfig = z.object({
     .object({
       overall: z.number().min(0).max(1).optional(),
       byTag: z.record(z.string(), z.number().min(0).max(1)).default({}),
+      /** Time budgets over a set of cases: the whole request, or one step the app reports. */
+      latency: z.array(LatencyGate).default([]),
     })
-    .default({ byTag: {} }),
+    .default({ byTag: {}, latency: [] }),
   budget: z.object({ maxUsdPerRun: z.number().positive().optional() }).default({}),
   repeats: z.number().int().positive().default(1),
 })
@@ -148,6 +176,13 @@ export const Assertion = z.discriminatedUnion('type', [
     ...common,
   }),
   z.object({ type: z.literal('stepPresent'), name: z.string(), ...common }),
+  /** The whole request as the harness timed it, or the time of one reported step, under a budget. */
+  z.object({
+    type: z.literal('latency'),
+    maxMs: z.number().positive(),
+    step: z.string().optional(),
+    ...common,
+  }),
 ])
 export type Assertion = z.infer<typeof Assertion>
 

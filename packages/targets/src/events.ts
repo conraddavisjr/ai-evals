@@ -405,6 +405,7 @@ export function caseEndEvents(
     reason: r.reason,
     detail: r.detail,
     output: trimOutput(r.output),
+    ...(r.context !== undefined ? { context: trimOutput(r.context) } : {}),
     t: at(),
   })
   return out

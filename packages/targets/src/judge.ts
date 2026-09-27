@@ -29,7 +29,14 @@ export function judgeState(
   if (output.length > maxOutputChars) output = `${output.slice(0, maxOutputChars)} …(cut)`
   const want = c.expect.outcome === undefined ? [] : [c.expect.outcome].flat()
   const state = {
-    request: { title: c.title, tags: c.tags, input: c.input, rubric: c.rubric ?? null },
+    request: {
+      title: c.title,
+      tags: c.tags,
+      input: c.input,
+      rubric: c.rubric ?? null,
+      // the rules the app applied (profile, filters), when it reports them
+      appliedContext: r.context ?? null,
+    },
     expected: {
       outcome: want.length ? want : null,
       shouldRefuse: want.length === 1 && want[0] === 'refused',

@@ -1,4 +1,10 @@
-import type { Attempt, CaseSummary, Report } from './runner.js'
+import { fmtMs } from './assertions.js'
+import type { Attempt, CaseSummary, Gate, Report } from './runner.js'
+
+/** A gate's figure: a pass rate as a percentage, a time in ms. */
+const value = (g: Gate, n: number) => (g.unit === 'ms' ? fmtMs(n) : pct(n))
+/** ✓ passed, ⚠ missed a warn-only budget, ✗ failed. */
+const mark = (g: Gate) => (g.ok ? '✓' : g.warnOnly ? '⚠' : '✗')
 
 const pct = (n: number) => `${(n * 100).toFixed(n === 1 || n === 0 ? 0 : 1)}%`
 const pad = (s: string, n: number) => (s.length >= n ? `${s.slice(0, n - 1)}…` : s.padEnd(n))
@@ -56,7 +62,7 @@ export function formatSummary(r: Report): string {
   )
   for (const g of r.gates)
     lines.push(
-      `  ${g.ok ? '✓' : '✗'} ${pad(g.name, 28)} ${pct(g.actual)} (needs ${pct(g.required)}, ${g.attempts} attempts)`,
+      `  ${mark(g)} ${pad(g.name, 28)} ${value(g, g.actual)} (${g.unit === 'ms' ? 'budget' : 'needs'} ${value(g, g.required)}, ${g.attempts} attempts)${!g.ok && g.warnOnly ? ' warning only' : ''}`,
     )
   if (t.skipped) lines.push(`  ✗ complete run                 ${t.skipped} attempt(s) skipped`)
   lines.push('', r.ok ? 'PASS' : 'FAIL')
@@ -114,10 +120,11 @@ export function toMarkdown(r: Report): string {
     '',
     `Target \`${r.target}\` · judge ${r.judge ? `\`${r.judge}\`` : 'off'} · spend $${r.totals.usd.toFixed(3)} · false refusals ${r.totals.falseRefusals} · missed refusals ${r.totals.missedRefusals}`,
     '',
-    '| Gate | Pass rate | Needs | |',
+    '| Gate | Actual | Needs | |',
     '| --- | --- | --- | --- |',
     ...r.gates.map(
-      (g) => `| ${g.name} | ${pct(g.actual)} | ${pct(g.required)} | ${g.ok ? '✓' : '✗'} |`,
+      (g) =>
+        `| ${g.name} | ${value(g, g.actual)} | ${g.unit === 'ms' ? '≤ ' : ''}${value(g, g.required)} | ${mark(g)}${!g.ok && g.warnOnly ? ' warning' : ''} |`,
     ),
   ]
   const failed = r.cases.filter((c) => !c.passAll)

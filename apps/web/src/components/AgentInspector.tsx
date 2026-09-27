@@ -1395,6 +1395,12 @@ function CaseChecks({ scored }: { scored: NonNullable<CustomerView['scored']> })
           )}
         </dl>
       )}
+      {scored.context !== null && scored.context !== undefined && (
+        <details className="case-output" open>
+          <summary>What the app applied (profile and filters)</summary>
+          <pre>{JSON.stringify(scored.context, null, 2)}</pre>
+        </details>
+      )}
       {output !== null && output !== undefined && !(Array.isArray(output) && !output.length) && (
         <details className="case-output">
           <summary>

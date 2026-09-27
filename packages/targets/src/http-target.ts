@@ -25,6 +25,8 @@ export interface TargetResult {
   httpStatus: number | null
   /** The parsed response body, for assertions that look past the mapped fields. */
   raw: unknown
+  /** What the app says it applied (responseMap.context): the resolved profile and filters. */
+  context?: unknown
   /** Contract violations: the response did not match the pack's response schema. */
   contractErrors: string[]
 }
@@ -197,6 +199,7 @@ export function httpTarget(
             ? null
             : { inputTokens, outputTokens, usd },
         model: str(at(map.model)),
+        ...(map.context ? { context: at(map.context) ?? null } : {}),
         latencyMs: elapsed(),
         httpStatus: res.status,
         raw: json,
