@@ -111,8 +111,10 @@ runs:
         read -r -a extra <<< "$IN_EXTRA"
         cd "$harness/packages/targets"
         # INIT_CWD: relative paths in flags resolve from the calling repository
-        INIT_CWD="$GITHUB_WORKSPACE" node --import tsx src/cli.ts "${args[@]}" "${extra[@]}"
-        echo "exit-code=$?" >> "$GITHUB_OUTPUT"
+        # GitHub runs bash with -e: capture the CLI's exit code instead of stopping on it
+        code=0
+        INIT_CWD="$GITHUB_WORKSPACE" node --import tsx src/cli.ts "${args[@]}" "${extra[@]}" || code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
 
     - name: Upload the report
       if: always()
